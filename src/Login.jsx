@@ -1,22 +1,45 @@
-import { useState } from 'react'
-import { Eye, EyeOff } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
-import { STATIC_CREDENTIALS, signIn } from './auth'
-import login from './assets/Login.png'
-import logo from './assets/Logo.png'
+import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import { STATIC_CREDENTIALS } from "./auth";
+import login from "./assets/Login.png";
+import logo from "./assets/Logo.png";
 
 const Login = () => {
-  const navigate = useNavigate()
-  const [showPassword, setShowPassword] = useState(false)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (
+      normalizedEmail === STATIC_CREDENTIALS.email &&
+      password === STATIC_CREDENTIALS.password
+    ) {
+      // ✅ STORE TOKEN (must match isAuthenticated)
+      localStorage.setItem("token", "admin_token");
+
+      setError("");
+
+      // ✅ FORCE RELOAD → ensures ProtectedLayout works
+      window.location.href = "/";
+      return;
+    }
+
+    setError("Use admin@gmail.com and admin@123 to sign in.");
+  };
 
   return (
     <div className="min-h-screen w-full flex flex-col md:flex-row">
+
+      {/* LEFT SIDE */}
       <div className="relative flex w-full flex-col items-center justify-center bg-[#f3f3f3] px-6 py-10 md:w-[60%] md:px-10 md:py-0">
+
         <div className="absolute top-4 left-4 md:top-6 md:left-8">
-          <img src={logo} alt="logo" className="h-25 w-auto object-contain md:h-12" />
+          <img src={logo} alt="logo" className="h-25 md:h-18" />
         </div>
 
         <img
@@ -30,74 +53,61 @@ const Login = () => {
             Work Better, Together
           </h2>
           <p className="text-gray-500 mt-2 md:mt-3 text-sm md:text-base leading-relaxed">
-            Manage your projects effortlessly, track every task in real time, 
+            Manage your projects effortlessly, track every task in real time,
             and keep your entire workflow organized.
           </p>
         </div>
       </div>
 
+      {/* RIGHT SIDE */}
       <div className="relative flex w-full items-center justify-center bg-[#062B4F] py-10 md:w-[40%] md:py-0">
+
         <form
+          onSubmit={handleSubmit}
           className="w-[90%] rounded-2xl bg-white p-6 shadow-2xl sm:w-[420px] md:absolute md:top-1/2 md:left-0 md:-translate-y-1/2 md:-translate-x-1/4 md:rounded-3xl md:p-8"
-          onSubmit={(event) => {
-            event.preventDefault()
-
-            const normalizedEmail = email.trim().toLowerCase()
-
-            if (
-              normalizedEmail === STATIC_CREDENTIALS.email &&
-              password === STATIC_CREDENTIALS.password
-            ) {
-              signIn()
-              setError('')
-              navigate('/')
-              return
-            }
-
-            setError('Use admin@gmail.com and admin@123 to sign in.')
-          }}
         >
+
           <h2 className="text-center text-base md:text-lg font-semibold text-gray-800">
             Sign In
           </h2>
 
           <h3 className="text-center text-xl md:text-2xl font-bold text-[#1C2B4A] mt-1">
-            Welcome, Back
+            Welcome
           </h3>
 
-          {/* Email */}
-          <div className="mt-5 md:mt-6">
+          {/* EMAIL */}
+          <div className="mt-6">
             <label className="text-sm text-gray-600">
               Enter your email address
             </label>
             <input
               type="text"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="Username or email address"
-              className="w-full mt-2 px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:outline-none"
+              className="w-full mt-2 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-400"
             />
           </div>
 
-          <div className="mt-4 md:mt-5">
+          {/* PASSWORD */}
+          <div className="mt-5">
             <label className="text-sm text-gray-600">
               Enter your Password
             </label>
 
             <div className="relative mt-2">
               <input
-                type={showPassword ? 'text' : 'password'}
+                type={showPassword ? "text" : "password"}
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="Password"
-                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 pr-12 focus:outline-none md:py-3"
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 pr-12 focus:outline-none focus:ring-1 focus:ring-slate-400"
               />
 
               <button
                 type="button"
-                onClick={() => setShowPassword((current) => !current)}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-gray-400 transition hover:text-gray-600"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-gray-400 hover:text-gray-600"
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -110,22 +120,34 @@ const Login = () => {
             </div>
           </div>
 
+          {/* DEMO */}
           <div className="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-500">
-            Demo login: <span className="font-medium text-slate-700">admin@gmail.com</span> /{' '}
-            <span className="font-medium text-slate-700">admin@123</span>
+            Demo login:{" "}
+            <span className="font-medium text-slate-700">
+              admin@gmail.com
+            </span>{" "}
+            /{" "}
+            <span className="font-medium text-slate-700">
+              admin@123
+            </span>
           </div>
 
-          {error ? (
-            <p className="mt-3 text-sm font-medium text-red-500">{error}</p>
-          ) : null}
+          {/* ERROR */}
+          {error && (
+            <p className="mt-3 text-sm font-medium text-red-500">
+              {error}
+            </p>
+          )}
 
-          <button className="w-full mt-5 md:mt-6 bg-[#062B4F] text-white py-2.5 md:py-3 rounded-lg shadow-md hover:bg-[#041f39]">
+          {/* BUTTON */}
+          <button className="w-full mt-6 bg-[#062B4F] text-white py-3 rounded-lg shadow-md hover:bg-[#041f39] transition">
             Sign In
           </button>
+
         </form>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default Login
+export default Login;   

@@ -10,10 +10,10 @@ export const sidebarMenu = [
     type: 'link',
     key: 'create-user',
     icon: 'users',
-    label: 'Create User',
+    label: 'User Management',
     to: '/create-user',
     eyebrow: 'Users',
-    title: 'Create User',
+    title: 'User Management',
     description:
       'Add new team members, assign permissions, and keep account setup aligned with workspace roles.',
     highlights: ['14 pending invites', '6 role templates', '2 approval steps'],
@@ -22,13 +22,39 @@ export const sidebarMenu = [
     type: 'link',
     key: 'all-project',
     icon: 'allProjects',
-    label: 'All Project',
+    label: 'All Projects',
     to: '/all-project',
     eyebrow: 'Projects',
-    title: 'All Project',
+    title: 'All Projects',
     description:
       'Browse every active and archived initiative with quick visibility into progress, owners, and next milestones.',
     highlights: ['28 total projects', '12 active', '6 completed this quarter'],
+  },
+  {
+    type: 'group',
+    key: 'resource',
+    icon: 'resource',
+    label: 'Resource',
+    children: [
+      {
+        label: 'Resource Master',
+        to: '/resource/resource-master',
+        eyebrow: 'Resource',
+        title: 'Resource Master',
+        description:
+          'Manage and maintain all resource information in your organization.',
+        highlights: ['10 total resources', '3 departments', '6 active roles'],
+      },
+      {
+        label: 'Resource Allocation',
+        to: '/resource/resource-allocation',
+        eyebrow: 'Resource',
+        title: 'Resource Allocation',
+        description:
+          'Track resource capacity and allocation percentage across teams.',
+        highlights: ['4 fully allocated', '3 partial', '2 under allocated'],
+      },
+    ],
   },
   {
     type: 'group',
@@ -37,7 +63,7 @@ export const sidebarMenu = [
     label: 'Project Management',
     children: [
       {
-        label: 'Create Project',
+        label: 'Project Allocation',
         to: '/project-management/create-project',
         eyebrow: 'Management',
         title: 'Create Project',
@@ -56,32 +82,6 @@ export const sidebarMenu = [
       },
     ],
   },
-  {
-    type: 'group',
-    key: 'expense',
-    icon: 'expense',
-    label: 'Expense',
-    children: [
-      {
-        label: 'Expense List',
-        to: '/expense',
-        eyebrow: 'Expense',
-        title: 'Expense List',
-        description:
-          'Track submitted spending, reimbursement status, and budget exceptions across current projects.',
-        highlights: ['34 requests open', '12 billable items', '2 flagged claims'],
-      },
-      {
-        label: 'Reports',
-        to: '/expense/reports',
-        eyebrow: 'Expense',
-        title: 'Expense Reports',
-        description:
-          'Review expense summaries, monthly trends, and recovery visibility for finance and delivery teams.',
-        highlights: ['6 summary views', '3 pending exports', '91% policy compliance'],
-      },
-    ],
-  },
 ]
 
 export const workspaceRoutes = sidebarMenu.flatMap((item) => {
@@ -95,3 +95,24 @@ export const workspaceRoutes = sidebarMenu.flatMap((item) => {
 
   return [item]
 })
+
+export const hiddenWorkspaceRoutes = [
+  {
+    label: 'Expense List',
+    to: '/expense',
+    eyebrow: 'Expense',
+    title: 'Expense List',
+    description:
+      'Track submitted spending, reimbursement status, and budget exceptions across current projects.',
+    highlights: ['34 requests open', '12 billable items', '2 flagged claims'],
+  },
+  {
+    label: 'Expense Reports',
+    to: '/expense/reports',
+    eyebrow: 'Expense',
+    title: 'Expense Reports',
+    description:
+      'Review expense summaries, monthly trends, and recovery visibility for finance and delivery teams.',
+    highlights: ['6 summary views', '3 pending exports', '91% policy compliance'],
+  },
+]

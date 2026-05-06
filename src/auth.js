@@ -6,13 +6,14 @@ export const STATIC_CREDENTIALS = {
 }
 
 export function isAuthenticated() {
-  return sessionStorage.getItem(AUTH_STORAGE_KEY) === 'true'
+  return !!localStorage.getItem("token");
 }
 
 export function signIn() {
-  sessionStorage.setItem(AUTH_STORAGE_KEY, 'true')
+  localStorage.setItem("token", "admin_token");
 }
 
 export function signOut() {
-  sessionStorage.removeItem(AUTH_STORAGE_KEY)
+  localStorage.removeItem("token");
 }
+

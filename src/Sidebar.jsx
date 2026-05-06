@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ChevronDown,
   Grid2x2,
   LayoutDashboard,
   Menu,
-  ReceiptText,
   SquareChartGantt,
+  ReceiptText,
   UserRoundPlus,
   X,
 } from 'lucide-react'
@@ -18,6 +18,7 @@ const iconMap = {
   dashboard: LayoutDashboard,
   expense: ReceiptText,
   projectManagement: SquareChartGantt,
+  resource: Grid2x2,
   users: UserRoundPlus,
 }
 
@@ -32,7 +33,7 @@ function findActiveGroupKey(pathname) {
       item.children.some((child) => matchesPath(pathname, child.to)),
   )
 
-  return activeGroup?.key ?? 'project-management'
+  return activeGroup?.key ?? null
 }
 
 function Sidebar() {
@@ -43,6 +44,10 @@ function Sidebar() {
   )
 
   const activeGroupKey = findActiveGroupKey(location.pathname)
+
+  useEffect(() => {
+    setOpenMenu(activeGroupKey)
+  }, [activeGroupKey])
 
   return (
     <>
@@ -57,11 +62,8 @@ function Sidebar() {
         </button>
 
         <div className="flex items-center gap-3">
-          <img src={logo} alt="worXkloud logo" className="h-10 w-auto object-contain" />
-          <div className="text-right">
-            <p className="text-sm font-semibold">worXkloud</p>
-            <p className="text-[11px] text-slate-300">Digital enterprises</p>
-          </div>
+          <img src={logo} alt="XPM.ai logo" className="h-10 w-auto object-contain mx-auto" />
+
         </div>
       </div>
 
@@ -76,21 +78,17 @@ function Sidebar() {
 
       <aside
         className={[
-          'fixed inset-y-0 left-0 z-50 flex h-screen w-[84vw] max-w-[18rem] flex-col bg-[#0d2646] text-white transition-transform duration-300 md:sticky md:top-0 md:w-[242px] md:max-w-none md:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 flex h-screen w-[84vw] max-w-[18rem] flex-col bg-[#0d2646] text-white transition-transform duration-300 md:sticky md:top-0 md:w-[210px] md:max-w-none md:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
         ].join(' ')}
       >
-        <div className="flex items-center justify-between px-7 pb-8 pt-6 md:pt-5">
+        <div className="flex items-center justify-between px-6 pb-8 pt-6 md:pt-4">
           <div className="w-full text-center">
-            {/* <img
+            <img
               src={logo}
-              alt="worXkloud logo" 
-              className="mx-auto h-16 w-auto object-contain"
-            /> */}
-            <p className="mt-2 text-[2rem] font-semibold tracking-[-0.03em] text-white">
-              wor<span className="text-[#8fd1ff]">X</span>kloud
-            </p>
-            <p className="mt-1 text-xs text-slate-300">Building DIGITAL Enterprises</p>
+              alt="worXkloud logo"
+              className="mx-auto h-20 w-auto object-contain"
+            />
           </div>
 
           <button
@@ -103,7 +101,7 @@ function Sidebar() {
           </button>
         </div>
 
-        <nav className="flex-1 space-y-3 px-5 pb-8">
+        <nav className="sidebar-scroll flex-1 space-y-3 overflow-y-auto px-2.5 pb-8 pr-1 scroll-smooth">
           {sidebarMenu.map((item) => {
             if (item.type === 'group') {
               const isOpen = openMenu === item.key || activeGroupKey === item.key
@@ -166,9 +164,9 @@ function MenuItem({ icon, label, onNavigate, to }) {
       onClick={onNavigate}
       className={({ isActive }) =>
         [
-          'flex items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-medium transition-all duration-200',
+          'flex items-center gap-3 rounded-xl px-4 py-3 text-[14px] font-medium transition-all duration-200',
           isActive
-            ? 'bg-[#17365d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
+            ? 'bg-[#18498a] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
             : 'text-slate-200 hover:bg-[#143356] hover:text-white',
         ].join(' ')
       }
@@ -194,9 +192,9 @@ function Dropdown({ children, icon, isActive, isOpen, onClick, title }) {
         type="button"
         onClick={onClick}
         className={[
-          'flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-[15px] font-medium transition-all duration-200',
+          'flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-[14px] font-medium transition-all duration-200',
           isActive
-            ? 'bg-[#17365d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
+            ? 'bg-[#215497] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
             : 'text-slate-200 hover:bg-[#143356] hover:text-white',
         ].join(' ')}
       >
@@ -220,8 +218,8 @@ function Dropdown({ children, icon, isActive, isOpen, onClick, title }) {
         ].join(' ')}
       >
         <div className="min-h-0 overflow-hidden">
-          <div className="ml-6 mt-3 border-l border-white/20 pl-4">
-            <div className="space-y-1.5">{children}</div>
+          <div className="ml-4 mt-3 border-l border-[#6e86aa] pl-3">
+            <div className="space-y-2">{children}</div>
           </div>
         </div>
       </div>
@@ -237,9 +235,11 @@ function SubItem({ label, onNavigate, to }) {
       onClick={onNavigate}
       className={({ isActive }) =>
         [
-          'relative block rounded-xl py-2 pl-5 pr-3 text-sm transition-colors',
-          'before:absolute before:left-0 before:top-1/2 before:h-1.5 before:w-1.5 before:-translate-y-1/2 before:rounded-full before:bg-slate-300/70',
-          isActive ? 'text-white' : 'text-slate-300 hover:text-white',
+          'relative block rounded-xl py-3 pl-6 pr-3 text-[13px] transition-colors',
+          'before:absolute before:left-2 before:top-1/2 before:h-1.5 before:w-1.5 before:-translate-y-1/2 before:rounded-full before:bg-slate-300/90',
+          isActive
+            ? 'bg-[#1e4f98] text-white'
+            : 'text-slate-300 hover:bg-[#17365d] hover:text-white',
         ].join(' ')
       }
     >

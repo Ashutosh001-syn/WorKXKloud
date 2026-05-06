@@ -1,9 +1,9 @@
 @import 'tailwindcss';
 
 :root {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
   color: #0f172a;
-  background-color: #0d2646;
+  background-color: #f5f7fa;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -22,7 +22,52 @@ body,
 
 body {
   margin: 0;
-  background: #0d2646;
+  background: #f5f7fa;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Sidebar Specific Scrollbar */
+.sidebar-scroll {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 button,
@@ -30,4 +75,12 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+input, select, textarea {
+  @apply w-full h-11 px-4 rounded-xl border border-gray-200 bg-gray-50 text-sm outline-none transition-all;
+}
+
+input:focus, select:focus, textarea:focus {
+  @apply border-blue-500 ring-2 ring-blue-100 bg-white;
 }

@@ -31,6 +31,7 @@ import {
   X,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { API_ENDPOINTS } from '../api'
 import SortableDashboardSection from '../components/dashboard/SortableDashboardSection'
 import {
   dashboardSectionMeta,
@@ -41,11 +42,12 @@ import {
 } from '../components/dashboard/dashboardData'
 import { useDashboardLayout } from '../hooks/useDashboardLayout'
 
-function ToolbarIcon({ icon: Icon, label }) {
+function ToolbarIcon({ icon: Icon, label, onClick }) {
   return (
     <button
       type="button"
       aria-label={label}
+      onClick={onClick}
       className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
     >
       {createElement(Icon, { size: 16, strokeWidth: 1.9 })}
@@ -343,12 +345,36 @@ const launcherSections = [
   },
 ]
 
+const gridMenuItems = [
+  'Budget Utilization',
+  'Active Projects',
+  'Activity Stream',
+  'Billable Utilization',
+  'Budget Distribution',
+  'Budget Tracking',
+  'Budget Vs Cost',
+  'Cost',
+  'Cost Overruns',
+  'Cost Trend | S-Curve',
+  'Critical Risks',
+  'Customer Contribution',
+  'Delayed Tasks',
+  'Effort',
+  'Executive Summary',
+  'Financial Summary',
+  'Invoiced',
+  'Margin',
+]
+
 function Dashboard() {
   const { layout, reorderSections, resizeSection } = useDashboardLayout()
   const navigate = useNavigate()
   const [resizingSectionId, setResizingSectionId] = useState(null)
   const [openModal, setOpenModal] = useState(false)
   const [activeLauncherMenu, setActiveLauncherMenu] = useState(null)
+  const [showGridMenu, setShowGridMenu] = useState(false)
+  const [gridLimit, setGridLimit] = useState(7)
+  const gridMenuRef = useRef(null)
   const resizeCleanupRef = useRef(null)
   const bodyStyleSnapshotRef = useRef({ cursor: '', userSelect: '' })
   const showLegacyLauncher = false
@@ -411,6 +437,17 @@ function Dashboard() {
       document.body.style.cursor = bodyStyleSnapshotRef.current.cursor
     }
   }, [resizingSectionId])
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (gridMenuRef.current && !gridMenuRef.current.contains(e.target)) {
+        setShowGridMenu(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   function handleResizeStart(event, sectionId) {
     if (window.innerWidth < 768) {
@@ -545,13 +582,17 @@ function Dashboard() {
   }
 
   function handleProjectQuickAction(mode) {
+    const code = `P-${new Date().getFullYear()}001`
     handleLauncherNavigation('/project-management/create-project', {
       state: {
         openWizard: true,
-        mode,
+        mode: mode,
+        projectCode: code,
       },
     })
   }
+
+  const visibleLayout = layout.slice(0, gridLimit)
 
   return (
     <div className="min-h-screen bg-[#0d2646] px-3 py-4 text-slate-900 sm:px-4">
@@ -570,10 +611,41 @@ function Dashboard() {
               }}
               className="inline-flex items-center rounded-full bg-[#0088CE] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#d78116]"
             >
-              Create Projects
+              New Space
             </button>
 
-            <ToolbarIcon icon={LayoutGrid} label="Grid view" />
+            <div ref={gridMenuRef} className="relative">
+              <ToolbarIcon
+                icon={LayoutGrid}
+                label="Grid view"
+                onClick={() => setShowGridMenu((prev) => !prev)}
+              />
+
+              {showGridMenu ? (
+                <div className="absolute right-0 z-50 mt-2 max-h-[420px] w-[260px] overflow-y-auto rounded-md border border-[#d5dde7] bg-white shadow-lg">
+                  {gridMenuItems.map((item, index) => {
+                    const isSelected = gridLimit === index + 1
+
+                    return (
+                      <button
+                        key={`${item}-${index}`}
+                        type="button"
+                        onClick={() => {
+                          setGridLimit(index + 1)
+                          setShowGridMenu(false)
+                        }}
+                        className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-[#4a5565] ${
+                          isSelected ? 'bg-[#dbeafe]' : 'hover:bg-[#eef3f8]'
+                        }`}
+                      >
+                        <span className="h-3 w-3 rounded-sm border border-[#c8d1dc] bg-white" />
+                        <span>{item}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : null}
+            </div>
             <ToolbarIcon icon={PencilLine} label="Edit" />
             <ToolbarIcon icon={RefreshCw} label="Refresh" />
             <ToolbarIcon icon={EllipsisVertical} label="More actions" />
@@ -585,9 +657,12 @@ function Dashboard() {
           sensors={sensors}
           onDragEnd={({ active, over }) => reorderSections(active.id, over?.id)}
         >
-          <SortableContext items={layout.map((item) => item.id)} strategy={rectSortingStrategy}>
+          <SortableContext
+            items={visibleLayout.map((item) => item.id)}
+            strategy={rectSortingStrategy}
+          >
             <div className="mt-3 grid grid-cols-12 gap-3">
-              {layout.map((section) => renderSection(section))}
+              {visibleLayout.map((section) => renderSection(section))}
             </div>
           </SortableContext>
         </DndContext>
@@ -676,7 +751,7 @@ function Dashboard() {
                 id="create-project-launcher-title"
                 className="text-[1.05rem] font-semibold text-[#0b2c4d]"
               >
-                Create Project
+                New Space
               </h2>
               <button
                 type="button"
