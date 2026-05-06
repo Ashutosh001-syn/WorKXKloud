@@ -384,7 +384,7 @@ function getStatusTone(status) {
     case 'Completed': return 'bg-[#dff1ff] text-[#2a78d2]'
     case 'On Hold': return 'bg-[#ffe8d8] text-[#db7c28]'
     case 'Allocated': return 'bg-[#fff6e5] text-[#f59e0b]'
-    case 'Re-allocated': return 'bg-[#f3f0ff] text-[#7c3aed]'
+    case 're-allocated': return 'bg-[#f3f0ff] text-[#7c3aed]'
     case 'Deny': return 'bg-[#fee2e2] text-[#ef4444]'
     case 'Accepted': return 'bg-[#dcfce7] text-[#22c55e]'
     default: return 'bg-[#fff0cb] text-[#d89a1d]'
