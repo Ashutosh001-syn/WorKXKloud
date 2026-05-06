@@ -579,7 +579,11 @@ function CreateProjectPage() {
     navigate(location.pathname, { replace: true, state: null })
   }, [location.pathname, location.state, navigate, projects])
 
-  const activeProjects = projects.filter((p) => p.status === 'Active').length
+  const activeProjects = projects.filter((p) => p.status === 'Allocated').length
+  const reallocationCount = projects.filter((p) => {
+    const status = String(p.status || '').toLowerCase()
+    return status === 're-allocated' || status === 'reallocated'
+  }).length
   const completedProjects = projects.filter((p) => p.status === 'Completed').length
   const totalBudget = projects.reduce((sum, p) => sum + Number(p.budget || 0), 0)
 
@@ -775,7 +779,7 @@ function CreateProjectPage() {
   }
 
   return (
-    <div className="relative min-h-screen bg-[#f1f5f9] p-3 sm:p-4">
+    <div className="relative min-h-screen bg-[#0d2646] p-3 sm:p-4">
       <section className="rounded-[10px] bg-white p-4 shadow-[0_16px_40px_rgba(3,10,24,0.16)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-[2rem] font-semibold tracking-[-0.04em] text-[#161616]">
@@ -964,9 +968,10 @@ function CreateProjectPage() {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
           <ProjectMetric icon={BriefcaseBusiness} label="Total Projects" value={projects.length} />
-          <ProjectMetric icon={UserRound} label="Active Projects" value={activeProjects} />
+          <ProjectMetric icon={UserRound} label="Allocation Count" value={activeProjects} />
+          <ProjectMetric icon={UserRound} label="Reallocation Count" value={reallocationCount} />
           <ProjectMetric icon={CalendarRange} label="Tracked Budget" value={formatCurrency(totalBudget)} />
         </div>
 
