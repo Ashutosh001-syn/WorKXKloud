@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { Search, ChevronDown, Clock, Plus, Eye, Pencil, Trash2, User, X, Shield, ShieldOff, Loader2 } from 'lucide-react'
-import { API_ENDPOINTS } from '../api'
+import { API_ENDPOINTS } from '../config/api'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -35,8 +35,8 @@ const decimalOnly = (v = '') => v.replace(/[^0-9.]/g, '')
 const mapApiRow = (r) => ({
   id: r.id,
   type: r.resource_type
-    ? r.resource_type.charAt(0).toUpperCase() + r.resource_type.slice(1).toLowerCase()
-    : 'Inhouse',
+    ? (r.resource_type.toLowerCase() === 'inhouse' ? 'In-house' : r.resource_type.charAt(0).toUpperCase() + r.resource_type.slice(1).toLowerCase())
+    : 'In-house',
 
   name: r.name || '',
   email: r.email || '',
@@ -58,6 +58,14 @@ const mapApiRow = (r) => ({
 
   // API: 1 = active, 0 = deactive
   blocked: Number(r.is_active) === 0,
+
+  monday: r.monday === true || String(r.monday) === 'true' || r.monday === 1 || String(r.monday) === '1',
+  tuesday: r.tuesday === true || String(r.tuesday) === 'true' || r.tuesday === 1 || String(r.tuesday) === '1',
+  wednesday: r.wednesday === true || String(r.wednesday) === 'true' || r.wednesday === 1 || String(r.wednesday) === '1',
+  thursday: r.thursday === true || String(r.thursday) === 'true' || r.thursday === 1 || String(r.thursday) === '1',
+  friday: r.friday === true || String(r.friday) === 'true' || r.friday === 1 || String(r.friday) === '1',
+  saturday: r.saturday === true || String(r.saturday) === 'true' || r.saturday === 1 || String(r.saturday) === '1',
+  sunday: r.sunday === true || String(r.sunday) === 'true' || r.sunday === 1 || String(r.sunday) === '1',
 })
 
 // Build FormData for create/update
@@ -65,7 +73,7 @@ const buildFormData = (form, isUpdate = false) => {
   const fd = new FormData()
   if (isUpdate) fd.append('id', form.id)
 
-  const typeMap = { Inhouse: 'inhouse', Freelancer: 'freelancer', Material: 'material', Cost: 'cost' }
+  const typeMap = { 'In-house': 'inhouse', Freelancer: 'freelancer', Material: 'material', Cost: 'cost' }
   fd.append('resource_type', typeMap[form.type] || form.type.toLowerCase())
   fd.append('name', form.name || '')
   fd.append('role', form.role || '')
@@ -81,6 +89,13 @@ const buildFormData = (form, isUpdate = false) => {
   fd.append('rate_per_unit', form.rate || '')
   fd.append('cost', form.cost || '')
   fd.append('is_active', form.blocked ? '0' : '1')
+  fd.append('monday', form.monday ? 'true' : 'false')
+  fd.append('tuesday', form.tuesday ? 'true' : 'false')
+  fd.append('wednesday', form.wednesday ? 'true' : 'false')
+  fd.append('thursday', form.thursday ? 'true' : 'false')
+  fd.append('friday', form.friday ? 'true' : 'false')
+  fd.append('saturday', form.saturday ? 'true' : 'false')
+  fd.append('sunday', form.sunday ? 'true' : 'false')
 
   // image: only send if it's a new base64 upload
   if (form.image && form.image.startsWith('data:')) {
@@ -108,7 +123,7 @@ const roleTone = {
 }
 
 /* ─── Time Dialer ─────────────────────────────────────────────────────────── */
-function TimeDial({ label, value, onChange, onClose, upward }) {
+function TimeDial({ label, value, onChange, onClose, upward, style: posStyle }) {
   const parseTime = (t = '12:00 AM') => {
     const [hm, period] = (t || '12:00 AM').split(' ')
     const [h, m] = (hm || '12:00').split(':').map(Number)
@@ -128,11 +143,10 @@ function TimeDial({ label, value, onChange, onClose, upward }) {
   }, [])
 
   return (
-    <div className="absolute z-[200] w-[260px] rounded-2xl bg-white shadow-2xl ring-1 ring-gray-100 overflow-hidden"
+    <div className="fixed z-[200] w-[260px] rounded-2xl bg-white shadow-2xl ring-1 ring-gray-100 overflow-hidden"
       style={{
         animation: 'fadeIn 0.15s ease',
-        ...(upward ? { bottom: '110%', top: 'auto' } : { top: '110%' }),
-        left: '50%', transform: 'translateX(-50%)',
+        ...posStyle,
       }}>
       <div className="bg-[#0052ff] px-5 py-3 flex items-center justify-between">
         <span className="text-[13px] font-bold text-white/80">{label}</span>
@@ -198,7 +212,7 @@ function TimeDial({ label, value, onChange, onClose, upward }) {
 /* ─── Smart Time Input ──────────────────────────────────────────────────── */
 function TimeInput({ value, onChange, disabled }) {
   const [open, setOpen] = useState(false)
-  const [upward, setUpward] = useState(false)
+  const [dialPos, setDialPos] = useState({ top: 0, left: 0 })
   const ref = useRef(null)
 
   useEffect(() => {
@@ -211,7 +225,22 @@ function TimeInput({ value, onChange, disabled }) {
     if (disabled) return
     if (ref.current) {
       const rect = ref.current.getBoundingClientRect()
-      setUpward(window.innerHeight - rect.bottom < 320)
+      const spaceBelow = window.innerHeight - rect.bottom
+      const dialHeight = 320
+      const dialWidth = 260
+      let top, left
+
+      if (spaceBelow < dialHeight && rect.top > spaceBelow) {
+        top = rect.top - dialHeight - 4
+      } else {
+        top = rect.bottom + 4
+      }
+
+      left = rect.left + rect.width / 2 - dialWidth / 2
+      if (left < 8) left = 8
+      if (left + dialWidth > window.innerWidth - 8) left = window.innerWidth - dialWidth - 8
+
+      setDialPos({ top, left })
     }
     setOpen(o => !o)
   }
@@ -226,7 +255,7 @@ function TimeInput({ value, onChange, disabled }) {
         <Clock size={12} style={{ opacity: disabled ? 0.4 : 0.8 }} />
         <span>{value}</span>
       </button>
-      {open && <TimeDial label="Select" value={value} onChange={onChange} onClose={() => setOpen(false)} upward={upward} />}
+      {open && <TimeDial label="Select" value={value} onChange={onChange} onClose={() => setOpen(false)} style={{ position: 'fixed', top: dialPos.top, left: dialPos.left }} />}
     </div>
   )
 }
@@ -267,18 +296,25 @@ function ViewModal({ row, onClose }) {
   const roleStyle = roleTone[row.role] || { bg: '#f1f5f9', color: '#475569' }
   const fields = []
 
-  if (row.type === 'Inhouse' || row.type === 'Freelancer') {
+  if (row.type === 'In-house' || row.type === 'Freelancer') {
     fields.push(
       { label: 'Email', value: row.email },
       { label: 'Mobile', value: row.mobile },
       { label: 'Role', value: row.role },
       { label: 'Shift', value: row.shift },
-      row.type === 'Inhouse'
-        ? { label: 'Salary (CTC)', value: row.salary ? `₹${row.salary}` : '—' }
+      row.type === 'In-house'
+        ? { label: 'CTC', value: row.salary ? `₹${row.salary}` : '—' }
         : { label: 'Hourly Rate', value: row.hourlyRate ? `$${row.hourlyRate}/hr` : '—' },
     )
     if (row.type === 'Freelancer') fields.push({ label: 'Experience', value: row.experience })
     fields.push({ label: 'Timing', value: `${row.startTime} — ${row.endTime}` })
+    
+    const activeDays = [
+      row.monday && 'Mon', row.tuesday && 'Tue', row.wednesday && 'Wed', 
+      row.thursday && 'Thu', row.friday && 'Fri', row.saturday && 'Sat', row.sunday && 'Sun'
+    ].filter(Boolean).join(', ')
+    if (activeDays) fields.push({ label: 'Working Days', value: activeDays })
+
     if (row.blocked) fields.push({ label: 'Status', value: '🚫 Blocked' })
   } else if (row.type === 'Material') {
     fields.push({ label: 'Unit', value: row.unit }, { label: 'Rate per unit', value: row.rate }, { label: 'Date & Time', value: row.dateTime })
@@ -294,7 +330,7 @@ function ViewModal({ row, onClose }) {
             <X size={16} />
           </button>
           <div className="flex items-center gap-4">
-            {(row.type === 'Inhouse' || row.type === 'Freelancer') ? (
+            {(row.type === 'In-house' || row.type === 'Freelancer') ? (
               <Avatar src={row.image} name={row.name} size={56} />
             ) : (
               <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
@@ -339,7 +375,8 @@ function EditModal({ row, onClose, onSave }) {
   const set = (k, v) => {
     let next = v
     if (k === 'name') next = nameOnly(v)
-    if (k === 'mobile' || k === 'salary') next = numbersOnly(v)
+    if (k === 'mobile') next = numbersOnly(v).slice(0, 10)
+    else if (k === 'salary') next = numbersOnly(v)
     if (k === 'hourlyRate' || k === 'rate' || k === 'cost') next = decimalOnly(v)
     setForm(p => ({ ...p, [k]: next }))
   }
@@ -348,6 +385,7 @@ function EditModal({ row, onClose, onSave }) {
   const lbl = "block text-[12px] font-bold text-[#475569] uppercase tracking-wider mb-1.5"
 
   const handleSave = async () => {
+    if (form.mobile && form.mobile.length !== 10) { alert('Mobile number must be exactly 10 digits'); return }
     setLoading(true)
     try {
       const fd = buildFormData(form, true)
@@ -376,7 +414,7 @@ function EditModal({ row, onClose, onSave }) {
         </div>
 
         <div className="px-8 py-6 space-y-5">
-          {(form.type === 'Inhouse' || form.type === 'Freelancer') && (<>
+          {(form.type === 'In-house' || form.type === 'Freelancer') && (<>
             <div className="flex items-center gap-4">
               <Avatar src={form.image} name={form.name} size={52} />
               <div>
@@ -424,7 +462,7 @@ function EditModal({ row, onClose, onSave }) {
                     <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94a3b8] pointer-events-none" />
                   </div>
                 </div>
-                <div><label className={lbl}>Salary (CTC)</label><input className={inp} type="number" value={form.salary} onChange={e => set('salary', e.target.value)} /></div>
+                <div><label className={lbl}>CTC</label><input className={inp} type="number" value={form.salary} onChange={e => set('salary', e.target.value)} /></div>
               </>)}
             </div>
 
@@ -440,6 +478,27 @@ function EditModal({ row, onClose, onSave }) {
                   <p className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider mb-1.5">End Time</p>
                   <TimeInput value={form.endTime} onChange={v => set('endTime', v)} disabled={false} />
                 </div>
+              </div>
+            </div>
+
+            <div>
+              <label className={lbl}>Working Days</label>
+              <div className="flex flex-wrap gap-4 p-4 rounded-2xl bg-[#f8fafc] border border-[#e2e8f0]">
+                {[
+                  { key: 'monday', label: 'Mon' },
+                  { key: 'tuesday', label: 'Tue' },
+                  { key: 'wednesday', label: 'Wed' },
+                  { key: 'thursday', label: 'Thu' },
+                  { key: 'friday', label: 'Fri' },
+                  { key: 'saturday', label: 'Sat' },
+                  { key: 'sunday', label: 'Sun' }
+                ].map(day => (
+                  <label key={day.key} className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" className="w-4 h-4 rounded border-[#cbd5e1] text-[#0052ff] focus:ring-[#0052ff]"
+                           checked={form[day.key] || false} onChange={e => set(day.key, e.target.checked)} />
+                    <span className="text-[13px] font-semibold text-[#475569]">{day.label}</span>
+                  </label>
+                ))}
               </div>
             </div>
           </>)}
@@ -479,16 +538,18 @@ function EditModal({ row, onClose, onSave }) {
 /* ─── Add Resource Modal ────────────────────────────────────────────────── */
 function AddResourceModal({ activeTab, onClose, onSave }) {
   const [form, setForm] = useState({
-    type: activeTab || 'Inhouse', name: '', role: '', email: '', mobile: '',
+    type: activeTab || 'In-house', name: '', role: '', email: '', mobile: '',
     experience: '', hourlyRate: '', shift: 'Day', salary: '',
     startTime: '09:00 AM', endTime: '06:00 PM',
     unit: '', rate: '', cost: '', image: null,
+    monday: false, tuesday: false, wednesday: false, thursday: false, friday: false, saturday: false, sunday: false
   })
   const [loading, setLoading] = useState(false)
   const set = (k, v) => {
     let next = v
     if (k === 'name') next = nameOnly(v)
-    if (k === 'mobile' || k === 'salary') next = numbersOnly(v)
+    if (k === 'mobile') next = numbersOnly(v).slice(0, 10)
+    else if (k === 'salary') next = numbersOnly(v)
     if (k === 'hourlyRate' || k === 'rate' || k === 'cost') next = decimalOnly(v)
     setForm(p => ({ ...p, [k]: next }))
   }
@@ -498,6 +559,7 @@ function AddResourceModal({ activeTab, onClose, onSave }) {
 
   const handleAdd = async () => {
     if (!form.name.trim()) { alert('Name is required'); return }
+    if (form.mobile && form.mobile.length !== 10) { alert('Mobile number must be exactly 10 digits'); return }
     setLoading(true)
     try {
       const fd = buildFormData(form, false)
@@ -529,7 +591,7 @@ function AddResourceModal({ activeTab, onClose, onSave }) {
           <div>
             <label className={lbl}>Resource Type</label>
             <div className="grid grid-cols-4 gap-2">
-              {['Inhouse', 'Freelancer', 'Material', 'Cost'].map(t => (
+              {['In-house', 'Freelancer', 'Material', 'Cost'].map(t => (
                 <button key={t} onClick={() => set('type', t)}
                   className="py-2 rounded-xl text-[13px] font-bold transition-all"
                   style={form.type === t
@@ -541,7 +603,7 @@ function AddResourceModal({ activeTab, onClose, onSave }) {
             </div>
           </div>
 
-          {(form.type === 'Inhouse' || form.type === 'Freelancer') && (<>
+          {(form.type === 'In-house' || form.type === 'Freelancer') && (<>
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-full border-2 border-[#e2e8f0] overflow-hidden flex items-center justify-center bg-[#f8fafc]">
                 {form.image ? <img src={form.image} className="w-full h-full object-cover" alt="preview" /> : <User size={24} className="text-[#cbd5e1]" />}
@@ -588,7 +650,7 @@ function AddResourceModal({ activeTab, onClose, onSave }) {
                     <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94a3b8] pointer-events-none" />
                   </div>
                 </div>
-                <div><label className={lbl}>Salary (CTC)</label><input className={inp} type="number" value={form.salary} onChange={e => set('salary', e.target.value)} placeholder="e.g. 20000" /></div>
+                <div><label className={lbl}>CTC</label><input className={inp} type="number" value={form.salary} onChange={e => set('salary', e.target.value)} placeholder="e.g. 20000" /></div>
               </>)}
             </div>
 
@@ -604,6 +666,27 @@ function AddResourceModal({ activeTab, onClose, onSave }) {
                   <p className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider mb-1.5">End Time</p>
                   <TimeInput value={form.endTime} onChange={v => set('endTime', v)} disabled={false} />
                 </div>
+              </div>
+            </div>
+
+            <div>
+              <label className={lbl}>Working Days</label>
+              <div className="flex flex-wrap gap-4 p-4 rounded-2xl bg-[#f8fafc] border border-[#e2e8f0]">
+                {[
+                  { key: 'monday', label: 'Mon' },
+                  { key: 'tuesday', label: 'Tue' },
+                  { key: 'wednesday', label: 'Wed' },
+                  { key: 'thursday', label: 'Thu' },
+                  { key: 'friday', label: 'Fri' },
+                  { key: 'saturday', label: 'Sat' },
+                  { key: 'sunday', label: 'Sun' }
+                ].map(day => (
+                  <label key={day.key} className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" className="w-4 h-4 rounded border-[#cbd5e1] text-[#0052ff] focus:ring-[#0052ff]"
+                           checked={form[day.key] || false} onChange={e => set(day.key, e.target.checked)} />
+                    <span className="text-[13px] font-semibold text-[#475569]">{day.label}</span>
+                  </label>
+                ))}
               </div>
             </div>
           </>)}
@@ -673,7 +756,7 @@ function BanModal({ row, onClose, onConfirm }) {
 /* ─── Main Page ─────────────────────────────────────────────────────────── */
 export default function ResourceMasterPage() {
   const [showAdd, setShowAdd] = useState(false)
-  const [activeTab, setActiveTab] = useState('Inhouse')
+  const [activeTab, setActiveTab] = useState('In-house')
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
   const [viewRow, setViewRow] = useState(null)
@@ -682,6 +765,15 @@ export default function ResourceMasterPage() {
   const [toast, setToast] = useState(null)
 
   const showToast = (message, type = 'success') => setToast({ message, type })
+
+  // ── Responsive hook ──────────────────────────────────────────────────────
+  const [winW, setWinW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200)
+  useEffect(() => {
+    const onResize = () => setWinW(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  const isMobile = winW < 1024
 
   // ── Fetch list from API ──────────────────────────────────────────────────
   const fetchResources = useCallback(async () => {
@@ -750,68 +842,74 @@ const toggleBan = async (row) => {
   }
 }
 
-  const thClass = "px-4 py-4 text-left text-[11px] font-black uppercase tracking-widest text-[#94a3b8] whitespace-nowrap"
+  const thClass = "px-6 py-5 text-left text-[11px] font-black uppercase tracking-widest text-[#94a3b8] whitespace-nowrap"
+
+  const actionBtnList = (row) => [
+    { key: 'view', icon: <Eye size={14} />, title: 'View', bg: '#e6ffed', color: '#00a83a', hoverBg: '#00a83a', onClick: () => setViewRow(row) },
+    { key: 'edit', icon: <Pencil size={14} />, title: 'Edit', bg: '#e8f2ff', color: '#0052ff', hoverBg: '#0052ff', onClick: () => setEditRow(row) },
+    { key: 'ban', icon: row.blocked ? <ShieldOff size={14} /> : <Shield size={14} />, title: row.blocked ? 'Unblock' : 'Block',
+      bg: row.blocked ? '#e6ffed' : '#fff0f0', color: row.blocked ? '#00a83a' : '#d32f2f',
+      hoverBg: row.blocked ? '#00a83a' : '#d32f2f', onClick: () => setBanRow(row) },
+  ]
 
   const ActionBtns = ({ row }) => (
     <td className="px-4 py-4 pr-6">
       <div className="flex items-center justify-center gap-2">
-        <button onClick={() => setViewRow(row)} title="View"
-          className="w-8 h-8 flex items-center justify-center rounded-xl transition-all"
-          style={{ background: '#e6ffed', color: '#00a83a' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#00a83a'; e.currentTarget.style.color = '#fff' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#e6ffed'; e.currentTarget.style.color = '#00a83a' }}>
-          <Eye size={14} />
-        </button>
-        <button onClick={() => setEditRow(row)} title="Edit"
-          className="w-8 h-8 flex items-center justify-center rounded-xl transition-all"
-          style={{ background: '#e8f2ff', color: '#0052ff' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#0052ff'; e.currentTarget.style.color = '#fff' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#e8f2ff'; e.currentTarget.style.color = '#0052ff' }}>
-          <Pencil size={14} />
-        </button>
-        <button onClick={() => setBanRow(row)} title={row.blocked ? 'Unblock' : 'Block'}
-          className="w-8 h-8 flex items-center justify-center rounded-xl transition-all"
-          style={row.blocked ? { background: '#e6ffed', color: '#00a83a' } : { background: '#fff0f0', color: '#d32f2f' }}
-          onMouseEnter={e => {
-            if (row.blocked) { e.currentTarget.style.background = '#00a83a'; e.currentTarget.style.color = '#fff' }
-            else { e.currentTarget.style.background = '#d32f2f'; e.currentTarget.style.color = '#fff' }
-          }}
-          onMouseLeave={e => {
-            if (row.blocked) { e.currentTarget.style.background = '#e6ffed'; e.currentTarget.style.color = '#00a83a' }
-            else { e.currentTarget.style.background = '#fff0f0'; e.currentTarget.style.color = '#d32f2f' }
-          }}>
-          {row.blocked ? <ShieldOff size={14} /> : <Shield size={14} />}
-        </button>
+        {actionBtnList(row).map(b => (
+          <button key={b.key} onClick={b.onClick} title={b.title}
+            className="w-8 h-8 flex items-center justify-center rounded-xl transition-all"
+            style={{ background: b.bg, color: b.color }}
+            onMouseEnter={e => { e.currentTarget.style.background = b.hoverBg; e.currentTarget.style.color = '#fff' }}
+            onMouseLeave={e => { e.currentTarget.style.background = b.bg; e.currentTarget.style.color = b.color }}>
+            {b.icon}
+          </button>
+        ))}
       </div>
     </td>
   )
 
+  const ActionBtnsRow = ({ row }) => (
+    <div className="flex items-center gap-2">
+      {actionBtnList(row).map(b => (
+        <button key={b.key} onClick={b.onClick} title={b.title}
+          className="w-8 h-8 flex items-center justify-center rounded-xl transition-all"
+          style={{ background: b.bg, color: b.color }}
+          onMouseEnter={e => { e.currentTarget.style.background = b.hoverBg; e.currentTarget.style.color = '#fff' }}
+          onMouseLeave={e => { e.currentTarget.style.background = b.bg; e.currentTarget.style.color = b.color }}>
+          {b.icon}
+        </button>
+      ))}
+    </div>
+  )
+
   const renderHeaders = () => {
-    if (activeTab === 'Inhouse') return (
+    if (activeTab === 'In-house') return (
       <tr style={{ background: '#f8fbff' }}>
-        <th className={thClass + " pl-6 w-14"}>Sr.</th>
-        <th className={thClass + " w-12"}>Photo</th>
-        <th className={thClass}>Name</th>
-        <th className={thClass}>Email</th>
-        <th className={thClass + " text-center"}>Role</th>
-        <th className={thClass + " text-center"}>Shift</th>
-        <th className={thClass + " text-center"}>Salary</th>
-        <th className={thClass + " text-center"}>Timing</th>
-        <th className={thClass + " text-center pr-6"}>Actions</th>
+        <th className={thClass + " pl-8"} style={{ width: 80 }}>Sr.</th>
+        <th className={thClass} style={{ width: 80 }}>Photo</th>
+        <th className={thClass} style={{ width: 220 }}>Name</th>
+        <th className={thClass} style={{ width: 260 }}>Email</th>
+        <th className={thClass + " text-center"} style={{ width: 160 }}>Role</th>
+        <th className={thClass + " text-center"} style={{ width: 100 }}>Shift</th>
+        <th className={thClass + " text-center"} style={{ width: 120 }}>CTC</th>
+        <th className={thClass + " text-center"} style={{ width: 220 }}>Timing</th>
+        <th className={thClass + " text-center"} style={{ width: 200 }}>Working Days</th>
+        <th className={thClass + " text-center pr-8"} style={{ width: 160 }}>Actions</th>
       </tr>
     )
     if (activeTab === 'Freelancer') return (
       <tr style={{ background: '#f8fbff' }}>
-        <th className={thClass + " pl-6 w-14"}>Sr.</th>
-        <th className={thClass + " w-12"}>Photo</th>
-        <th className={thClass}>Name</th>
-        <th className={thClass}>Email</th>
-        <th className={thClass}>Mobile</th>
-        <th className={thClass + " text-center"}>Role</th>
-        <th className={thClass + " text-center"}>Exp.</th>
-        <th className={thClass + " text-center"}>$/hr</th>
-        <th className={thClass + " text-center"}>Timing</th>
-        <th className={thClass + " text-center pr-6"}>Actions</th>
+        <th className={thClass + " pl-8"} style={{ width: 80 }}>Sr.</th>
+        <th className={thClass} style={{ width: 80 }}>Photo</th>
+        <th className={thClass} style={{ width: 200 }}>Name</th>
+        <th className={thClass} style={{ width: 220 }}>Email</th>
+        <th className={thClass} style={{ width: 160 }}>Mobile</th>
+        <th className={thClass + " text-center"} style={{ width: 160 }}>Role</th>
+        <th className={thClass + " text-center"} style={{ width: 80 }}>Exp.</th>
+        <th className={thClass + " text-center"} style={{ width: 100 }}>$/hr</th>
+        <th className={thClass + " text-center"} style={{ width: 220 }}>Timing</th>
+        <th className={thClass + " text-center"} style={{ width: 200 }}>Working Days</th>
+        <th className={thClass + " text-center pr-8"} style={{ width: 160 }}>Actions</th>
       </tr>
     )
     if (activeTab === 'Material') return (
@@ -835,7 +933,7 @@ const toggleBan = async (row) => {
     )
   }
 
-  const tdBase = "px-4 py-4 text-[13px] text-[#334155]"
+  const tdBase = "px-6 py-5 text-[13px] text-[#334155]"
 
   const renderRow = (row, i) => {
     const rs = roleTone[row.role]
@@ -843,19 +941,19 @@ const toggleBan = async (row) => {
 
     const sharedCells = (
       <>
-        <td className={tdBase + " pl-6 text-[#94a3b8] font-semibold w-14"}>{i + 1}</td>
-        <td className="px-4 py-3 w-12"><Avatar src={row.image} name={row.name} size={34} /></td>
-        <td className={tdBase + " font-semibold max-w-[130px] truncate"}>
-          <div className="flex items-center gap-1.5">
+        <td className={tdBase + " pl-8 text-[#94a3b8] font-semibold w-14"}>{i + 1}</td>
+        <td className="px-4 py-3 w-12"><Avatar src={row.image} name={row.name} size={38} /></td>
+        <td className={tdBase + " font-semibold max-w-[180px] truncate"}>
+          <div className="flex items-center gap-2">
             {row.blocked && <span title="Blocked" style={{ color: '#d32f2f', fontSize: 12 }}>🚫</span>}
             {row.name}
           </div>
         </td>
-        <td className={tdBase + " text-[#64748b] max-w-[160px] truncate"}>{row.email}</td>
+        <td className={tdBase + " text-[#64748b] max-w-[200px] truncate"}>{row.email}</td>
       </>
     )
 
-    if (activeTab === 'Inhouse') return (
+    if (activeTab === 'In-house') return (
       <tr key={row.id} style={rowStyle} onMouseEnter={e => e.currentTarget.style.background = '#fafbff'} onMouseLeave={e => e.currentTarget.style.background = ''}>
         {sharedCells}
         <td className={tdBase + " text-center"}>
@@ -869,6 +967,14 @@ const toggleBan = async (row) => {
             <span className="text-[#cbd5e1] text-[10px]">→</span>
             <span className="px-2 py-1 rounded-lg text-[11px] font-semibold" style={{ background: '#f0f5ff', color: '#0052ff' }}>{row.endTime}</span>
           </div>
+        </td>
+        <td className={tdBase + " text-center"}>
+          <span className="text-[11px] font-bold text-[#64748b]">
+            {[
+              row.monday && 'M', row.tuesday && 'T', row.wednesday && 'W', 
+              row.thursday && 'TH', row.friday && 'F', row.saturday && 'S', row.sunday && 'S'
+            ].filter(Boolean).join(',') || '—'}
+          </span>
         </td>
         <ActionBtns row={row} />
       </tr>
@@ -889,6 +995,14 @@ const toggleBan = async (row) => {
             <span className="text-[#cbd5e1] text-[10px]">→</span>
             <span className="px-2 py-1 rounded-lg text-[11px] font-semibold" style={{ background: '#f0f5ff', color: '#0052ff' }}>{row.endTime}</span>
           </div>
+        </td>
+        <td className={tdBase + " text-center"}>
+          <span className="text-[11px] font-bold text-[#64748b]">
+            {[
+              row.monday && 'M', row.tuesday && 'T', row.wednesday && 'W', 
+              row.thursday && 'TH', row.friday && 'F', row.saturday && 'S', row.sunday && 'S'
+            ].filter(Boolean).join(',') || '—'}
+          </span>
         </td>
         <ActionBtns row={row} />
       </tr>
@@ -916,6 +1030,97 @@ const toggleBan = async (row) => {
     )
   }
 
+  // ── Card renderer for mobile ──────────────────────────────────────────────
+  const renderCard = (row, i) => {
+    const rs = roleTone[row.role]
+    const isPerson = activeTab === 'In-house' || activeTab === 'Freelancer'
+
+    return (
+      <div key={row.id} className="rm-card" style={{ opacity: row.blocked ? 0.65 : 1 }}>
+        {/* Card header */}
+        <div className="rm-card-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', flexShrink: 0, width: 22 }}>{i + 1}.</span>
+            {isPerson && <Avatar src={row.image} name={row.name} size={38} />}
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {row.blocked && <span style={{ color: '#d32f2f', fontSize: 12 }}>🚫</span>}
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#14365c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
+              </div>
+              {isPerson && row.email && <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.email}</p>}
+            </div>
+          </div>
+          <ActionBtnsRow row={row} />
+        </div>
+
+        {/* Card body — key-value grid */}
+        <div className="rm-card-body">
+          {isPerson && (
+            <>
+              {row.role && (
+                <div className="rm-card-field">
+                  <span className="rm-card-label">Role</span>
+                  {rs
+                    ? <span style={{ display: 'inline-flex', padding: '3px 10px', borderRadius: 8, fontSize: 11, fontWeight: 800, background: rs.bg, color: rs.color }}>{row.role}</span>
+                    : <span className="rm-card-value">{row.role}</span>}
+                </div>
+              )}
+              {activeTab === 'In-house' && (
+                <>
+                  <div className="rm-card-field">
+                    <span className="rm-card-label">Shift</span>
+                    <span className="rm-card-value">{row.shift}</span>
+                  </div>
+                  <div className="rm-card-field">
+                    <span className="rm-card-label">CTC</span>
+                    <span className="rm-card-value" style={{ fontWeight: 700, color: '#14365c' }}>{row.salary ? `₹${row.salary}` : '—'}</span>
+                  </div>
+                </>
+              )}
+              {activeTab === 'Freelancer' && (
+                <>
+                  <div className="rm-card-field">
+                    <span className="rm-card-label">Mobile</span>
+                    <span className="rm-card-value">{row.mobile || '—'}</span>
+                  </div>
+                  <div className="rm-card-field">
+                    <span className="rm-card-label">Exp.</span>
+                    <span className="rm-card-value">{row.experience || '—'}</span>
+                  </div>
+                  <div className="rm-card-field">
+                    <span className="rm-card-label">$/hr</span>
+                    <span className="rm-card-value" style={{ fontWeight: 700, color: '#14365c' }}>{row.hourlyRate ? `$${row.hourlyRate}` : '—'}</span>
+                  </div>
+                </>
+              )}
+              <div className="rm-card-field" style={{ gridColumn: '1 / -1' }}>
+                <span className="rm-card-label">Timing</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ padding: '3px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600, background: '#f0f5ff', color: '#0052ff' }}>{row.startTime}</span>
+                  <span style={{ color: '#cbd5e1', fontSize: 10 }}>→</span>
+                  <span style={{ padding: '3px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600, background: '#f0f5ff', color: '#0052ff' }}>{row.endTime}</span>
+                </div>
+              </div>
+            </>
+          )}
+          {activeTab === 'Material' && (
+            <>
+              <div className="rm-card-field"><span className="rm-card-label">Unit</span><span className="rm-card-value">{row.unit || '—'}</span></div>
+              <div className="rm-card-field"><span className="rm-card-label">Rate / unit</span><span className="rm-card-value">{row.rate || '—'}</span></div>
+              <div className="rm-card-field"><span className="rm-card-label">Date & Time</span><span className="rm-card-value" style={{ fontSize: 11 }}>{row.dateTime}</span></div>
+            </>
+          )}
+          {activeTab === 'Cost' && (
+            <>
+              <div className="rm-card-field"><span className="rm-card-label">Cost</span><span className="rm-card-value" style={{ fontWeight: 700, color: '#14365c' }}>{row.cost ? `₹${row.cost}` : '—'}</span></div>
+              <div className="rm-card-field"><span className="rm-card-label">Date & Time</span><span className="rm-card-value" style={{ fontSize: 11 }}>{row.dateTime}</span></div>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: '#f4f7fb', fontFamily: "'DM Sans', system-ui, sans-serif" }}>
       <style>{`
@@ -926,33 +1131,75 @@ const toggleBan = async (row) => {
         @keyframes modalIn { from { opacity: 0; transform: translateY(20px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
         @keyframes spin { to { transform: rotate(360deg); } }
         .animate-spin { animation: spin 1s linear infinite; }
+
+        /* ── Responsive card styles ── */
+        .rm-card {
+          background: #fff; border: 1px solid #f1f5f9; border-radius: 16px;
+          overflow: hidden; transition: box-shadow 0.2s, transform 0.15s;
+          animation: fadeIn 0.2s ease;
+        }
+        .rm-card:hover { box-shadow: 0 4px 20px rgba(0,82,255,0.08); transform: translateY(-1px); }
+        .rm-card-header {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 14px 16px; gap: 12px; border-bottom: 1px solid #f8fafc;
+        }
+        .rm-card-body {
+          display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px;
+          padding: 14px 16px;
+        }
+        .rm-card-field { display: flex; flex-direction: column; gap: 3px; }
+        .rm-card-label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.6px; }
+        .rm-card-value { font-size: 13px; font-weight: 500; color: #334155; }
+
+        @media (max-width: 639px) {
+          .rm-card-body { grid-template-columns: 1fr; }
+        }
+
+        /* ── Custom Scrollbar ── */
+        .custom-scrollbar::-webkit-scrollbar {
+          height: 8px;
+          width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 10px;
+          border: 2px solid #f1f5f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
       `}</style>
 
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '40px 32px' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: isMobile ? '20px 16px' : '40px 32px' }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: isMobile ? 'center' : 'flex-start', justifyContent: 'space-between', marginBottom: isMobile ? 20 : 32, flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 900, color: '#0f1e3d', letterSpacing: '-0.5px', margin: 0 }}>Resource Master</h1>
-            <p style={{ fontSize: 14, color: '#64748b', marginTop: 4, fontWeight: 500 }}>Manage all organizational resources from one place</p>
+            <h1 style={{ fontSize: isMobile ? 22 : 28, fontWeight: 900, color: '#0f1e3d', letterSpacing: '-0.5px', margin: 0 }}>Resource Master</h1>
+            {!isMobile && <p style={{ fontSize: 14, color: '#64748b', marginTop: 4, fontWeight: 500 }}>Manage all organizational resources from one place</p>}
           </div>
           <button onClick={() => setShowAdd(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'linear-gradient(135deg, #0052ff, #003adb)', color: '#fff', border: 'none', borderRadius: 14, padding: '12px 22px', fontSize: 14, fontWeight: 800, cursor: 'pointer', boxShadow: '0 4px 20px rgba(0,82,255,0.3)', transition: 'all 0.2s' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'linear-gradient(135deg, #0052ff, #003adb)', color: '#fff', border: 'none', borderRadius: isMobile ? 12 : 14, padding: isMobile ? '10px 16px' : '12px 22px', fontSize: isMobile ? 13 : 14, fontWeight: 800, cursor: 'pointer', boxShadow: '0 4px 20px rgba(0,82,255,0.3)', transition: 'all 0.2s', flexShrink: 0 }}
             onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
             onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
-            <Plus size={18} /> Add Resource
+            <Plus size={isMobile ? 16 : 18} /> Add Resource
           </button>
         </div>
 
         {/* Card */}
-        <div style={{ background: '#fff', borderRadius: 24, boxShadow: '0 2px 20px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-          {/* Tabs */}
-          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #f1f5f9', padding: '0 32px' }}>
-            {['Inhouse', 'Freelancer', 'Material', 'Cost'].map(tab => (
+        <div style={{ background: '#fff', borderRadius: isMobile ? 16 : 24, boxShadow: '0 2px 20px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+          {/* Tabs — scrollable on mobile */}
+          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #f1f5f9', padding: isMobile ? '0 12px' : '0 32px', overflowX: 'auto' }} className="no-scrollbar">
+            {['In-house', 'Freelancer', 'Material', 'Cost'].map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 style={{
-                  position: 'relative', padding: '18px 20px', fontSize: 14, fontWeight: 800,
+                  position: 'relative', padding: isMobile ? '14px 14px' : '18px 20px', fontSize: isMobile ? 13 : 14, fontWeight: 800,
                   background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s',
                   letterSpacing: '-0.2px', color: activeTab === tab ? '#0052ff' : '#94a3b8',
+                  whiteSpace: 'nowrap', flexShrink: 0,
                 }}>
                 {tab}
                 {activeTab === tab && <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, background: '#0052ff', borderRadius: '3px 3px 0 0' }} />}
@@ -960,26 +1207,34 @@ const toggleBan = async (row) => {
             ))}
           </div>
 
-          {/* Table */}
-          <div style={{ overflowX: 'auto' }}>
-            {loading ? (
-              <div style={{ padding: '60px 0', textAlign: 'center' }}>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, color: '#64748b', fontSize: 14, fontWeight: 600 }}>
-                  <Loader2 size={20} className="animate-spin" style={{ color: '#0052ff' }} />
-                  Loading resources…
-                </div>
+          {/* Content: Table on desktop, Cards on mobile */}
+          {loading ? (
+            <div style={{ padding: '60px 0', textAlign: 'center' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, color: '#64748b', fontSize: 14, fontWeight: 600 }}>
+                <Loader2 size={20} className="animate-spin" style={{ color: '#0052ff' }} />
+                Loading resources…
               </div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+            </div>
+          ) : isMobile ? (
+            /* ── Card layout ── */
+            <div style={{ padding: '12px 12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {filtered.length === 0
+                ? <div style={{ padding: '48px 0', textAlign: 'center', color: '#94a3b8', fontSize: 14, fontWeight: 600 }}>No records found</div>
+                : filtered.map((row, i) => renderCard(row, i))}
+            </div>
+          ) : (
+            /* ── Table layout ── */
+            <div className="overflow-x-auto custom-scrollbar">
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1400 }}>
                 <thead>{renderHeaders()}</thead>
-                <tbody>
+                <tbody style={{ background: '#fff' }}>
                   {filtered.length === 0
-                    ? <tr><td colSpan={10} style={{ padding: '60px 0', textAlign: 'center', color: '#94a3b8', fontSize: 14, fontWeight: 600 }}>No records found</td></tr>
+                    ? <tr><td colSpan={10} style={{ padding: '80px 0', textAlign: 'center', color: '#94a3b8', fontSize: 14, fontWeight: 600 }}>No records found</td></tr>
                     : filtered.map((row, i) => renderRow(row, i))}
                 </tbody>
               </table>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 

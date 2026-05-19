@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router-dom'
-import AppHeader from './AppHeader'
-import Sidebar from './Sidebar'
+import AppHeader from '../components/layout/AppHeader'
+import Sidebar from '../components/layout/Sidebar'
 
 function DashboardLayout() {
   return (

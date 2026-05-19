@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import CreateProjectWizardModal from '../components/projects/CreateProjectWizardModal'
-import { API_ENDPOINTS } from '../api'
+import { API_ENDPOINTS } from '../config/api'
 
 const PROJECT_STORAGE_KEY = 'workxkloud_projects_create_mock_v2'
 
@@ -25,6 +25,8 @@ function getDefaultFormValues() {
     name: '',
     clientName: '',
     pm: '',
+    techLead: '',
+    technology: '',
     status: 'Allocated',
     priority: '',
     budget: '0',
@@ -53,6 +55,8 @@ function mapProjectToFormValues(project = {}) {
     name: project.project_name ?? project.name ?? defaults.name,
     clientName: project.company_name ?? project.clientName ?? project.client ?? defaults.clientName,
     pm: project.project_manager ?? project.pm ?? project.owner ?? defaults.pm,
+    techLead: project.technical_lead ?? project.tech_lead ?? project.techLead ?? defaults.techLead,
+    technology: project.technology ?? defaults.technology,
     status: project.status ?? defaults.status,
     priority: project.priority ?? defaults.priority,
     budget: String(project.budget ?? defaults.budget),
@@ -217,16 +221,18 @@ function DeniedPMHistoryModal({ isOpen, onClose }) {
         {/* Search */}
         <div className="px-6 pt-4 pb-3">
           <div className="relative w-full max-w-xs">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-              size={14}
-            />
+            {!historySearch && (
+              <Search
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                size={14}
+              />
+            )}
             <input
               type="text"
               placeholder="Search by Project name"
               value={historySearch}
               onChange={(e) => setHistorySearch(e.target.value)}
-              className="h-9 w-full rounded-[8px] border border-[#e2e8f0] bg-[#f8fafc] pl-9 pr-4 text-[12px] text-[#17365d] outline-none focus:border-[#1191da] focus:bg-white transition-all placeholder:text-slate-400"
+              className="h-9 w-full rounded-[8px] border border-[#e2e8f0] bg-[#f8fafc] pl-3 pr-8 text-[12px] text-[#17365d] outline-none focus:border-[#1191da] focus:bg-white transition-all placeholder:text-slate-400"
             />
             {historySearch && (
               <button
@@ -452,7 +458,7 @@ function CreateProjectPage() {
           .filter((user) => user.role && user.role.toLowerCase().trim() === 'project manager')
           .map((user) => {
             const name = user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim()
-            const type = user.user_type === 'inhouse' ? '(Inhouse)' : '(Freelancer)'
+            const type = user.user_type === 'inhouse' ? '(In-house)' : '(Freelancer)'
             return `${name} ${type}`
           })
           .filter((name) => name.length > 0)
@@ -671,6 +677,7 @@ function CreateProjectPage() {
       ['name', 'Name'],
       ['plannedStartDate', 'Planned Start Date'],
       ['pm', 'PM'],
+      ['technology', 'Technology'],
       ['clientName', 'Client Name'],
       ['state', 'State'],
       ['projectType', 'Project Type'],
@@ -704,6 +711,8 @@ function CreateProjectPage() {
         payload.append('end_date', projectData.end_date || projectData.endDate || '')
         payload.append('duration', String(projectData.duration || ''))
         payload.append('project_manager', projectData.project_manager || projectData.pm || '')
+        payload.append('technical_lead', projectData.technical_lead || projectData.techLead || '')
+        payload.append('technology', projectData.technology || '')
         payload.append('project_type', projectData.project_type || projectData.projectType || '')
         payload.append('priority', projectData.priority || '')
         payload.append('methodology', projectData.methodology || '')
@@ -746,6 +755,8 @@ function CreateProjectPage() {
       clientName: formValues.clientName.trim(),
       owner: formValues.pm.trim(),
       pm: formValues.pm.trim(),
+      techLead: formValues.techLead.trim(),
+      technology: formValues.technology.trim(),
       status: formValues.status,
       priority: formValues.priority || 'Medium',
       budget: formValues.budget.trim(),
@@ -869,14 +880,14 @@ function CreateProjectPage() {
                         <label className="mb-1.5 block text-[11px] font-semibold text-[#64748b] uppercase tracking-wider transition-colors group-focus-within:text-[#1191da]">Client Name</label>
                         <div className="relative">
                           {!filters.client && (
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={12} />
+                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={12} />
                           )}
                           <input
                             type="text"
-                            placeholder="    Search by Client"
+                            placeholder="Search by Client"
                             value={filters.client}
                             onChange={(e) => setFilters({ ...filters, client: e.target.value })}
-                            className={`h-9 w-full rounded-[8px] border border-[#e2e8f0] bg-[#f8fafc] ${filters.client ? 'pl-3' : 'pl-8'} pr-8 text-[12px] text-[#17365d] outline-none transition-all focus:border-[#1191da] focus:bg-white focus:ring-4 focus:ring-[#1191da]/5 placeholder:text-slate-400`}
+                            className={`h-9 w-full rounded-[8px] border border-[#e2e8f0] bg-[#f8fafc] pl-3 pr-8 text-[12px] text-[#17365d] outline-none transition-all focus:border-[#1191da] focus:bg-white focus:ring-4 focus:ring-[#1191da]/5 placeholder:text-slate-400`}
                           />
                           {filters.client && (
                             <button
@@ -893,14 +904,14 @@ function CreateProjectPage() {
                         <label className="mb-1.5 block text-[11px] font-semibold text-[#64748b] uppercase tracking-wider transition-colors group-focus-within:text-[#1191da]">Project Manager</label>
                         <div className="relative">
                           {!filters.pm && (
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={12} />
+                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={12} />
                           )}
                           <input
                             type="text"
-                            placeholder="    Search by PM"
+                            placeholder="Search by PM"
                             value={filters.pm}
                             onChange={(e) => setFilters({ ...filters, pm: e.target.value })}
-                            className={`h-9 w-full rounded-[8px] border border-[#e2e8f0] bg-[#f8fafc] ${filters.pm ? 'pl-3' : 'pl-8'} pr-8 text-[12px] text-[#17365d] outline-none transition-all focus:border-[#1191da] focus:bg-white focus:ring-4 focus:ring-[#1191da]/5 placeholder:text-slate-400`}
+                            className={`h-9 w-full rounded-[8px] border border-[#e2e8f0] bg-[#f8fafc] pl-3 pr-8 text-[12px] text-[#17365d] outline-none transition-all focus:border-[#1191da] focus:bg-white focus:ring-4 focus:ring-[#1191da]/5 placeholder:text-slate-400`}
                           />
                           {filters.pm && (
                             <button
@@ -1133,6 +1144,14 @@ function CreateProjectPage() {
                   <p className="mt-1 text-[14px] font-medium text-[#1e293b]">{viewModal.project.company_name || viewModal.project.client}</p>
                 </div>
                 <div>
+                  <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Technical Lead</label>
+                  <p className="mt-1 text-[14px] font-medium text-[#1e293b]">{viewModal.project.technical_lead || viewModal.project.techLead || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Technology</label>
+                  <p className="mt-1 text-[14px] font-medium text-[#1e293b]">{viewModal.project.technology || 'N/A'}</p>
+                </div>
+                <div>
                   <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Project Type</label>
                   <p className="mt-1 text-[14px] font-medium text-[#1e293b]">{viewModal.project.project_type || 'N/A'}</p>
                 </div>
@@ -1197,6 +1216,66 @@ function CreateProjectPage() {
                         </tbody>
                       </table>
                     </div>
+                  </div>
+                )}
+
+                {/* Resource Allocation Section */}
+                {viewModal.project.resource_allocations && (
+                  <div className="col-span-2 space-y-4">
+                    <label className="mb-2 block text-[11px] font-bold text-[#17365d] uppercase tracking-wider border-b border-[#e2e8f0] pb-1">Resource Allocations</label>
+                    {(() => {
+                      try {
+                        const allocs = typeof viewModal.project.resource_allocations === 'string' 
+                          ? JSON.parse(viewModal.project.resource_allocations) 
+                          : viewModal.project.resource_allocations;
+                        
+                        if (!Array.isArray(allocs)) return null;
+
+                        return allocs.map((alloc, aIdx) => (
+                          <div key={aIdx} className="rounded-xl border border-[#f1f5f9] bg-white overflow-hidden shadow-sm">
+                            <div className="bg-[#f8fafc] px-3 py-2 border-b border-[#f1f5f9] flex justify-between items-center">
+                              <span className="text-[11px] font-bold text-[#475569] uppercase">{alloc.type}</span>
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left text-[11px]">
+                                <thead className="bg-[#fcfdfe] text-slate-400">
+                                  <tr>
+                                    <th className="px-3 py-2 font-semibold">Details</th>
+                                    {(alloc.type === 'In-house' || alloc.type === 'Freelancer') && <th className="px-3 py-2 font-semibold text-right">Alloc</th>}
+                                    {alloc.type === 'Cost' && <th className="px-3 py-2 font-semibold text-right">Amount</th>}
+                                    {alloc.type === 'Material' && <th className="px-3 py-2 font-semibold text-right">Total</th>}
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[#f1f5f9]">
+                                  {alloc.rows.map((row, rIdx) => (
+                                    <tr key={rIdx} className="hover:bg-slate-50/50">
+                                      <td className="px-3 py-2">
+                                        <p className="font-bold text-[#1e293b]">{row.resourceName || row.name || '—'}</p>
+                                        <p className="text-[10px] text-[#64748b]">
+                                          {row.role || row.unit || ''} 
+                                          {row.quantity ? ` (${row.quantity} units)` : ''}
+                                        </p>
+                                      </td>
+                                      {(alloc.type === 'In-house' || alloc.type === 'Freelancer') && (
+                                        <td className="px-3 py-2 text-right font-black text-blue-600">{row.allocation}%</td>
+                                      )}
+                                      {alloc.type === 'Cost' && (
+                                        <td className="px-3 py-2 text-right font-black text-emerald-600">₹{row.amount}</td>
+                                      )}
+                                      {alloc.type === 'Material' && (
+                                        <td className="px-3 py-2 text-right font-black text-emerald-600">₹{row.total}</td>
+                                      )}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ));
+                      } catch (e) {
+                        return <p className="text-[10px] text-red-400">Error parsing allocations</p>;
+                      }
+                    })()}
                   </div>
                 )}
 

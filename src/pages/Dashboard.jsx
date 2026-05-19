@@ -31,7 +31,7 @@ import {
   X,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { API_ENDPOINTS } from '../api'
+import { API_ENDPOINTS } from '../config/api'
 import SortableDashboardSection from '../components/dashboard/SortableDashboardSection'
 import {
   dashboardSectionMeta,
@@ -634,9 +634,8 @@ function Dashboard() {
                           setGridLimit(index + 1)
                           setShowGridMenu(false)
                         }}
-                        className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-[#4a5565] ${
-                          isSelected ? 'bg-[#dbeafe]' : 'hover:bg-[#eef3f8]'
-                        }`}
+                        className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-[#4a5565] ${isSelected ? 'bg-[#dbeafe]' : 'hover:bg-[#eef3f8]'
+                          }`}
                       >
                         <span className="h-3 w-3 rounded-sm border border-[#c8d1dc] bg-white" />
                         <span>{item}</span>
@@ -677,7 +676,7 @@ function Dashboard() {
       {showLegacyLauncher && openModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-[700px] rounded-lg bg-white shadow-lg">
-            
+
             {/* Header */}
             <div className="border-b px-6 py-3 text-center font-semibold text-gray-700">
               Create Project
@@ -686,7 +685,7 @@ function Dashboard() {
             {/* Body */}
             <div className="p-6">
               <div className="grid grid-cols-5 gap-6 text-center text-sm text-gray-600">
-                
+
                 {/* Row 1 */}
                 {["Project", "Task", "Timesheet", "Expense", "Discussion"].map((item) => (
                   <div key={item} className="cursor-pointer hover:text-blue-500">
@@ -776,7 +775,7 @@ function Dashboard() {
               {launcherSections.map((section) => (
                 <section key={section.title} className="relative">
                   <p className="mb-4 text-sm font-medium text-[#a5b0bf]">{section.title}</p>
-                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 md:grid-cols-5">
+                  <div className="grid grid-cols-3 gap-y-6 gap-x-2 sm:grid-cols-4 md:grid-cols-5">
                     {section.items.map((item) => {
                       const Icon = item.icon
                       const isProjectMenuOpen = activeLauncherMenu === item.submenu
@@ -785,34 +784,24 @@ function Dashboard() {
                       return (
                         <div
                           key={item.label}
-                          className={
-                            isProjectLauncher
-                              ? isProjectMenuOpen
-                                ? 'relative z-20 translate-x-[4px]'
-                                : 'relative translate-x-[4px]'
-                              : 'relative'
-                          }
+                          className="relative flex justify-center"
                         >
                           <button
                             type="button"
                             onClick={() => handleLauncherItemClick(item)}
                             className={[
-                              'group flex min-h-[92px] flex-col items-center justify-center gap-2 text-center text-sm transition',
+                              'group flex min-h-[92px] w-full flex-col items-center justify-start gap-2 rounded-[16px] px-1 py-2 text-center text-sm text-[#5f6c7b] transition hover:bg-[#f5f8fc] hover:text-[#1191da]',
                               isProjectMenuOpen
-                                ? 'w-[84px] rounded-[10px] border border-white bg-white px-2 py-2 text-[#5f6c7b] shadow-[0_14px_30px_rgba(15,23,42,0.18)]'
-                                : isProjectLauncher
-                                  ? 'w-[84px] rounded-[10px] px-2 py-2 text-[#5f6c7b] hover:bg-[#f5f8fc] hover:text-[#1191da]'
-                                  : 'w-full rounded-[16px] px-3 py-2 text-[#5f6c7b] hover:bg-[#f5f8fc] hover:text-[#1191da]',
+                                ? 'bg-white shadow-[0_14px_30px_rgba(15,23,42,0.18)] border border-[#e4e4e4]'
+                                : '',
                             ].join(' ')}
                           >
                             <span
                               className={[
-                                'flex items-center justify-center border transition',
+                                'flex items-center justify-center rounded-[14px] border border-[#dbe4ef] text-[#7a8797] transition group-hover:border-[#b4d9ef] group-hover:text-[#1191da]',
                                 isProjectMenuOpen
-                                  ? 'h-12 w-12 rounded-[8px] border-[#d8e2ee] bg-white text-[#8d98a8]'
-                                  : isProjectLauncher
-                                    ? 'h-12 w-12 rounded-[8px] border-[#dbe4ef] text-[#7a8797] group-hover:border-[#b4d9ef] group-hover:text-[#1191da]'
-                                    : 'h-11 w-11 rounded-[14px] border-[#dbe4ef] text-[#7a8797] group-hover:border-[#b4d9ef] group-hover:text-[#1191da]',
+                                  ? 'h-12 w-12 border-[#d8e2ee] bg-white text-[#8d98a8]'
+                                  : 'h-12 w-12',
                               ].join(' ')}
                             >
                               <Icon size={20} strokeWidth={1.8} />
@@ -829,34 +818,34 @@ function Dashboard() {
 
                           {isProjectMenuOpen ? (
                             <div className="absolute left-[2px] top-full z-10 mt-2.5 w-max">
-  {/* Arrow */}
-  <span className="absolute -top-[6px] left-[34px] h-[12px] w-[12px] rotate-45 rounded-[2px] bg-[#e4f0fd] shadow-[0_10px_20px_rgba(15,23,42,0.22)] backdrop-blur-[10px]" />
+                              {/* Arrow */}
+                              <span className="absolute -top-[6px] left-[34px] h-[12px] w-[12px] rotate-45 rounded-[2px] bg-[#e4f0fd] shadow-[0_10px_20px_rgba(15,23,42,0.22)] backdrop-blur-[10px]" />
 
-  {/* Popup Container (NO BORDER) */}
-  <div className="relative flex items-start gap-2.5 rounded-[14px] bg-[#e4f0fd] p-2.5 shadow-[0_20px_44px_rgba(2,6,23,0.34)] backdrop-blur-[12px]">
+                              {/* Popup Container (NO BORDER) */}
+                              <div className="relative flex items-start gap-2.5 rounded-[14px] bg-[#e4f0fd] p-2.5 shadow-[0_20px_44px_rgba(2,6,23,0.34)] backdrop-blur-[12px]">
 
-    {/* New Project */}
-    <button
-      type="button"
-      onClick={() => handleProjectQuickAction('new')}
-      className="flex h-[78px] w-[92px] flex-col items-center justify-center gap-2.5 rounded-[10px] bg-white/88 px-2.5 text-center text-[10px] font-medium text-[#5f6c7b] shadow-[0_12px_24px_rgba(15,23,42,0.12)] backdrop-blur-[8px] transition hover:text-[#1191da]"
-    >
-      <FileText size={15} strokeWidth={1.8} />
-      <span className="leading-[1.15]">New Project</span>
-    </button>
+                                {/* New Project */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleProjectQuickAction('new')}
+                                  className="flex h-[78px] w-[92px] flex-col items-center justify-center gap-2.5 rounded-[10px] bg-white/88 px-2.5 text-center text-[10px] font-medium text-[#5f6c7b] shadow-[0_12px_24px_rgba(15,23,42,0.12)] backdrop-blur-[8px] transition hover:text-[#1191da]"
+                                >
+                                  <FileText size={15} strokeWidth={1.8} />
+                                  <span className="leading-[1.15]">New Project</span>
+                                </button>
 
-    {/* Copy Project */}
-    <button
-      type="button"
-      onClick={() => handleProjectQuickAction('copy')}
-      className="flex h-[78px] w-[92px] flex-col items-center justify-center gap-2.5 rounded-[10px] bg-white/88 px-2.5 text-center text-[10px] font-medium text-[#5f6c7b] shadow-[0_12px_24px_rgba(15,23,42,0.12)] backdrop-blur-[8px] transition hover:text-[#1191da]"
-    >
-      <Copy size={15} strokeWidth={1.8} />
-      <span className="leading-[1.15]">Copy Project</span>
-    </button>
+                                {/* Copy Project */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleProjectQuickAction('copy')}
+                                  className="flex h-[78px] w-[92px] flex-col items-center justify-center gap-2.5 rounded-[10px] bg-white/88 px-2.5 text-center text-[10px] font-medium text-[#5f6c7b] shadow-[0_12px_24px_rgba(15,23,42,0.12)] backdrop-blur-[8px] transition hover:text-[#1191da]"
+                                >
+                                  <Copy size={15} strokeWidth={1.8} />
+                                  <span className="leading-[1.15]">Copy Project</span>
+                                </button>
 
-  </div>
-</div>
+                              </div>
+                            </div>
                           ) : null}
                         </div>
                       )

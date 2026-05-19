@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { API_ENDPOINTS } from "../../api";
+import { API_ENDPOINTS } from "../../config/api";
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
@@ -87,7 +87,7 @@ const METHODOLOGY_OPTIONS = ["Agile", "Predictive", "Hybrid"];
 const BILLING_OPTIONS = ["No Billing", "Fixed Cost", "Time and Material"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-const STEPS = ["Project Detail", "Customer Details", "Milestone & Payment"];
+const STEPS = ["Project Details", "Customer Details", "Resource Allocation", "Milestone & Payment"];
 
 const OPTION_FIELDS = [
   { key: "tasksStart", label: "Tasks should start when all predecessors are complete." },
@@ -282,6 +282,66 @@ function StyledSelect({ value, onChange, placeholder, options, style = {} }) {
   );
 }
 
+function SearchableSelect({ value, onChange, placeholder, options, style = {} }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, []);
+
+  const toggle = () => {
+    if (!open && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setCoords({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: rect.width });
+    }
+    setOpen(!open);
+  };
+
+  const filtered = options.filter(o => o.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div ref={containerRef} style={{ position: "relative", width: "100%" }}>
+      <div onClick={toggle}
+        style={{
+          ...inputStyle, ...style,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          cursor: "pointer", color: value ? "#333" : "#bbb",
+          borderColor: open ? "#2563eb" : "#dde1e9",
+          boxShadow: open ? "0 0 0 3px rgba(37,99,235,0.10)" : "none",
+        }}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value || placeholder}</span>
+        <IconChevronDown />
+      </div>
+      {open && (
+        <div style={{
+          position: "fixed", top: coords.top - window.scrollY + 4, left: coords.left - window.scrollX, width: coords.width,
+          zIndex: 10001, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8,
+          boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)", padding: 4
+        }}>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search..." autoFocus
+            style={{ ...inputStyle, height: 32, marginBottom: 4, padding: "0 8px" }} />
+          <div style={{ maxHeight: 150, overflowY: "auto" }}>
+            {filtered.length > 0 ? filtered.map(o => (
+              <div key={o} onClick={() => { onChange(o); setOpen(false); setSearch(""); }}
+                style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12, borderRadius: 4, background: value === o ? "#eff6ff" : "transparent", color: value === o ? "#2563eb" : "#333" }}>
+                {o}
+              </div>
+            )) : <div style={{ padding: "8px 12px", fontSize: 11, color: "#94a3b8" }}>No results</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Buttons ─────────────────────────────────────────────────────────────────
 
 function BtnPrimary({ onClick, children }) {
@@ -309,10 +369,48 @@ function BtnOutline({ onClick, children }) {
   );
 }
 
+// ─── Toast Notification ───────────────────────────────────────────────────────
+
+function Toast({ message, visible, onHide }) {
+  useEffect(() => {
+    if (visible) {
+      const timer = setTimeout(onHide, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [visible, onHide]);
+
+  if (!visible) return null;
+
+  return (
+    <div style={{
+      position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)",
+      zIndex: 10000, display: "flex", alignItems: "center", gap: 8,
+      background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8,
+      padding: "10px 18px", boxShadow: "0 4px 16px rgba(220,38,38,0.12)",
+      animation: "toastSlideIn 0.3s ease",
+      maxWidth: "90%", whiteSpace: "nowrap",
+    }}>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="7" stroke="#ef4444" strokeWidth="1.4" />
+        <path d="M8 4.5v4" stroke="#ef4444" strokeWidth="1.4" strokeLinecap="round" />
+        <circle cx="8" cy="11" r="0.8" fill="#ef4444" />
+      </svg>
+      <span style={{ fontSize: 12, fontWeight: 500, color: "#991b1b" }}>{message}</span>
+      <button onClick={onHide} style={{
+        background: "none", border: "none", cursor: "pointer", padding: 2,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: "#f87171", marginLeft: 4,
+      }}>
+        <IconX />
+      </button>
+    </div>
+  );
+}
+
 // ─── Step Tabs (pixel-perfect from screenshot) ────────────────────────────────
 
-function StepTabs({ step, setStep }) {
-  const pct = ((step - 1) / 2) * 100;
+function StepTabs({ step, onStepClick }) {
+  const pct = ((step - 1) / 3) * 100;
   return (
     <div style={{ padding: "14px 24px 0", borderBottom: "1px solid #e8eaef", background: "#fff", flexShrink: 0 }}>
       <div style={{ position: "relative", maxWidth: 500, margin: "0 auto" }}>
@@ -320,13 +418,13 @@ function StepTabs({ step, setStep }) {
         <div style={{ position: "absolute", left: "16.666%", right: "16.666%", top: 7, height: 1, background: "#e2e6ec" }}>
           <div style={{ position: "absolute", left: 0, top: 0, height: "100%", background: "#2563eb", width: `${pct}%`, transition: "width 0.3s ease" }} />
         </div>
-        <div style={{ position: "relative", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", paddingBottom: 12 }}>
+        <div style={{ position: "relative", display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", paddingBottom: 12 }}>
           {STEPS.map((label, i) => {
             const n = i + 1;
             const active = step === n;
             const done = step > n;
             return (
-              <button key={label} type="button" onClick={() => setStep(n)}
+              <button key={label} type="button" onClick={() => onStepClick(n)}
                 style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                 <span style={{
                   width: 15, height: 15, borderRadius: "50%", display: "flex",
@@ -372,7 +470,7 @@ function UploadBox({ files, setFiles }) {
         }}>
         <IconUpload size={22} />
         <span style={{ fontSize: 13, color: "#666", fontWeight: 500 }}>Upload Proposal Document</span>
-        <span style={{ fontSize: 11, color: "#aaa" }}>PDF / DOC / DOCX</span>
+        <span style={{ fontSize: 11, color: "#aaa" }}>Upload your project proposal here</span>
       </div>
       <input ref={ref} type="file" multiple accept=".pdf,.doc,.docx" style={{ display: "none" }} onChange={e => handle(e.target.files)} />
       {files.map((n, i) => (
@@ -410,7 +508,7 @@ function LogoUpload({ preview, setPreview, setLogoFile }) {
           <>
             <IconUpload size={22} />
             <span style={{ fontSize: 12, color: "#666", fontWeight: 500, marginTop: 6 }}>Upload Logo</span>
-            <span style={{ fontSize: 10, color: "#bbb", marginTop: 2 }}>PDF / DOC / DOCX</span>
+            <span style={{ fontSize: 10, color: "#bbb", marginTop: 2 }}>(JPEG/ PNG/ GIF)</span>
           </>
         )}
       <input ref={ref} type="file" accept="image/*" style={{ display: "none" }} onChange={handle} />
@@ -441,15 +539,98 @@ function MsDateInput({ value, onChange }) {
 export default function CreateProjectModal({ isOpen = true, onClose, onSave, formValues = {} }) {
   console.log("Rendering CreateProjectModal, isOpen:", isOpen);
   const [step, setStep] = useState(1);
+  const [toast, setToast] = useState({ visible: false, message: "" });
+
+  function showToast(message) {
+    setToast({ visible: true, message });
+  }
+
+  function hideToast() {
+    setToast({ visible: false, message: "" });
+  }
+
+  function handleStepClick(targetStep) {
+    // Clicking the current step — do nothing
+    if (targetStep === step) return;
+
+    // Going backward is always allowed
+    if (targetStep < step) {
+      setStep(targetStep);
+      return;
+    }
+
+    // Going forward — validate all steps in between
+    if (step === 1 && targetStep >= 2) {
+      if (!validateStep1()) {
+        showToast("Please fill all required fields in Project Details.");
+        return;
+      }
+    }
+    if (step <= 2 && targetStep >= 3) {
+      if (step === 1 && !validateStep1()) {
+        showToast("Please fill all required fields in Project Details.");
+        return;
+      }
+      if (!validateStep2(true)) {
+        showToast("Please fill all required fields in Customer Details.");
+        return;
+      }
+    }
+    if (step <= 3 && targetStep >= 4) {
+      if (step === 1 && !validateStep1()) {
+        showToast("Please fill all required fields in Project Details.");
+        return;
+      }
+      if (step <= 2 && !validateStep2(true)) {
+        showToast("Please fill all required fields in Customer Details.");
+        return;
+      }
+      if (!validateStep3()) {
+        // showToast("Please fill all required fields in Resource Allocation.");
+        // return;
+      }
+    }
+
+    setStep(targetStep);
+  }
   const [projectCode, setProjectCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [projectManagers, setProjectManagers] = useState([]);
+  const [techLeads, setTechLeads] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [userData, setUserData] = useState([]);
+  const [resourceData, setResourceData] = useState([]);
 
   useEffect(() => {
     if (isOpen) {
       fetchManagers();
+      fetchResources();
     }
   }, [isOpen]);
+
+  async function fetchResources() {
+    try {
+      const response = await fetch(API_ENDPOINTS.RESOURCE_LIST);
+      const data = await response.json();
+      if (data.success) {
+        const rawResources = data.data || [];
+        setResourceData(rawResources);
+
+        // Extract PMs and Tech Leads from Resource Master
+        const resPMs = rawResources
+          .filter(r => r.role && r.role.toLowerCase() === "project manager")
+          .map(r => r.name);
+        const resTLs = rawResources
+          .filter(r => r.role && (r.role.toLowerCase() === "tech lead" || r.role.toLowerCase() === "technical lead"))
+          .map(r => r.name);
+
+        setProjectManagers(prev => [...new Set([...prev, ...resPMs])]);
+        setTechLeads(prev => [...new Set([...prev, ...resTLs])]);
+      }
+    } catch (error) {
+      console.error("Error fetching resources:", error);
+    }
+  }
 
   async function fetchManagers() {
     try {
@@ -462,12 +643,28 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
           .filter(user => user.role && user.role.toLowerCase().trim() === 'project manager')
           .map(user => {
             const name = user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim();
-            const type = user.user_type === 'inhouse' ? '(Inhouse)' : '(Freelancer)';
+            const type = user.user_type === 'inhouse' ? '(In-house)' : '(Freelancer)';
             return `${name} ${type}`;
           })
           .filter(name => name.length > 0);
+        
+        const tlNames = rawUsers
+          .filter(user => user.role && user.role.toLowerCase().trim() === 'tech lead')
+          .map(user => {
+            const name = user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim();
+            const type = user.user_type === 'inhouse' ? '(In-house)' : '(Freelancer)';
+            return `${name} ${type}`;
+          })
+          .filter(name => name.length > 0);
+          
         console.log("Filtered Managers:", pmNames);
         setProjectManagers(pmNames);
+        setTechLeads(tlNames);
+        setAllUsers(rawUsers.map(user => {
+          const name = user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim();
+          return name;
+        }).filter(name => name.length > 0));
+        setUserData(rawUsers);
       }
     } catch (error) {
       console.error("Error fetching managers:", error);
@@ -481,6 +678,14 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
   const [duration, setDuration] = useState("");
   const [excludeWeekends, setExcludeWeekends] = useState(false);
   const [pm, setPm] = useState("");
+
+  // Holiday check state
+  const [endDateFromApi, setEndDateFromApi] = useState(null);
+  const [holidaysSkipped, setHolidaysSkipped] = useState([]);
+  const [holidayCheckLoading, setHolidayCheckLoading] = useState(false);
+  const holidayCheckTimer = useRef(null);
+  const [techLead, setTechLead] = useState("");
+  const [technology, setTechnology] = useState("");
   const [projectType, setProjectType] = useState("");
   const [priority, setPriority] = useState("");
   const [methodology, setMethodology] = useState("");
@@ -495,7 +700,94 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
   const [persons, setPersons] = useState([{ name: "", role: "", mobile: "", email: "" }]);
   const [pErrors, setPErrors] = useState([{}]);
 
-  // Step 3
+  // Step 3 (New: Resource Allocation)
+  const [allocations, setAllocations] = useState([
+    { type: "In-house", rows: [{ role: "", resourceName: "", allocation: "", workingDays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] }] },
+    { type: "Cost", rows: [{ name: "", amount: "" }] }
+  ]);
+  const [showAddResourceType, setShowAddResourceType] = useState(false);
+
+  const getDefaultRow = (type) => {
+    if (type === "In-house" || type === "Freelancer") {
+      return { role: "", resourceName: "", allocation: "", workingDays: [] };
+    } else if (type === "Cost") {
+      return { name: "", amount: "" };
+    } else if (type === "Material") {
+      return { name: "", unit: "", quantity: "1", rate: "0", total: "0" };
+    }
+    return {};
+  };
+
+  const MATERIAL_OPTIONS = [
+    { name: "Cement", unit: "Bag", rate: 450 },
+    { name: "Steel", unit: "Kg", rate: 70 },
+    { name: "Bricks", unit: "Unit", rate: 10 },
+    { name: "Sand", unit: "Cu.m", rate: 1200 },
+  ];
+
+  const addAllocation = (type) => {
+    if (allocations.some(a => a.type === type)) {
+      showToast(`${type} section already exists.`);
+      setShowAddResourceType(false);
+      return;
+    }
+    setAllocations(p => [...p, { type, rows: [getDefaultRow(type)] }]);
+    setShowAddResourceType(false);
+  };
+
+  const removeAllocation = (index) => {
+    setAllocations(p => p.filter((_, i) => i !== index));
+  };
+
+  const addRowToAllocation = (index) => {
+    setAllocations(p => p.map((a, i) => i === index ? { ...a, rows: [...a.rows, getDefaultRow(a.type)] } : a));
+  };
+
+  const removeRowFromAllocation = (allocIndex, rowIndex) => {
+    setAllocations(p => p.map((a, i) => i === allocIndex ? { ...a, rows: a.rows.filter((_, j) => j !== rowIndex) } : a));
+  };
+
+  const updateAllocationRow = (allocIndex, rowIndex, key, value) => {
+    setAllocations(p => p.map((a, i) => i === allocIndex ? {
+      ...a,
+      rows: a.rows.map((r, j) => j === rowIndex ? {
+        ...r,
+        [key]: value,
+        ...(a.type === "Material" && (key === "quantity" || key === "rate") ? {
+          total: String((parseFloat(key === "quantity" ? value : r.quantity) || 0) * (parseFloat(key === "rate" ? value : r.rate) || 0))
+        } : {}),
+        ...(a.type === "Material" && key === "name" ? (() => {
+          // Check Resource Master data first
+          const res = resourceData.find(r => r.name === value && r.resource_type.toLowerCase() === "material");
+          if (res) return { unit: res.unit_bag_kg, rate: String(res.rate_per_unit), total: String((parseFloat(r.quantity) || 0) * res.rate_per_unit) };
+          
+          // Fallback to MATERIAL_OPTIONS
+          const mat = MATERIAL_OPTIONS.find(m => m.name === value);
+          if (mat) return { unit: mat.unit, rate: String(mat.rate), total: String((parseFloat(r.quantity) || 0) * mat.rate) };
+          return {};
+        })() : {}),
+        ...(a.type === "Cost" && key === "name" ? (() => {
+          const res = resourceData.find(r => r.name === value && r.resource_type.toLowerCase() === "cost");
+          if (res) return { amount: String(res.cost) };
+          return {};
+        })() : {})
+      } : r)
+    } : a));
+  };
+
+  const toggleDay = (allocIndex, rowIndex, day) => {
+    setAllocations(p => p.map((a, i) => i === allocIndex ? {
+      ...a,
+      rows: a.rows.map((r, j) => j === rowIndex ? {
+        ...r,
+        workingDays: r.workingDays.includes(day)
+          ? r.workingDays.filter(d => d !== day)
+          : [...r.workingDays, day]
+      } : r)
+    } : a));
+  };
+
+  // Step 4 (Previous Step 3)
   const [milestones, setMilestones] = useState([{ name: "BRD Sign-off", date: null, pct: "" }]);
   const [budget, setBudget] = useState("");
   const [billing, setBilling] = useState("No Billing");
@@ -511,6 +803,8 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
       setStartDate(formValues.plannedStartDate ? new Date(formValues.plannedStartDate) : null);
       setDuration(formValues.duration || "");
       setPm(formValues.pm || "");
+      setTechLead(formValues.techLead || formValues.technical_lead || "");
+      setTechnology(formValues.technology || "");
       setProjectType(formValues.projectType || "");
       setPriority(formValues.priority || "");
       setMethodology(formValues.methodology || "");
@@ -556,9 +850,52 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
     return () => window.removeEventListener("keydown", h);
   }, [isOpen, onClose]);
 
+  // ── Holiday API check ────────────────────────────────────────────────────────
+  useEffect(() => {
+    // Clear previous timer
+    if (holidayCheckTimer.current) clearTimeout(holidayCheckTimer.current);
+
+    if (!startDate || !duration || isNaN(parseInt(duration)) || parseInt(duration) <= 0) {
+      setEndDateFromApi(null);
+      setHolidaysSkipped([]);
+      return;
+    }
+
+    // Debounce 400 ms so we don't fire on every keystroke
+    holidayCheckTimer.current = setTimeout(async () => {
+      setHolidayCheckLoading(true);
+      try {
+        const year = startDate.getFullYear();
+        const month = String(startDate.getMonth() + 1).padStart(2, "0");
+        const day = String(startDate.getDate()).padStart(2, "0");
+        const startStr = `${year}-${month}-${day}`;
+        
+        const url = `${API_ENDPOINTS.CHECK_HOLIDAYS}?start_date=${startStr}&duration=${duration}&exclude_weekends=${excludeWeekends ? 1 : 0}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.success) {
+          const [yr, mo, dy] = data.end_date.split("-").map(Number);
+          setEndDateFromApi(new Date(yr, mo - 1, dy));
+          setHolidaysSkipped(data.holidays_skipped || []);
+        }
+      } catch (err) {
+        console.error("Holiday check failed:", err);
+        // Fallback to local calculation
+        setEndDateFromApi(addDays(startDate, duration, excludeWeekends));
+        setHolidaysSkipped([]);
+      } finally {
+        setHolidayCheckLoading(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(holidayCheckTimer.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, duration, excludeWeekends]);
+
   if (!isOpen) return null;
 
-  const endDate = startDate && duration ? addDays(startDate, duration, excludeWeekends) : null;
+  // Use API-computed end date (with holidays), fall back to local calc
+  const endDate = endDateFromApi ?? (startDate && duration ? addDays(startDate, duration, excludeWeekends) : null);
 
   function addPerson() {
     setPersons(p => [...p, { name: "", role: "", mobile: "", email: "" }]);
@@ -605,14 +942,15 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
     const isStartDateValid = !!startDate;
     const isDurationValid = duration !== "" && duration !== null;
     const isPmValid = !!pm;
+    const isTechnologyValid = !!technology.trim();
     const isProjectTypeValid = !!projectType;
     const isMethodologyValid = !!methodology;
 
-    const isValid = isNameValid && isContractDateValid && isStartDateValid && isDurationValid && isPmValid && isProjectTypeValid && isMethodologyValid;
+    const isValid = isNameValid && isContractDateValid && isStartDateValid && isDurationValid && isPmValid && isTechnologyValid && isProjectTypeValid && isMethodologyValid;
 
     if (!isValid) {
       console.log("Step 1 Validation Failed:", {
-        isNameValid, isContractDateValid, isStartDateValid, isDurationValid, isPmValid, isProjectTypeValid, isMethodologyValid
+        isNameValid, isContractDateValid, isStartDateValid, isDurationValid, isPmValid, isTechnologyValid, isProjectTypeValid, isMethodologyValid
       });
     }
     return isValid;
@@ -628,6 +966,11 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
   }
 
   function validateStep3() {
+    // Resource Allocation validation - currently optional
+    return true;
+  }
+
+  function validateStep4() {
     // 1. Billing is required
     if (!billing) return false;
 
@@ -645,7 +988,7 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
   }
 
   async function handleSubmit() {
-    if (!validateStep3()) {
+    if (!validateStep4()) {
       alert("Please fill all required fields in the Milestone section.");
       return;
     }
@@ -661,6 +1004,8 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
     formData.append("end_date", endDate ? endDate.toISOString().split('T')[0] : null);
     formData.append("duration", duration || null);
     formData.append("project_manager", pm || null);
+    formData.append("technical_lead", techLead || null);
+    formData.append("technology", technology || null);
     formData.append("project_type", projectType || null);
     formData.append("priority", priority || null);
     formData.append("methodology", methodology || null);
@@ -696,6 +1041,8 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
       milestone_date: m.date ? m.date.toISOString().split('T')[0] : null,
       percentage: parseInt(m.pct) || 0
     }))));
+
+    formData.append("resource_allocations", JSON.stringify(allocations));
 
     try {
       const response = await fetch(API_ENDPOINTS.ADD_PROJECT, {
@@ -747,7 +1094,10 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
         </header>
 
         {/* ── Step Tabs ── */}
-        <StepTabs step={step} setStep={setStep} />
+        <StepTabs step={step} onStepClick={handleStepClick} />
+
+        {/* ── Toast Notification ── */}
+        <Toast message={toast.message} visible={toast.visible} onHide={hideToast} />
 
         {/* ── Body ── */}
         <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
@@ -755,7 +1105,7 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
           {/* ════ Step 1: Project Detail ════ */}
           {step === 1 && (
             <div style={{ padding: "20px 24px 28px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px" }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-[14px] sm:gap-x-5">
 
                 {/* Row 1 */}
                 <Field label="Project Code" required>
@@ -789,15 +1139,61 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
 
                 {/* Row 3 */}
                 <Field label="End Date">
-                  <DateInput value={endDate} onChange={() => { }} placeholder="End date" disabled />
+                  <div style={{ position: "relative" }}>
+                    <DateInput value={endDate} onChange={() => { }} placeholder="End date" disabled />
+                    {holidayCheckLoading && (
+                      <span style={{ position: "absolute", right: 38, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: "#2563eb" }}>⟳</span>
+                    )}
+                  </div>
                 </Field>
-                <Field label="Duration" required>
-                  <StyledInput value={duration} onChange={e => setDuration(e.target.value.replace(/[^0-9]/g, ""))} placeholder="Enter Duration" type="text" />
+                <Field label="Duration (In Days)" required>
+                  <StyledInput
+                    value={duration}
+                    onChange={e => setDuration(e.target.value.replace(/[^0-9]/g, ""))}
+                    placeholder="Enter Duration (In Days)"
+                    type="text"
+                  />
                 </Field>
+
+                {/* Holiday Warning Banner */}
+                {holidaysSkipped.length > 0 && (
+                  <div style={{
+                    gridColumn: "1 / -1",
+                    background: "#fffbeb", border: "1px solid #fcd34d",
+                    borderRadius: 8, padding: "10px 14px",
+                    display: "flex", flexDirection: "column", gap: 4,
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 14 }}>🗓️</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#92400e" }}>
+                        {holidaysSkipped.length} holiday{holidaysSkipped.length > 1 ? "s" : ""} found — end date adjusted
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 10px", marginTop: 2 }}>
+                      {holidaysSkipped.map((h, i) => (
+                        <span key={i} style={{
+                          fontSize: 11, color: "#78350f",
+                          background: "#fef3c7", borderRadius: 4,
+                          padding: "2px 7px",
+                        }}>
+                          {h.date} · {h.title}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Row 4 */}
                 <Field label="Project Manager" required>
                   <StyledSelect value={pm} onChange={e => setPm(e.target.value)} placeholder="Select project manager" options={projectManagers} />
+                </Field>
+                <Field label="Technical Lead">
+                  <StyledSelect value={techLead} onChange={e => setTechLead(e.target.value)} placeholder="Select technical lead" options={techLeads} />
+                </Field>
+
+                {/* Row 4.5 */}
+                <Field label="Technology" required>
+                  <StyledInput value={technology} onChange={e => setTechnology(e.target.value)} placeholder="Enter technology" type="text" />
                 </Field>
                 <Field label="Project Type" required>
                   <StyledSelect value={projectType} onChange={e => setProjectType(e.target.value)} placeholder="Select project type" options={PROJECT_TYPE_OPTIONS} />
@@ -858,7 +1254,7 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
               </div>
 
               {/* Company Name + Location */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px", marginBottom: 14 }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-[14px] sm:gap-x-5 mb-[14px]">
                 <Field label="Company Name" required>
                   <StyledInput value={companyName} onChange={e => setCompanyName(e.target.value.replace(/[^a-zA-Z\s]/g, ""))} placeholder="Enter Company name" />
                 </Field>
@@ -932,8 +1328,162 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
             </div>
           )}
 
-          {/* ════ Step 3: Milestone & Payment ════ */}
+          {/* ════ Step 3: Resource Allocation ════ */}
           {step === 3 && (
+            <div style={{ padding: "20px 24px 28px" }}>
+              {allocations.map((alloc, aIdx) => (
+                <div key={aIdx} style={{ marginBottom: 24, border: "1px solid #eef0f5", borderRadius: 10, overflow: "hidden", background: "#fff", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", background: "#f8faff", borderBottom: "1px solid #eef0f5" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ background: "#2563eb", color: "#fff", padding: "4px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600 }}>
+                        {alloc.type}
+                      </div>
+                      <IconChevronDown />
+                    </div>
+                    <button onClick={() => removeAllocation(aIdx)} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}>
+                      <IconTrash size={14} />
+                    </button>
+                  </div>
+
+                  <div style={{ padding: "0 0 12px", overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
+                      <thead>
+                        <tr style={{ background: "#f8f9fb" }}>
+                          <th style={{ textAlign: "left", padding: "10px 16px", fontSize: 11, fontWeight: 600, color: "#64748b", width: 50 }}>Sr.no</th>
+                          {(alloc.type === "In-house" || alloc.type === "Freelancer") && (
+                            <>
+                              <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 11, fontWeight: 600, color: "#64748b", width: 140 }}>Role</th>
+                              <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 11, fontWeight: 600, color: "#64748b", width: 180 }}>Resource Name</th>
+                              <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 11, fontWeight: 600, color: "#64748b", width: 100 }}>Allocation%</th>
+                              <th style={{ textAlign: "center", padding: "10px 8px", fontSize: 11, fontWeight: 600, color: "#64748b" }}>Working Days</th>
+                            </>
+                          )}
+                          {alloc.type === "Cost" && (
+                            <>
+                              <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 11, fontWeight: 600, color: "#64748b" }}>Name</th>
+                              <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 11, fontWeight: 600, color: "#64748b" }}>Amount</th>
+                            </>
+                          )}
+                          {alloc.type === "Material" && (
+                            <>
+                              <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 11, fontWeight: 600, color: "#64748b" }}>Material Name</th>
+                              <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 11, fontWeight: 600, color: "#64748b" }}>Unit</th>
+                              <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 11, fontWeight: 600, color: "#64748b" }}>Quantity</th>
+                              <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 11, fontWeight: 600, color: "#64748b" }}>Rate</th>
+                              <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 11, fontWeight: 600, color: "#64748b" }}>Total</th>
+                            </>
+                          )}
+                          <th style={{ width: 40 }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {alloc.rows.map((row, rIdx) => {
+                          const filteredPeople = userData.filter(u => {
+                            const isType = alloc.type === "In-house" ? u.user_type === "inhouse" : u.user_type === "freelancer";
+                            const isRole = row.role ? (u.role && u.role.toLowerCase() === row.role.toLowerCase()) : true;
+                            return isType && isRole;
+                          }).map(u => u.name || `${u.first_name || ''} ${u.last_name || ''}`.trim());
+
+                          return (
+                            <tr key={rIdx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                              <td style={{ padding: "10px 16px", fontSize: 12, color: "#64748b" }}>{rIdx + 1}.</td>
+                              {(alloc.type === "In-house" || alloc.type === "Freelancer") && (
+                                <>
+                                  <td style={{ padding: "8px 4px" }}>
+                                    <StyledSelect value={row.role} onChange={e => updateAllocationRow(aIdx, rIdx, "role", e.target.value)} placeholder="Select Role" options={["Project Manager", "Tech Lead", "Tester", "Architect", "Developer"]} style={{ height: 32, fontSize: 11 }} />
+                                  </td>
+                                  <td style={{ padding: "8px 4px" }}>
+                                    <SearchableSelect value={row.resourceName} onChange={v => updateAllocationRow(aIdx, rIdx, "resourceName", v)} placeholder="Select Resource" options={filteredPeople} style={{ height: 32, fontSize: 11 }} />
+                                  </td>
+                                  <td style={{ padding: "8px 4px" }}>
+                                    <StyledInput value={row.allocation} onChange={e => updateAllocationRow(aIdx, rIdx, "allocation", e.target.value.replace(/[^0-9]/g, ""))} placeholder="Enter %" style={{ height: 32, fontSize: 11 }} />
+                                  </td>
+                                  <td style={{ padding: "8px 4px" }}>
+                                    <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                                      {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(day => (
+                                        <label key={day} style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 9, color: "#64748b", cursor: "pointer" }}>
+                                          <input type="checkbox" checked={row.workingDays.includes(day)} onChange={() => toggleDay(aIdx, rIdx, day)} style={{ width: 10, height: 10 }} />
+                                          {day}
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </td>
+                                </>
+                              )}
+                              {alloc.type === "Cost" && (
+                                <>
+                                  <td style={{ padding: "8px 4px" }}>
+                                    <SearchableSelect value={row.name} onChange={v => updateAllocationRow(aIdx, rIdx, "name", v)} placeholder="Enter Name" options={[...new Set([...resourceData.filter(r => r.resource_type.toLowerCase() === "cost").map(r => r.name), "Licensing", "Hosting", "Domain"])]} style={{ height: 32, fontSize: 11 }} />
+                                  </td>
+                                  <td style={{ padding: "8px 4px" }}>
+                                    <StyledInput value={row.amount} onChange={e => updateAllocationRow(aIdx, rIdx, "amount", e.target.value.replace(/[^0-9]/g, ""))} placeholder="Enter Amount" style={{ height: 32, fontSize: 11 }} />
+                                  </td>
+                                </>
+                              )}
+                              {alloc.type === "Material" && (
+                                <>
+                                  <td style={{ padding: "8px 4px" }}>
+                                    <SearchableSelect value={row.name} onChange={v => updateAllocationRow(aIdx, rIdx, "name", v)} placeholder="Select Material" options={[...new Set([...resourceData.filter(r => r.resource_type.toLowerCase() === "material").map(r => r.name), ...MATERIAL_OPTIONS.map(m => m.name)])]} style={{ height: 32, fontSize: 11 }} />
+                                  </td>
+                                  <td style={{ padding: "8px 4px" }}>
+                                    <StyledInput value={row.unit} onChange={e => updateAllocationRow(aIdx, rIdx, "unit", e.target.value)} placeholder="Unit" style={{ height: 32, fontSize: 11 }} />
+                                  </td>
+                                  <td style={{ padding: "8px 4px" }}>
+                                    <StyledInput value={row.quantity} onChange={e => updateAllocationRow(aIdx, rIdx, "quantity", e.target.value.replace(/[^0-9]/g, ""))} placeholder="Qty" style={{ height: 32, fontSize: 11 }} />
+                                  </td>
+                                  <td style={{ padding: "8px 4px" }}>
+                                    <StyledInput value={row.rate} onChange={e => updateAllocationRow(aIdx, rIdx, "rate", e.target.value.replace(/[^0-9.]/g, ""))} placeholder="Rate" style={{ height: 32, fontSize: 11 }} />
+                                  </td>
+                                  <td style={{ padding: "8px 4px" }}>
+                                    <StyledInput value={row.total} disabled placeholder="Total" style={{ height: 32, fontSize: 11, background: "#f8f9fa" }} />
+                                  </td>
+                                </>
+                              )}
+                              <td style={{ padding: "8px 4px", textAlign: "center" }}>
+                                {alloc.rows.length > 1 && (
+                                  <button onClick={() => removeRowFromAllocation(aIdx, rIdx)} style={{ background: "none", border: "none", cursor: "pointer", color: "#f87171" }}>
+                                    <IconTrash size={12} />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    <button onClick={() => addRowToAllocation(aIdx)} style={{ display: "flex", alignItems: "center", gap: 6, margin: "12px 16px 0", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#2563eb" }}>
+                      <IconPlus size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <div style={{ position: "relative", marginTop: 12 }}>
+                <button onClick={() => setShowAddResourceType(!showAddResourceType)}
+                  style={{ display: "flex", alignItems: "center", gap: 8, background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
+                  Add Resource type <IconChevronDown />
+                </button>
+                {showAddResourceType && (
+                  <div style={{ position: "absolute", bottom: "calc(100% + 8px)", left: 0, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)", zIndex: 10, minWidth: 160 }}>
+                    {["In-house", "Freelancer", "Cost", "Material"].map(type => (
+                      <button key={type} onClick={() => addAllocation(type)}
+                        style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "#475467", borderBottom: "1px solid #f1f5f9" }}>
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 32 }}>
+                <BtnOutline onClick={() => setStep(2)}>Back</BtnOutline>
+                <BtnPrimary onClick={() => setStep(4)}>Next</BtnPrimary>
+              </div>
+            </div>
+          )}
+
+          {/* ════ Step 4: Milestone & Payment ════ */}
+          {step === 4 && (
             <div style={{ padding: "16px 24px 24px" }}>
 
               {/* Milestone table */}
@@ -1013,7 +1563,7 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
               </button>
 
               {/* Budget + Billing */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px", marginTop: 10 }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-[14px] sm:gap-x-5 mt-2.5">
                 <Field label="Budget" required>
                   <StyledInput value={budget} onChange={e => setBudget(e.target.value.replace(/[^0-9]/g, ""))} placeholder="0" type="text" />
                 </Field>
@@ -1048,15 +1598,15 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
               </div>
 
               <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 28 }}>
-                <BtnOutline onClick={() => setStep(2)}>Back</BtnOutline>
+                <BtnOutline onClick={() => setStep(3)}>Back</BtnOutline>
                 <button
                   onClick={handleSubmit}
-                  disabled={isLoading || !validateStep3()}
+                  disabled={isLoading || !validateStep4()}
                   style={{
                     height: 40, padding: "0 32px", borderRadius: 8, border: "none",
-                    background: (isLoading || !validateStep3()) ? "#cbd5e1" : "#2563eb",
+                    background: (isLoading || !validateStep4()) ? "#cbd5e1" : "#2563eb",
                     color: "#fff",
-                    fontSize: 13, fontWeight: 600, cursor: (isLoading || !validateStep3()) ? "not-allowed" : "pointer",
+                    fontSize: 13, fontWeight: 600, cursor: (isLoading || !validateStep4()) ? "not-allowed" : "pointer",
                     fontFamily: "inherit",
                     transition: "background 0.15s",
                   }}

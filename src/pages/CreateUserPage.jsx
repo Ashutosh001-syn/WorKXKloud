@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { Search, ChevronDown, X, Pencil, Ban, Camera, User, Check } from 'lucide-react'
-import { API_ENDPOINTS } from '../api'
+import { API_ENDPOINTS } from '../config/api'
 
 const initialTeamMembers = [
 ]
@@ -111,11 +111,13 @@ function CustomDropdown({ label, options, value, onChange, placeholder }) {
 }
 
 export default function CreateUserPage() {
-  const [activeTab, setActiveTab] = useState('Inhouse')
+  const [activeTab, setActiveTab] = useState('In-house')
   const [teamMembers, setTeamMembers] = useState(initialTeamMembers)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [formValues, setFormValues] = useState({
     type: '',
+    accountName: '',
+    companyName: '',
     name: '',
     email: '',
     password: '',
@@ -139,7 +141,7 @@ export default function CreateUserPage() {
       if (data.success) {
         const mappedUsers = data.data.map(user => ({
           ...user,
-          type: user.user_type === 'inhouse' ? 'Inhouse' : 'Freelancer',
+          type: user.user_type === 'inhouse' ? 'In-house' : (user.user_type === 'customer' ? 'Customer' : 'Freelancer'),
           designation: user.role,
           mobile: user.mobile || '',
           isBanned: user.status === 'disable'
@@ -167,7 +169,7 @@ export default function CreateUserPage() {
     }
   }
 
-  const titleTabName = activeTab === 'Inhouse' ? 'Inhouse' : 'Freelancer'
+  const titleTabName = activeTab === 'In-house' ? 'In-house' : (activeTab === 'Customer' ? 'Customer' : 'Freelancer')
 
   const uniqueDepartments = [...new Set(teamMembers.map(m => m.designation))].filter(Boolean)
   const uniqueRoles = [...new Set(teamMembers.map(m => m.role))].filter(Boolean)
@@ -198,7 +200,7 @@ export default function CreateUserPage() {
 
   const handleCloseModal = () => {
     setIsModalOpen(false)
-    setFormValues({ type: '', name: '', email: '', password: '', role: '', mobile: '', image: null })
+    setFormValues({ type: '', accountName: '', companyName: '', name: '', email: '', password: '', role: '', mobile: '', image: null })
     setSelectedFile(null)
     setEditingId(null)
   }
@@ -234,7 +236,9 @@ export default function CreateUserPage() {
     const member = teamMembers.find(m => m.id === id)
     if (member) {
       setFormValues({
-        type: member.type || 'Inhouse',
+        type: member.type || 'In-house',
+        accountName: member.account_name || member.accountName || '',
+        companyName: member.company_name || member.companyName || '',
         name: member.name || '',
         email: member.email || '',
         password: member.password || '',
@@ -259,15 +263,30 @@ export default function CreateUserPage() {
       alert('Please provide a mobile number for the freelancer.')
       return
     }
+    if (formValues.type === 'Customer') {
+      if (!formValues.accountName || !formValues.companyName || !formValues.mobile) {
+        alert('Please fill in Account Name, Company Name and Contact number for the customer.')
+        return
+      }
+    }
 
     const formData = new FormData()
     formData.append('name', formValues.name)
     formData.append('email', formValues.email)
     formData.append('password', formValues.password || '')
     formData.append('role', formValues.role)
-    formData.append('user_type', formValues.type?.toLowerCase() === 'freelancer' ? 'freelancer' : 'inhouse')
-    if (formValues.type === 'Freelancer') {
+    
+    let userTypeStr = 'inhouse'
+    if (formValues.type?.toLowerCase() === 'freelancer') userTypeStr = 'freelancer'
+    if (formValues.type?.toLowerCase() === 'customer') userTypeStr = 'customer'
+    formData.append('user_type', userTypeStr)
+    
+    if (formValues.type === 'Freelancer' || formValues.type === 'Customer') {
       formData.append('mobile', formValues.mobile || '')
+    }
+    if (formValues.type === 'Customer') {
+      formData.append('account_name', formValues.accountName || '')
+      formData.append('company_name', formValues.companyName || '')
     }
     
     if (selectedFile) {
@@ -302,20 +321,20 @@ export default function CreateUserPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-[#f1f5f9] p-6">
-      <div className="rounded-[12px] bg-white p-6 shadow-sm">
+    <div className="min-h-[calc(100vh-64px)] bg-[#f1f5f9] p-4 sm:p-6">
+      <div className="rounded-[12px] bg-white p-4 sm:p-6 shadow-sm">
 
         {/* Header */}
-        <div className="mb-6 flex items-start justify-between">
+        <div className="mb-6 flex flex-col sm:flex-row items-start justify-between gap-4">
           <div>
-            <h1 className="text-[20px] font-semibold text-[#1e293b]">
+            <h1 className="text-[18px] sm:text-[20px] font-semibold text-[#1e293b]">
               User Management(<span className="text-[#0052ff]">{titleTabName}</span>)
             </h1>
-            <p className="mt-1 text-[13px] text-[#64748b]">
+            <p className="mt-1 text-[12px] sm:text-[13px] text-[#64748b]">
               Manage and maintain all resource in the organization
             </p>
           </div>
-          <div className="flex flex-col items-end gap-3">
+          <div className="flex w-full sm:w-auto flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-3">
             <button
               onClick={handleOpenModal}
               className="rounded-full bg-[#0052ff] px-6 py-2 text-[14px] font-medium text-white transition hover:bg-[#0042cc]"
@@ -339,19 +358,19 @@ export default function CreateUserPage() {
         </div>
 
         {/* Filters */}
-        <div className="mb-6 flex items-center justify-between gap-4">
-          <div className="relative w-full max-w-[340px]">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+        <div className="mb-6 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+          <div className="relative w-full md:max-w-[340px]">
+            <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
-              placeholder="      Search by Name & Email"
+              placeholder="Search by Name & Email"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-[42px] w-full rounded-[8px] border border-[#e2e8f0] bg-white pl-10 pr-4 text-[13px] text-[#334155] outline-none placeholder:text-[#94a3b8] focus:border-[#1191da]"
+              className="h-[42px] w-full rounded-[8px] border border-[#e2e8f0] bg-white pl-4 pr-10 text-[13px] text-[#334155] outline-none placeholder:text-[#94a3b8] focus:border-[#1191da]"
             />
           </div>
-          <div className="flex items-center gap-4">
-            <div className="relative w-[220px]">
+          <div className="flex flex-col sm:flex-row items-stretch gap-4 w-full md:w-auto">
+            <div className="relative w-full sm:w-[220px]">
               <select
                 value={searchDepartment}
                 onChange={(e) => setSearchDepartment(e.target.value)}
@@ -364,7 +383,7 @@ export default function CreateUserPage() {
               </select>
               <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
             </div>
-            <div className="relative w-[220px]">
+            <div className="relative w-full sm:w-[220px]">
               <select
                 value={searchRole}
                 onChange={(e) => setSearchRole(e.target.value)}
@@ -382,7 +401,7 @@ export default function CreateUserPage() {
 
         {/* Tabs */}
         <div className="mb-6 flex items-center gap-8 border-b border-[#e2e8f0]">
-          {['Inhouse', 'Freelancer'].map((tab) => (
+          {['In-house', 'Freelancer', 'Customer'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -400,8 +419,8 @@ export default function CreateUserPage() {
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto rounded-[8px] border border-[#e2e8f0]">
-          <table className="w-full text-left text-[13px] text-[#475569]">
+        <div className="overflow-x-auto rounded-[8px] border border-[#e2e8f0] max-w-[calc(100vw-32px)] sm:max-w-none">
+          <table className="w-full text-left text-[13px] text-[#475569] min-w-[800px]">
             <thead className="bg-[#f8fafc] text-[#334155]">
               <tr>
                 <th className="px-5 py-3.5 font-medium">Sr.no</th>
@@ -491,8 +510,8 @@ export default function CreateUserPage() {
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[4px]">
-          <div className="relative w-full max-w-[540px] rounded-[16px] bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[4px] overflow-y-auto pt-10 pb-10">
+          <div className="relative w-full max-w-[540px] rounded-[16px] bg-white shadow-2xl my-auto">
 
             <div className="flex items-center justify-between rounded-t-[16px] bg-[#f4f8fb] px-6 py-4">
               <h2 className="w-full text-center text-[16px] font-semibold text-[#1e293b]">
@@ -535,23 +554,52 @@ export default function CreateUserPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-x-5 gap-y-5">
-                <div className="col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-5">
+                <div className="col-span-1 sm:col-span-2">
                   <CustomDropdown
                     label={<>User Type <span className="text-red-500">*</span></>}
-                    options={['Inhouse', 'Freelancer']}
+                    options={['In-house', 'Freelancer', 'Customer']}
                     value={formValues.type}
                     placeholder="Select user type"
                     onChange={(val) => setFormValues({ ...formValues, type: val })}
                   />
                 </div>
 
+                {formValues.type === 'Customer' && (
+                  <>
+                    <div>
+                      <label className="mb-2 block text-[13px] font-semibold text-[#334155]">Account Name <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Enter account name"
+                        value={formValues.accountName}
+                        onChange={(e) => setFormValues({ ...formValues, accountName: e.target.value })}
+                        className="h-11 w-full rounded-[8px] border border-[#e2e8f0] px-3.5 text-[13px] text-[#334155] outline-none placeholder:text-[#94a3b8] focus:border-[#1191da]"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-[13px] font-semibold text-[#334155]">Company Name <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Enter company name"
+                        value={formValues.companyName}
+                        onChange={(e) => setFormValues({ ...formValues, companyName: e.target.value })}
+                        className="h-11 w-full rounded-[8px] border border-[#e2e8f0] px-3.5 text-[13px] text-[#334155] outline-none placeholder:text-[#94a3b8] focus:border-[#1191da]"
+                      />
+                    </div>
+                  </>
+                )}
+
                 <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[#334155]">Name <span className="text-red-500">*</span></label>
+                  <label className="mb-2 block text-[13px] font-semibold text-[#334155]">
+                    {formValues.type === 'Customer' ? 'Customer Name' : 'Name'} <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
                     required
-                    placeholder="Enter name"
+                    placeholder={`Enter ${formValues.type === 'Customer' ? 'customer name' : 'name'}`}
                     value={formValues.name}
                     onChange={(e) => setFormValues({ ...formValues, name: e.target.value.replace(/[^a-zA-Z\s]/g, "") })}
                     className="h-11 w-full rounded-[8px] border border-[#e2e8f0] px-3.5 text-[13px] text-[#334155] outline-none placeholder:text-[#94a3b8] focus:border-[#1191da]"
@@ -583,21 +631,37 @@ export default function CreateUserPage() {
                 </div>
 
                 <div>
-                  <CustomDropdown
-                    label={<>Role <span className="text-red-500">*</span></>}
-                    options={['Project manager', 'Frontend Developer', 'Backend developer', 'Tester', 'Architecture', 'Tech Lead']}
-                    value={formValues.role}
-                    placeholder="Enter role"
-                    onChange={(val) => setFormValues({ ...formValues, role: val })}
-                  />
+                  {formValues.type === 'Customer' ? (
+                    <>
+                      <label className="mb-2 block text-[13px] font-semibold text-[#334155]">Designation <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Enter designation"
+                        value={formValues.role}
+                        onChange={(e) => setFormValues({ ...formValues, role: e.target.value })}
+                        className="h-11 w-full rounded-[8px] border border-[#e2e8f0] px-3.5 text-[13px] text-[#334155] outline-none placeholder:text-[#94a3b8] focus:border-[#1191da]"
+                      />
+                    </>
+                  ) : (
+                    <CustomDropdown
+                      label={<>Role <span className="text-red-500">*</span></>}
+                      options={['Project manager', 'Frontend Developer', 'Backend developer', 'Tester', 'Architecture', 'Tech Lead']}
+                      value={formValues.role}
+                      placeholder="Enter role"
+                      onChange={(val) => setFormValues({ ...formValues, role: val })}
+                    />
+                  )}
                 </div>
 
-                {formValues.type === 'Freelancer' && (
+                {(formValues.type === 'Freelancer' || formValues.type === 'Customer') && (
                   <div>
-                    <label className="mb-2 block text-[13px] font-semibold text-[#334155]">Mobile <span className="text-red-500">*</span></label>
+                    <label className="mb-2 block text-[13px] font-semibold text-[#334155]">
+                      {formValues.type === 'Customer' ? 'Contact us' : 'Mobile'} <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="text"
-                      placeholder="Enter mobile number"
+                      placeholder={formValues.type === 'Customer' ? 'Enter contact number' : 'Enter mobile number'}
                       value={formValues.mobile}
                       onChange={(e) => setFormValues({ ...formValues, mobile: e.target.value.replace(/[^0-9]/g, "").slice(0, 10) })}
                       className="h-11 w-full rounded-[8px] border border-[#e2e8f0] px-3.5 text-[13px] text-[#334155] outline-none placeholder:text-[#94a3b8] focus:border-[#1191da]"

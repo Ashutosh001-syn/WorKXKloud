@@ -1,8 +1,9 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import DashboardLayout from './DashboardLayout'
-import Login from './Login'
-import { isAuthenticated } from './auth'
-import { hiddenWorkspaceRoutes, workspaceRoutes } from './navigation'
+import DashboardLayout from './layouts/DashboardLayout'
+import Login from './pages/Login'
+import ForgotPassword from './pages/ForgotPassword'
+import { isAuthenticated } from './utils/auth'
+import { hiddenWorkspaceRoutes, workspaceRoutes } from './config/navigation'
 import AllProjectPage from './pages/AllProjectPage'
 import CreateProjectPage from './pages/CreateProjectPage'
 import CreateUserPage from './pages/CreateUserPage'
@@ -11,6 +12,7 @@ import ResourceAllocationPage from './pages/ResourceAllocationPage'
 import ResourceMasterPage from './pages/ResourceMasterPage'
 import WorkspacePage from './pages/WorkspacePage'
 import ProfilePage from './pages/ProfilePage'
+import CalendarPage from './pages/CalendarPage'
 
 function ProtectedLayout() {
   if (!isAuthenticated()) {
@@ -29,6 +31,10 @@ function App() {
         <Route
           path="/login"
           element={isAuthenticated() ? <Navigate to="/" replace /> : <Login />}
+        />
+        <Route
+          path="/forgot-password"
+          element={isAuthenticated() ? <Navigate to="/" replace /> : <ForgotPassword />}
         />
 
         <Route element={<ProtectedLayout />}>
@@ -49,6 +55,8 @@ function App() {
                   <ResourceMasterPage />
                 ) : route.to === '/resource/resource-allocation' ? (
                   <ResourceAllocationPage />
+                ) : route.to === '/calendar' ? (
+                  <CalendarPage />
                 ) : (
                   <WorkspacePage
                     eyebrow={route.eyebrow}

@@ -82,6 +82,17 @@ export const sidebarMenu = [
       },
     ],
   },
+  {
+    type: 'link',
+    key: 'calendar',
+    icon: 'calendar',
+    label: 'Calendar',
+    to: '/calendar',
+    eyebrow: 'Calendar',
+    title: 'Calendar',
+    description: 'Schedule team events, deadlines, milestones, and organization holidays.',
+    highlights: ['4 upcoming holidays', '2 milestones this week', '1 company-wide event'],
+  },
 ]
 
 export const workspaceRoutes = sidebarMenu.flatMap((item) => {

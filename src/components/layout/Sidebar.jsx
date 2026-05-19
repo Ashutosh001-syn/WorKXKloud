@@ -8,10 +8,11 @@ import {
   ReceiptText,
   UserRoundPlus,
   X,
+  Calendar,
 } from 'lucide-react'
 import { NavLink, useLocation } from 'react-router-dom'
-import logo from './assets/Logo.png'
-import { sidebarMenu } from './navigation'
+import logo from '../../assets/Logo.png'
+import { sidebarMenu } from '../../config/navigation'
 
 const iconMap = {
   allProjects: Grid2x2,
@@ -20,6 +21,7 @@ const iconMap = {
   projectManagement: SquareChartGantt,
   resource: Grid2x2,
   users: UserRoundPlus,
+  calendar: Calendar,
 }
 
 function matchesPath(pathname, to) {
@@ -49,23 +51,14 @@ function Sidebar() {
     setOpenMenu(activeGroupKey)
   }, [activeGroupKey])
 
+  useEffect(() => {
+    const handler = () => setMobileOpen(true)
+    document.addEventListener('open-sidebar', handler)
+    return () => document.removeEventListener('open-sidebar', handler)
+  }, [])
+
   return (
     <>
-      <div className="sticky top-0 z-30 flex items-center justify-between bg-[#0d2646] px-4 py-4 text-white shadow-lg md:hidden">
-        <button
-          type="button"
-          onClick={() => setMobileOpen(true)}
-          className="rounded-xl border border-white/10 bg-white/5 p-2.5 transition hover:bg-white/10"
-          aria-label="Open sidebar"
-        >
-          <Menu size={18} />
-        </button>
-
-        <div className="flex items-center gap-3">
-          <img src={logo} alt="XPM.ai logo" className="h-10 w-auto object-contain mx-auto" />
-
-        </div>
-      </div>
 
       {mobileOpen ? (
         <button
