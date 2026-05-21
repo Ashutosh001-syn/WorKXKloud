@@ -133,6 +133,7 @@ function Sidebar() {
                 icon={item.icon}
                 label={item.label}
                 to={item.to}
+                badgeKey={item.badgeKey}
                 onNavigate={() => setMobileOpen(false)}
               />
             )
@@ -143,8 +144,20 @@ function Sidebar() {
   )
 }
 
-function MenuItem({ icon, label, onNavigate, to }) {
+function MenuItem({ icon, label, onNavigate, to, badgeKey }) {
   const Icon = iconMap[icon]
+  const [badgeCount, setBadgeCount] = useState(0)
+
+  useEffect(() => {
+    if (!badgeKey) return
+    const update = () => {
+      const val = parseInt(localStorage.getItem(badgeKey) || '0', 10)
+      setBadgeCount(val)
+    }
+    update()
+    window.addEventListener('badge-update', update)
+    return () => window.removeEventListener('badge-update', update)
+  }, [badgeKey])
 
   if (!Icon) {
     return null
@@ -167,7 +180,12 @@ function MenuItem({ icon, label, onNavigate, to }) {
       <span className="flex h-5 w-5 items-center justify-center text-slate-100">
         <Icon size={16} strokeWidth={1.8} />
       </span>
-      <span>{label}</span>
+      <span className="flex-1">{label}</span>
+      {badgeKey && badgeCount > 0 && (
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">
+          {badgeCount}
+        </span>
+      )}
     </NavLink>
   )
 }

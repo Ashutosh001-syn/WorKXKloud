@@ -31,6 +31,19 @@ export const sidebarMenu = [
     highlights: ['28 total projects', '12 active', '6 completed this quarter'],
   },
   {
+    type: 'link',
+    key: 'new-assigned-project',
+    icon: 'allProjects',
+    label: 'New Assigned Project',
+    to: '/new-assigned-project',
+    eyebrow: 'Projects',
+    title: 'New Assigned Project',
+    description:
+      'Review newly assigned projects from PMO, accept or decline, and begin scheduling.',
+    highlights: ['3 pending projects', '1 awaiting acceptance', 'PM role assigned'],
+    badgeKey: 'assigned_projects_badge',
+  },
+  {
     type: 'group',
     key: 'resource',
     icon: 'resource',
