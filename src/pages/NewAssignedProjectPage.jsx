@@ -13,6 +13,7 @@ import {
   Check,
   X,
   Plus,
+  Minus,
   Trash2,
   Calendar,
   User,
@@ -1137,7 +1138,7 @@ function NewAssignedProjectPage() {
                     <tr className="bg-[#edf3f8] text-[#39485c] border-b border-slate-100">
                       <th className="px-4 py-3 font-bold">Role</th>
                       <th className="px-4 py-3 font-bold text-center">Current</th>
-                      <th className="px-4 py-3 font-bold text-center w-[100px]">Required</th>
+                      <th className="px-4 py-3 font-bold text-center w-[140px]">Required</th>
                       <th className="px-4 py-3 font-bold text-center">Additional Needed</th>
                     </tr>
                   </thead>
@@ -1155,7 +1156,7 @@ function NewAssignedProjectPage() {
 
                       // Calculate Additional Needed
                       const reqVal = parseInt(row.required) || 0;
-                      const addNeeded = row.current + reqVal;
+                      const addNeeded = Math.max(0, row.current + reqVal);
 
                       return (
                         <tr key={index}>
@@ -1190,14 +1191,48 @@ function NewAssignedProjectPage() {
                             {row.current}
                           </td>
                           <td className="px-4 py-3.5 text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              placeholder={row.placeholder}
-                              value={row.required}
-                              onChange={(e) => handleUpdateRequired(index, e.target.value)}
-                              className="w-14 h-8 text-center border border-slate-200 rounded-lg text-xs font-bold focus:border-blue-500 focus:outline-none text-slate-800 bg-slate-50/50 focus:bg-white"
-                            />
+                            <div className="inline-flex items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50/50 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all duration-200">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const currentVal = parseInt(row.required) || 0;
+                                  if (currentVal > -row.current) {
+                                    handleUpdateRequired(index, String(currentVal - 1));
+                                  }
+                                }}
+                                className="flex h-9 w-9 items-center justify-center bg-transparent text-slate-500 hover:bg-slate-100 active:bg-slate-200 transition-colors cursor-pointer"
+                              >
+                                <Minus size={14} strokeWidth={2.5} />
+                              </button>
+                              <input
+                                type="number"
+                                min={-row.current}
+                                placeholder={row.placeholder}
+                                value={row.required}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === '') {
+                                    handleUpdateRequired(index, '');
+                                  } else {
+                                    const parsed = parseInt(val);
+                                    if (!isNaN(parsed) && parsed >= -row.current) {
+                                      handleUpdateRequired(index, String(parsed));
+                                    }
+                                  }
+                                }}
+                                className="h-9 w-12 border-x border-slate-200 bg-white text-center text-xs font-bold text-slate-800 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const currentVal = parseInt(row.required) || 0;
+                                  handleUpdateRequired(index, String(currentVal + 1));
+                                }}
+                                className="flex h-9 w-9 items-center justify-center bg-transparent text-slate-500 hover:bg-slate-100 active:bg-slate-200 transition-colors cursor-pointer"
+                              >
+                                <Plus size={14} strokeWidth={2.5} />
+                              </button>
+                            </div>
                           </td>
                           <td className="px-4 py-3.5 text-center">
                             <span className="inline-block px-3 py-1 bg-[#e2f7e3] text-[#219653] font-bold text-xs rounded-lg min-w-[36px]">
