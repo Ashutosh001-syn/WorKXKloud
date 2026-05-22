@@ -604,11 +604,14 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
     }
     return () => {
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
     };
   }, [isOpen]);
 
@@ -1088,7 +1091,7 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
 
   return (
     <div onClick={e => { if (e.target === e.currentTarget) onClose?.(); }}
-      style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "12px", background: "rgba(0,0,0,0.65)", fontFamily: "'Inter',system-ui,sans-serif" }}>
+      style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "12px", background: "rgba(0,0,0,0.65)", fontFamily: "'Inter',system-ui,sans-serif", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}>
       <div style={{
         position: "relative", width: 580, maxWidth: "100%", borderRadius: 12,
         background: "#fff", boxShadow: "0 20px 60px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06)",

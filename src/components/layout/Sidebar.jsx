@@ -16,6 +16,7 @@ import { sidebarMenu } from '../../config/navigation'
 
 const iconMap = {
   allProjects: Grid2x2,
+  myProjects: Grid2x2,
   dashboard: LayoutDashboard,
   expense: ReceiptText,
   projectManagement: SquareChartGantt,
@@ -172,7 +173,7 @@ function MenuItem({ icon, label, onNavigate, to, badgeKey }) {
         [
           'flex items-center gap-3 rounded-xl px-4 py-3 text-[14px] font-medium transition-all duration-200',
           isActive
-            ? 'bg-[#18498a] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
+            ? 'bg-[#0052ff] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
             : 'text-slate-200 hover:bg-[#143356] hover:text-white',
         ].join(' ')
       }

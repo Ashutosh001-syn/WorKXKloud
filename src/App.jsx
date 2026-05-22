@@ -14,6 +14,7 @@ import WorkspacePage from './pages/WorkspacePage'
 import ProfilePage from './pages/ProfilePage'
 import CalendarPage from './pages/CalendarPage'
 import NewAssignedProjectPage from './pages/NewAssignedProjectPage'
+import MyProjectsPage from './pages/MyProjectsPage'
 
 function ProtectedLayout() {
   if (!isAuthenticated()) {
@@ -52,6 +53,8 @@ function App() {
                   <AllProjectPage />
                 ) : route.to === '/new-assigned-project' ? (
                   <NewAssignedProjectPage />
+                ) : route.to === '/my-projects' ? (
+                  <MyProjectsPage />
                 ) : route.to === '/project-management/create-project' ? (
                   <CreateProjectPage />
                 ) : route.to === '/resource/resource-master' ? (

@@ -180,7 +180,7 @@ const getInitialResources = (project) => {
   const devCount = project?.resourcesAllocated?.filter(r => r.role.toLowerCase() === 'developer').length || 0;
   const testerCount = project?.resourcesAllocated?.filter(r => r.role.toLowerCase() === 'tester').length || 0;
   const uiCount = project?.resourcesAllocated?.filter(r => ['ui designer', 'ui/ux designer', 'designer'].includes(r.role.toLowerCase())).length || 0;
-  
+
   const isProj1 = project?.id === 'PJ-2026001';
 
   return [
@@ -992,17 +992,17 @@ function NewAssignedProjectPage() {
       {showDeclineModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* Backdrop */}
-          <div 
+          <div
             className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             onClick={() => setShowDeclineModal(false)}
           />
-          
+
           {/* Modal Container */}
           <div className="relative w-full max-w-[500px] bg-white rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="bg-[#eef4fc] px-6 py-4 flex items-center justify-between border-b border-blue-100/50">
               <h3 className="text-[14px] font-bold text-slate-800 tracking-wide">Declined Project</h3>
-              <button 
+              <button
                 onClick={() => setShowDeclineModal(false)}
                 className="text-slate-400 hover:text-slate-600 transition cursor-pointer p-1 rounded-lg hover:bg-slate-100/50"
               >
@@ -1013,7 +1013,7 @@ function NewAssignedProjectPage() {
             {/* Body */}
             <div className="p-6">
               <p className="text-xs text-slate-500 font-medium mb-4">Please Provide a reason for declining</p>
-              
+
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-700">
                   Reason for Declining <span className="text-rose-500">*</span>
@@ -1058,17 +1058,17 @@ function NewAssignedProjectPage() {
       {showConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* Backdrop */}
-          <div 
+          <div
             className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             onClick={() => setShowConfirmModal(false)}
           />
-          
+
           {/* Modal Container */}
           <div className="relative w-full max-w-[450px] bg-white rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 z-10">
             {/* Header */}
             <div className="bg-[#eef4fc] px-6 py-4 flex items-center justify-between border-b border-blue-100/50">
               <h3 className="text-[14px] font-bold text-slate-800 tracking-wide">Required Resource</h3>
-              <button 
+              <button
                 onClick={() => setShowConfirmModal(false)}
                 className="text-slate-400 hover:text-slate-600 transition cursor-pointer p-1 rounded-lg hover:bg-slate-100/50"
               >
@@ -1112,17 +1112,17 @@ function NewAssignedProjectPage() {
       {showAddResourceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* Backdrop */}
-          <div 
+          <div
             className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             onClick={() => setShowAddResourceModal(false)}
           />
-          
+
           {/* Modal Container */}
           <div className="relative w-full max-w-[620px] max-h-[85vh] flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 z-10">
             {/* Header */}
             <div className="bg-[#eef4fc] px-6 py-4 flex items-center justify-between border-b border-blue-100/50 flex-shrink-0">
               <h3 className="text-[14px] font-bold text-slate-800 tracking-wide">Add Required Resource</h3>
-              <button 
+              <button
                 onClick={() => setShowAddResourceModal(false)}
                 className="text-slate-400 hover:text-slate-600 transition cursor-pointer p-1 rounded-lg hover:bg-slate-100/50"
               >

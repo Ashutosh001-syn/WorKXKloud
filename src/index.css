@@ -77,11 +77,11 @@ select {
   font: inherit;
 }
 
-input, select, textarea {
+input:not([type="checkbox"]):not([type="radio"]), select, textarea {
   @apply w-full h-11 px-4 rounded-xl border border-gray-200 bg-gray-50 text-sm outline-none transition-all;
 }
 
-input:focus, select:focus, textarea:focus {
+input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:focus {
   @apply border-blue-500 ring-2 ring-blue-100 bg-white;
 }
 

@@ -44,6 +44,17 @@ export const sidebarMenu = [
     badgeKey: 'assigned_projects_badge',
   },
   {
+    type: 'link',
+    key: 'my-projects',
+    icon: 'myProjects',
+    label: 'My Projects',
+    to: '/my-projects',
+    eyebrow: 'Projects',
+    title: 'My Projects',
+    description: 'Monitor Project Progress with Smart Visibility.',
+    highlights: ['3 active projects', 'PM role assigned'],
+  },
+  {
     type: 'group',
     key: 'resource',
     icon: 'resource',
