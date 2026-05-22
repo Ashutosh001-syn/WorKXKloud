@@ -77,6 +77,16 @@ export default function CalendarPage() {
   const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false)
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [previewHolidays, setPreviewHolidays] = useState([])
+  useEffect(() => {
+    if (isModalOpen || isDetailsModalOpen || isDeleteConfirmOpen || isUploadModalOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isModalOpen, isDetailsModalOpen, isDeleteConfirmOpen, isUploadModalOpen])
 
   // Long-press and click gesture refs and handlers
   const pressTimerRef = useRef(null)

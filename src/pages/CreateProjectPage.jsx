@@ -446,6 +446,17 @@ function CreateProjectPage() {
   // ── NEW: History modal state ──
   const [showHistoryModal, setShowHistoryModal] = useState(false)
 
+  useEffect(() => {
+    if (isModalOpen || showHistoryModal || viewModal.isOpen || confirmModal.isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isModalOpen, showHistoryModal, viewModal.isOpen, confirmModal.isOpen])
+
   useEffect(() => { fetchManagers() }, [])
 
   async function fetchManagers() {

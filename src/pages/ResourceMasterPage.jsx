@@ -292,6 +292,13 @@ function Toast({ message, type, onDone }) {
 
 /* ─── View Modal ────────────────────────────────────────────────────────── */
 function ViewModal({ row, onClose }) {
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
   if (!row) return null
   const roleStyle = roleTone[row.role] || { bg: '#f1f5f9', color: '#475569' }
   const fields = []
@@ -372,6 +379,13 @@ function ViewModal({ row, onClose }) {
 function EditModal({ row, onClose, onSave }) {
   const [form, setForm] = useState({ ...row })
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
   const set = (k, v) => {
     let next = v
     if (k === 'name') next = nameOnly(v)
@@ -545,6 +559,13 @@ function AddResourceModal({ activeTab, onClose, onSave }) {
     monday: false, tuesday: false, wednesday: false, thursday: false, friday: false, saturday: false, sunday: false
   })
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
   const set = (k, v) => {
     let next = v
     if (k === 'name') next = nameOnly(v)
@@ -726,6 +747,14 @@ function AddResourceModal({ activeTab, onClose, onSave }) {
 /* ─── Ban Confirm Modal ─────────────────────────────────────────────────── */
 function BanModal({ row, onClose, onConfirm }) {
   const isBlocked = row.blocked
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(14,30,60,0.45)', backdropFilter: 'blur(6px)' }}>
       <div className="w-full max-w-[380px] rounded-3xl bg-white overflow-hidden" style={{ boxShadow: '0 32px 80px rgba(0,0,0,0.15)', animation: 'modalIn 0.2s cubic-bezier(0.34,1.56,0.64,1)' }}>

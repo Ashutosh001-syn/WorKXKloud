@@ -327,6 +327,17 @@ function AllProjectPage() {
   const [viewProject, setViewProject] = useState(null)
 
   useEffect(() => {
+    if (viewProject) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [viewProject])
+
+  useEffect(() => {
     async function fetchAllProjects() {
       setIsLoading(true)
       setError('')

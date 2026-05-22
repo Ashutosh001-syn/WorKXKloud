@@ -405,6 +405,8 @@ function Dashboard() {
       return undefined
     }
 
+    document.body.style.overflow = 'hidden'
+
     const handleEscape = (event) => {
       if (event.key === 'Escape') {
         setActiveLauncherMenu(null)
@@ -416,6 +418,7 @@ function Dashboard() {
 
     return () => {
       window.removeEventListener('keydown', handleEscape)
+      document.body.style.overflow = 'unset'
     }
   }, [openModal])
 

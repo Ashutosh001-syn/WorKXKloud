@@ -133,6 +133,16 @@ export default function CreateUserPage() {
   const [showBlockedUsers, setShowBlockedUsers] = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
   const fileInputRef = useRef(null)
+  useEffect(() => {
+    if (isModalOpen || banModal.isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isModalOpen, banModal.isOpen])
 
   const fetchUsers = async () => {
     try {
