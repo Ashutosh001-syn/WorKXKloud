@@ -585,12 +585,10 @@ function Dashboard() {
   }
 
   function handleProjectQuickAction(mode) {
-    const code = `P-${new Date().getFullYear()}001`
     handleLauncherNavigation('/project-management/create-project', {
       state: {
         openWizard: true,
         mode: mode,
-        projectCode: code,
       },
     })
   }

@@ -536,7 +536,7 @@ function MsDateInput({ value, onChange }) {
 
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 
-export default function CreateProjectModal({ isOpen = true, onClose, onSave, formValues = {} }) {
+export default function CreateProjectModal({ isOpen = true, onClose, onSave, formValues = {}, editingId = null }) {
   console.log("Rendering CreateProjectModal, isOpen:", isOpen);
   const [step, setStep] = useState(1);
   const [toast, setToast] = useState({ visible: false, message: "" });
@@ -632,10 +632,10 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
 
         // Extract PMs and Tech Leads from Resource Master
         const resPMs = rawResources
-          .filter(r => r.role && r.role.toLowerCase() === "project manager")
+          .filter(r => r.role && String(r.role).toLowerCase() === "project manager")
           .map(r => r.name);
         const resTLs = rawResources
-          .filter(r => r.role && (r.role.toLowerCase() === "tech lead" || r.role.toLowerCase() === "technical lead"))
+          .filter(r => r.role && (String(r.role).toLowerCase() === "tech lead" || String(r.role).toLowerCase() === "technical lead"))
           .map(r => r.name);
 
         setProjectManagers(prev => [...new Set([...prev, ...resPMs])]);
@@ -663,7 +663,7 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
           .filter(name => name.length > 0);
         
         const tlNames = rawUsers
-          .filter(user => user.role && user.role.toLowerCase().trim() === 'tech lead')
+          .filter(user => user.role && (user.role.toLowerCase().trim() === 'tech lead' || user.role.toLowerCase().trim() === 'technical lead'))
           .map(user => {
             const name = user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim();
             const type = user.user_type === 'inhouse' ? '(In-house)' : '(Freelancer)';
@@ -812,9 +812,15 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
 
   useEffect(() => {
     if (isOpen && !hasInitialized.current) {
+      const parseDateSafe = (val) => {
+        if (!val) return null;
+        const parsed = new Date(val);
+        return isNaN(parsed.getTime()) ? null : parsed;
+      };
+
       setProjectName(formValues.name || "");
-      setContractDate(formValues.contractDate ? new Date(formValues.contractDate) : null);
-      setStartDate(formValues.plannedStartDate ? new Date(formValues.plannedStartDate) : null);
+      setContractDate(parseDateSafe(formValues.contractDate));
+      setStartDate(parseDateSafe(formValues.plannedStartDate));
       setDuration(formValues.duration || "");
       setPm(formValues.pm || "");
       setTechLead(formValues.techLead || formValues.technical_lead || "");
@@ -823,11 +829,21 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
       setPriority(formValues.priority || "");
       setMethodology(formValues.methodology || "");
       setScope(formValues.description || "");
+      setCompanyName(formValues.clientName || formValues.companyName || "");
+      setLocation(formValues.location || "");
       setBudget(formValues.budget || "");
       setBilling(formValues.billing || "No Billing");
 
       if (Array.isArray(formValues.persons)) setPersons(formValues.persons);
       if (Array.isArray(formValues.milestones)) setMilestones(formValues.milestones);
+      if (Array.isArray(formValues.resource_allocations) && formValues.resource_allocations.length > 0) {
+        setAllocations(formValues.resource_allocations);
+      } else {
+        setAllocations([
+          { type: "In-house", rows: [{ role: "", resourceName: "", allocation: "", workingDays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] }] },
+          { type: "Cost", rows: [{ name: "", amount: "" }] }
+        ]);
+      }
       if (formValues.options) setOpts(formValues.options);
 
       setStep(1);
@@ -863,6 +879,35 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, [isOpen, onClose]);
+
+  // Resolve PM and Tech Lead display names from userData (which fetches asynchronously)
+  useEffect(() => {
+    if (isOpen && userData.length > 0) {
+      const resolveUserName = (val) => {
+        if (!val) return "";
+        const user = userData.find(u => 
+          String(u.id) === String(val) || 
+          String(u.user_id) === String(val) || 
+          u.name === val || 
+          `${u.first_name || ''} ${u.last_name || ''}`.trim() === val
+        );
+        if (user) {
+          const name = user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim();
+          const type = user.user_type === 'inhouse' ? '(In-house)' : '(Freelancer)';
+          return `${name} ${type}`;
+        }
+        return val;
+      };
+
+      if (formValues.pm) {
+        setPm(resolveUserName(formValues.pm));
+      }
+      const tlVal = formValues.techLead || formValues.technical_lead;
+      if (tlVal) {
+        setTechLead(resolveUserName(tlVal));
+      }
+    }
+  }, [isOpen, userData, formValues]);
 
   // ── Holiday API check ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -926,20 +971,20 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
   // Helper to check validity without setting state (prevents render loops)
   function checkPersonsValid() {
     return persons.every(p =>
-      p.name.trim() &&
-      p.role.trim() &&
-      p.mobile.trim() && validateMobile(p.mobile) &&
-      p.email.trim() && validateEmail(p.email)
+      p.name && String(p.name).trim() &&
+      p.role && String(p.role).trim() &&
+      p.mobile && String(p.mobile).trim() && validateMobile(p.mobile) &&
+      p.email && String(p.email).trim() && validateEmail(p.email)
     );
   }
 
   function validatePersons() {
     const errs = persons.map(p => {
       const e = {};
-      if (!p.name.trim()) e.name = "Required";
-      if (!p.role.trim()) e.role = "Required";
-      if (!p.mobile.trim()) e.mobile = "Required"; else if (!validateMobile(p.mobile)) e.mobile = "Invalid";
-      if (!p.email.trim()) e.email = "Required"; else if (!validateEmail(p.email)) e.email = "Invalid email";
+      if (!p.name || !String(p.name).trim()) e.name = "Required";
+      if (!p.role || !String(p.role).trim()) e.role = "Required";
+      if (!p.mobile || !String(p.mobile).trim()) e.mobile = "Required"; else if (!validateMobile(p.mobile)) e.mobile = "Invalid";
+      if (!p.email || !String(p.email).trim()) e.email = "Required"; else if (!validateEmail(p.email)) e.email = "Invalid email";
       return e;
     });
     setPErrors(errs);
@@ -951,12 +996,12 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
   function updateMs(i, k, v) { setMilestones(m => m.map((x, j) => j === i ? { ...x, [k]: v } : x)); }
 
   function validateStep1() {
-    const isNameValid = !!projectName.trim();
+    const isNameValid = !!(projectName && String(projectName).trim());
     const isContractDateValid = !!contractDate;
     const isStartDateValid = !!startDate;
     const isDurationValid = duration !== "" && duration !== null;
     const isPmValid = !!pm;
-    const isTechnologyValid = !!technology.trim();
+    const isTechnologyValid = !!(technology && String(technology).trim());
     const isProjectTypeValid = !!projectType;
     const isMethodologyValid = !!methodology;
 
@@ -972,11 +1017,11 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
 
   function validateStep2(showErrors = false) {
     if (showErrors) {
-      const isCompanyValid = !!companyName.trim();
+      const isCompanyValid = !!(companyName && String(companyName).trim());
       const arePersonsValid = validatePersons();
       return isCompanyValid && arePersonsValid;
     }
-    return !!companyName.trim() && checkPersonsValid();
+    return !!(companyName && String(companyName).trim()) && checkPersonsValid();
   }
 
   function validateStep3() {
@@ -1011,14 +1056,40 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
     // Create FormData for form-data submission
     const formData = new FormData();
 
+    if (editingId) {
+      formData.append("project_id", editingId);
+    }
+
     formData.append("project_code", projectCode);
     formData.append("project_name", projectName || null);
     formData.append("contact_sign_date", contractDate ? contractDate.toISOString().split('T')[0] : null);
     formData.append("start_date", startDate ? startDate.toISOString().split('T')[0] : null);
     formData.append("end_date", endDate ? endDate.toISOString().split('T')[0] : null);
     formData.append("duration", duration || null);
-    formData.append("project_manager", pm || null);
-    formData.append("technical_lead", techLead || null);
+    const getUserId = (val) => {
+      if (!val) return null;
+      const user = userData.find(u => {
+        const name = (u.name || `${u.first_name || ''} ${u.last_name || ''}`).trim();
+        const type = u.user_type === 'inhouse' ? '(In-house)' : '(Freelancer)';
+        return `${name} ${type}` === val || name === val || String(u.id) === String(val) || String(u.user_id) === String(val);
+      });
+      if (user) return user.id || user.user_id;
+      if (!isNaN(val) && String(val).trim() !== "") return val;
+      return null;
+    };
+
+    const getCleanName = (val) => {
+      if (!val) return null;
+      return val.replace(/\s*\((In-house|Freelancer)\)\s*$/i, "").trim();
+    };
+
+    const pmId = getUserId(pm);
+    if (pmId) formData.append("pm_id", pmId);
+    formData.append("project_manager", getCleanName(pm) || null);
+    
+    const tlId = getUserId(techLead);
+    if (tlId) formData.append("technical_lead", tlId);
+    
     formData.append("technology", technology || null);
     formData.append("project_type", projectType || null);
     formData.append("priority", priority || null);
@@ -1056,10 +1127,36 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
       percentage: parseInt(m.pct) || 0
     }))));
 
-    formData.append("resource_allocations", JSON.stringify(allocations));
+    const formattedAllocations = allocations.map(alloc => {
+      if (alloc.type === "In-house" || alloc.type === "Freelancer") {
+        return {
+          ...alloc,
+          rows: alloc.rows.map(row => {
+            const user = userData.find(u => {
+              const uName = (u.name || `${u.first_name || ''} ${u.last_name || ''}`).trim();
+              return uName === row.resourceName;
+            });
+            const userId = user ? (user.id || user.user_id || null) : null;
+            
+            // Send both the name and the IDs
+            if (row.role === "Project Manager") {
+              return { ...row, pm_id: userId };
+            } else if (row.role === "Tech Lead" || row.role === "Technical Lead") {
+              return { ...row, tl_id: userId, technical_lead_id: userId };
+            } else {
+              return { ...row, resource_id: userId };
+            }
+          })
+        };
+      }
+      return alloc;
+    });
+
+    formData.append("resource_allocations", JSON.stringify(formattedAllocations));
 
     try {
-      const response = await fetch(API_ENDPOINTS.ADD_PROJECT, {
+      const url = editingId ? API_ENDPOINTS.UPDATE_PROJECT : API_ENDPOINTS.ADD_PROJECT;
+      const response = await fetch(url, {
         method: 'POST',
         body: formData
       });
@@ -1069,11 +1166,11 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
       if (contentType && contentType.indexOf("application/json") !== -1) {
         const data = await response.json();
         if (data.success) {
-          alert(data.message || "Project created successfully");
-          onSave?.({ ...Object.fromEntries(formData), id: Date.now() });
+          alert(data.message || (editingId ? "Project updated successfully" : "Project created successfully"));
+          onSave?.({ ...Object.fromEntries(formData), id: editingId || Date.now() });
           onClose();
         } else {
-          alert(data.message || "Failed to create project");
+          alert(data.message || (editingId ? "Failed to update project" : "Failed to create project"));
         }
       } else {
         // If not JSON, it might be an HTML error page

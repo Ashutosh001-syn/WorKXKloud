@@ -1,6 +1,6 @@
 export const API_ROOT_URL = import.meta.env.VITE_API_ROOT_URL || 
-// 'http://103.185.75.124:8021/api'
-'http://localhost:8021/api'
+'http://103.185.75.124:8021/api'
+// 'http://localhost:8021/api'
 ;
 export const API_BASE_URL = `${API_ROOT_URL}/admin`;
 
@@ -29,4 +29,6 @@ export const API_ENDPOINTS = {
   UPDATE_HOLIDAY: `${API_BASE_URL}/update_holiday`,
   DELETE_HOLIDAY: `${API_BASE_URL}/delete_holiday`,
   CHECK_HOLIDAYS: `${API_BASE_URL}/check_holidays`,
+  // Project Manager
+  GET_PROJECTS_BY_PM: `${API_ROOT_URL}/projectManager/get_projectsByPm`,
 };

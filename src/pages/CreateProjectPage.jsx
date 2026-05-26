@@ -69,8 +69,29 @@ function mapProjectToFormValues(project = {}) {
     portfolio: project.portfolio ?? defaults.portfolio,
     billing: project.no_billing === "No" ? "No Billing" : (project.billing ?? defaults.billing),
     defaultTaskSchedule: project.defaultTaskSchedule ?? defaults.defaultTaskSchedule,
-    persons: project.contacts ?? [],
-    milestones: project.milestones ?? [],
+    contractDate: project.contact_sign_date ?? project.contractDate ?? null,
+    duration: project.duration ?? defaults.duration,
+    location: project.location ?? defaults.location,
+    persons: (project.contacts ?? []).map(p => ({
+      name: p.person_name || p.name || "",
+      role: p.role || "",
+      mobile: p.mobile || "",
+      email: p.email || ""
+    })),
+    milestones: (project.milestones ?? []).map(m => {
+      const dateVal = m.milestone_date || m.date;
+      let parsedDate = null;
+      if (dateVal) {
+        const d = new Date(dateVal);
+        if (!isNaN(d.getTime())) parsedDate = d;
+      }
+      return {
+        name: m.milestone || m.name || "",
+        date: parsedDate,
+        pct: String(m.percentage ?? m.pct ?? "")
+      };
+    }),
+    resource_allocations: project.resource_allocations ?? [],
     options: {
       ...defaults.options,
       ...(project.options ?? {}),
@@ -704,57 +725,11 @@ function CreateProjectPage() {
   }
 
   async function handleProjectSaved(projectData) {
-    const newProject = {
-      ...projectData,
-      id: projectData.id || Date.now(),
-      name: projectData.project_name || projectData.name,
-      pm: projectData.project_manager || projectData.pm,
-      client: projectData.company_name || projectData.client,
-      status: projectData.status || 'Active',
-    }
     try {
-      if (editingId) {
-        const payload = new FormData()
-        payload.append('project_id', String(editingId))
-        payload.append('project_name', projectData.project_name || projectData.name || '')
-        payload.append('contact_sign_date', projectData.contact_sign_date || '')
-        payload.append('start_date', projectData.start_date || projectData.startDate || '')
-        payload.append('end_date', projectData.end_date || projectData.endDate || '')
-        payload.append('duration', String(projectData.duration || ''))
-        payload.append('project_manager', projectData.project_manager || projectData.pm || '')
-        payload.append('technical_lead', projectData.technical_lead || projectData.techLead || '')
-        payload.append('technology', projectData.technology || '')
-        payload.append('project_type', projectData.project_type || projectData.projectType || '')
-        payload.append('priority', projectData.priority || '')
-        payload.append('methodology', projectData.methodology || '')
-        payload.append('project_scope', projectData.project_scope || projectData.description || '')
-        payload.append('company_name', projectData.company_name || projectData.clientName || projectData.client || '')
-        payload.append('location', projectData.location || projectData.state || '')
-        payload.append('budget', String(projectData.budget || ''))
-        payload.append('no_billing', projectData.no_billing || (projectData.billing === 'No Billing' ? 'No' : 'Yes'))
-        payload.append('status', projectData.status || 'Active')
-        payload.append('project_code', projectData.project_code || projectData.projectCode || '')
-        payload.append('contacts', JSON.stringify(projectData.contacts || projectData.persons || []))
-        payload.append('milestones', JSON.stringify(projectData.milestones || []))
-
-        const response = await fetch(API_ENDPOINTS.UPDATE_PROJECT, {
-          method: 'POST',
-          body: payload,
-        })
-        const data = await response.json()
-        if (!data.success) throw new Error(data.message || 'Project update failed')
-      }
-
-      if (editingId) {
-        setProjects((prev) => prev.map((p) => (p.id === editingId ? { ...p, ...newProject } : p)))
-      } else {
-        setProjects((prev) => [newProject, ...prev])
-      }
       fetchProjects()
       handleCloseModal()
     } catch (error) {
       console.error('Save project failed:', error)
-      alert(error.message || 'Failed to save project')
     }
   }
 
@@ -1112,6 +1087,7 @@ function CreateProjectPage() {
         errorMessage={formError}
         formValues={formValues}
         isOpen={isModalOpen}
+        editingId={editingId}
         title={editingId ? 'Edit Project' : modalMode === 'copy' ? 'Copy Project' : 'Create Project'}
         onClose={handleCloseModal}
         onInputChange={handleInputChange}

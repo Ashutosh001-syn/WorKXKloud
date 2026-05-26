@@ -53,14 +53,11 @@ const customStyles = `
   }
 
   .gantt_grid_head_cell {
-    color: #475569 !important;
+    color: #374151 !important;
     font-weight: 700 !important;
     font-size: 12px !important;
     border-right: 1px solid #cbd5e1 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: center !important;
-    padding: 6px 12px !important;
+    text-align: center !important;
   }
 
   .gantt_grid_head_cell_search {
@@ -104,17 +101,17 @@ const customStyles = `
   }
 
   /* Table cells left border color indicators */
-  .border-left-yellow {
-    border-left: 5px solid #f1c40f !important;
+  .border-left-green {
+    border-left: 5px solid #52b788 !important;
   }
   .border-left-blue {
-    border-left: 5px solid #60a5fa !important;
+    border-left: 5px solid #42a5f5 !important;
   }
-  .border-left-green {
-    border-left: 5px solid #10b981 !important;
+  .border-left-purple {
+    border-left: 5px solid #bb96ff !important;
   }
   .border-left-pink {
-    border-left: 5px solid #ec4899 !important;
+    border-left: 5px solid #ff85a1 !important;
   }
   .border-left-none {
     border-left: 5px solid transparent !important;
@@ -210,23 +207,29 @@ const customStyles = `
     line-height: 22px !important;
   }
 
-  .gantt-bar-yellow { background-color: #f1c40f !important; }
-  .gantt-bar-yellow .gantt_task_progress { background-color: #d4ac0d !important; }
+  .gantt-bar-dark-green { background-color: #2d6a4f !important; border-radius: 4px !important; }
+  .gantt-bar-dark-green .gantt_task_progress { background-color: #1b4332 !important; }
+  
+  .gantt-bar-green { background-color: #52b788 !important; border-radius: 4px !important; }
+  .gantt-bar-green .gantt_task_progress { background-color: #40916c !important; }
 
-  .gantt-bar-blue { background-color: #8bb4e8 !important; }
-  .gantt-bar-blue .gantt_task_progress { background-color: #5d8ec9 !important; }
+  .gantt-bar-dark-blue { background-color: #1565c0 !important; border-radius: 4px !important; }
+  .gantt-bar-dark-blue .gantt_task_progress { background-color: #0d47a1 !important; }
+  
+  .gantt-bar-blue { background-color: #42a5f5 !important; border-radius: 4px !important; }
+  .gantt-bar-blue .gantt_task_progress { background-color: #1e88e5 !important; }
 
-  .gantt-bar-pink { background-color: #f8c9d4 !important; }
-  .gantt-bar-pink .gantt_task_progress { background-color: #e59ba9 !important; }
+  .gantt-bar-dark-purple { background-color: #6a0dad !important; border-radius: 4px !important; }
+  .gantt-bar-dark-purple .gantt_task_progress { background-color: #4a0e4e !important; }
+  
+  .gantt-bar-purple { background-color: #bb96ff !important; border-radius: 4px !important; }
+  .gantt-bar-purple .gantt_task_progress { background-color: #9d4edd !important; }
 
-  .gantt-bar-green { background-color: #48c9b0 !important; }
-  .gantt-bar-green .gantt_task_progress { background-color: #1abc9c !important; }
-
-  .gantt-bar-dark-green {
-    background-color: #4e8a60 !important;
-    border-radius: 4px !important;
-  }
-  .gantt-bar-dark-green .gantt_task_progress { background-color: #275635 !important; }
+  .gantt-bar-dark-pink { background-color: #d81b60 !important; border-radius: 4px !important; }
+  .gantt-bar-dark-pink .gantt_task_progress { background-color: #880e4f !important; }
+  
+  .gantt-bar-pink { background-color: #ff85a1 !important; border-radius: 4px !important; }
+  .gantt-bar-pink .gantt_task_progress { background-color: #f72585 !important; }
 
   /* Assignee labels */
   .gantt-assignees-label {
@@ -238,15 +241,30 @@ const customStyles = `
   }
 
   /* Dependency Links */
-  .gantt_task_link.gantt_link_regular { stroke: #e879f9 !important; stroke-width: 1.5px !important; }
-  .gantt_task_link .gantt_line_wrapper { stroke: #e879f9 !important; }
-  .gantt_task_link .gantt_link_line { background-color: #e879f9 !important; stroke: #e879f9 !important; }
-  .gantt_link_arrow { border-color: transparent transparent transparent #e879f9 !important; border-left-color: #e879f9 !important; }
+  .gantt_task_link.gantt_link_regular { stroke: #94a3b8 !important; stroke-width: 1.2px !important; }
+  .gantt_task_link .gantt_line_wrapper { stroke: #94a3b8 !important; }
+  .gantt_task_link .gantt_link_line { background-color: #94a3b8 !important; stroke: #94a3b8 !important; }
+  .gantt_link_arrow { border-color: transparent transparent transparent #94a3b8 !important; border-left-color: #94a3b8 !important; }
 
   /* Critical Path */
-  .gantt_critical_task { border: 1px solid #ef4444 !important; box-shadow: 0 0 6px rgba(239,68,68,0.35) !important; }
+  .gantt_critical_task { 
+    background-color: #f87171 !important; 
+    border: 1.5px solid #ef4444 !important; 
+    box-shadow: 0 0 8px rgba(239,68,68,0.4) !important; 
+  }
+  .gantt_critical_task .gantt_task_progress { 
+    background-color: #ef4444 !important; 
+  }
   .gantt_critical_link .gantt_line_wrapper { stroke: #ef4444 !important; stroke-width: 2px !important; }
   .gantt_critical_link .gantt_link_arrow { border-left-color: #ef4444 !important; }
+
+  /* Grid Row Highlighting for Critical Tasks */
+  .critical-row {
+    background-color: #fef2f2 !important;
+  }
+  .critical-row:hover {
+    background-color: #fee2e2 !important;
+  }
 
   /* Lightbox */
   .gantt_cal_light {
@@ -310,7 +328,7 @@ const dropdownItem = {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-function GanttChart({ tasks, projectName, onClose }) {
+function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   const containerRef = useRef(null)
 
   const [zoomLevel, setZoomLevel] = useState('day')
@@ -322,6 +340,44 @@ function GanttChart({ tasks, projectName, onClose }) {
   const [moreOpen, setMoreOpen] = useState(false)
 
   const [activeBaseline, setActiveBaseline] = useState('Baseline 1')
+
+  const [gridWidth, setGridWidth] = useState(640)
+  const isDragging = useRef(false)
+  const animationFrameId = useRef(null)
+
+  const handleMouseDown = (e) => {
+    e.preventDefault()
+    isDragging.current = true
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+
+  const handleMouseMove = (e) => {
+    if (!isDragging.current) return
+    const containerEl = containerRef.current
+    if (!containerEl) return
+
+    if (animationFrameId.current) {
+      cancelAnimationFrame(animationFrameId.current)
+    }
+
+    animationFrameId.current = requestAnimationFrame(() => {
+      const containerRect = containerEl.getBoundingClientRect()
+      const newWidth = Math.max(150, Math.min(1000, e.clientX - containerRect.left))
+      setGridWidth(newWidth)
+      gantt.config.grid_width = newWidth
+      gantt.render()
+    })
+  }
+
+  const handleMouseUp = () => {
+    isDragging.current = false
+    document.removeEventListener('mousemove', handleMouseMove)
+    document.removeEventListener('mouseup', handleMouseUp)
+    if (animationFrameId.current) {
+      cancelAnimationFrame(animationFrameId.current)
+    }
+  }
 
   // Close all dropdowns when clicking outside
   useEffect(() => {
@@ -337,10 +393,125 @@ function GanttChart({ tasks, projectName, onClose }) {
     return () => document.head.removeChild(styleEl)
   }, [])
 
+  // ── Helper functions for formatting WBS, dates, and predecessors ─────────
+  const getPredecessorsText = (task) => {
+    try {
+      const links = gantt.getLinks() || [];
+      const taskLinks = links.filter(link => link.target === task.id);
+      if (!taskLinks.length) return "-";
+      
+      return taskLinks.map(link => {
+        const sourceTask = gantt.isTaskExists(link.source) ? gantt.getTask(link.source) : null;
+        if (!sourceTask) return "";
+        
+        const sourceWbs = gantt.getWBSCode(sourceTask) || "";
+        
+        let typeStr = "";
+        if (link.type === "0" || link.type === 0) typeStr = ""; 
+        else if (link.type === "1" || link.type === 1) typeStr = "SS";
+        else if (link.type === "2" || link.type === 2) typeStr = "FF";
+        else if (link.type === "3" || link.type === 3) typeStr = "SF";
+        
+        return `${sourceWbs}${typeStr}`;
+      }).filter(Boolean).join(", ") || "-";
+    } catch {
+      return "-";
+    }
+  }
+
+  const formatDateShort = (date) => {
+    if (!date) return "-";
+    let d = date;
+    if (typeof date === "string") {
+      d = new Date(date);
+    }
+    try {
+      const day = d.getDate().toString().padStart(2, '0');
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const month = months[d.getMonth()];
+      const year = d.getFullYear().toString().slice(-2);
+      return `${day} ${month} '${year}`;
+    } catch {
+      return "-";
+    }
+  }
+
+  const formatToAPI = (date, isEnd = false) => {
+    if (!date) return null;
+    const d = new Date(date);
+    const pad = (n) => n.toString().padStart(2, '0');
+    
+    let hours = d.getHours();
+    let minutes = d.getMinutes();
+    let seconds = d.getSeconds();
+    
+    if (hours === 0 && minutes === 0 && seconds === 0) {
+      hours = isEnd ? 18 : 10;
+    }
+    
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  };
+
+  const syncTaskWithAPI = async (task) => {
+    try {
+      // Map assignees to integer if needed by API, fallback to 3 as default
+      const parsedResource = task.assignees && !isNaN(parseInt(task.assignees)) 
+        ? parseInt(task.assignees) 
+        : 3;
+
+      // Extract numeric task sub id
+      let numericSubId = task.id;
+      if (typeof task.id === 'string' && task.id.includes('_')) {
+        // dynamic tasks have format task_1234567. We can map them or hash them to an integer
+        numericSubId = parseInt(task.id.split('_')[1]) % 100000;
+      } else if (typeof task.id === 'string' && task.id.includes('.')) {
+        // e.g. "1.1" -> parseFloat -> 1.1 or replace "." to parse as integer e.g. "11"
+        numericSubId = parseFloat(task.id);
+      } else if (!isNaN(parseInt(task.id))) {
+        numericSubId = parseInt(task.id);
+      }
+
+      const payload = {
+        pm_id: pmId ? parseInt(pmId) : 2,               
+        project_id: projectId ? parseInt(projectId) : 1,          
+        project_sub_id: numericSubId, 
+        planned_start: formatToAPI(task.start_date, false),
+        planned_end: formatToAPI(task.end_date, true),
+        duration: task.duration || 0,
+        resource: parsedResource,
+        predecessor: getPredecessorsText(task) || "None"
+      };
+
+      console.log("Sending payload to assign_project API:", payload);
+
+      const response = await fetch("http://103.185.75.124:8021/api/projectManager/assign_project", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log("Successfully synced task to API:", data.message);
+      } else {
+        console.error("API sync returned error:", data);
+      }
+    } catch (error) {
+      console.error("Network or API Error:", error);
+    }
+  };
+
   useEffect(() => {
     if (!containerRef.current) return
 
-    gantt.plugins({ critical_path: true, tooltip: true })
+    try {
+      gantt.plugins({ critical_path: true, tooltip: true, auto_scheduling: true, inline_editors: true })
+    } catch {
+      gantt.plugins({ critical_path: true, tooltip: true, inline_editors: true })
+    }
 
     gantt.config.date_format = "%Y-%m-%d"
     gantt.config.row_height = 42
@@ -350,43 +521,90 @@ function GanttChart({ tasks, projectName, onClose }) {
     gantt.config.highlight_critical_path = criticalPath
     gantt.config.work_time = true
     gantt.config.start_on_monday = false
+    gantt.config.inline_editors_date_format = "%Y-%m-%d"
+    gantt.config.grid_width = gridWidth
+    gantt.config.details_on_dblclick = false
+
+    // ── Inline Editors Configuration ──────────────────────────────────────────
+    const textEditor = { type: "text", map_to: "text" };
+    const dateEditor = { type: "date", map_to: "start_date" };
+    const endEditor = { type: "date", map_to: "end_date" };
+    const durationEditor = { type: "number", map_to: "duration", min: 0, max: 1000 };
+    const resourceEditor = { type: "text", map_to: "assignees" };
+    const predecessorEditor = { type: "predecessor", map_to: "auto" };
 
     gantt.config.columns = [
       {
-        name: "wbs_code", width: 100, align: "left",
-        header: [
-          { html: "<div style='text-align:center;width:100%;font-weight:700;'>WBS</div>" },
-          { text: "" }
-        ],
+        name: "wbs_code",
+        label: "#",
+        width: 50,
+        align: "center",
+        resize: true,
+        header: [{ text: "#", align: "center" }],
         template: (task) => {
-          const getWBS = (t) => {
-            if (!t) return ""
-            const parentId = t.parent || 0
-            const siblings = gantt.getChildren(parentId)
-            const idx = siblings.indexOf(t.id) + 1
-            if (idx === 0) return ""
-            if (parentId && parentId !== 0 && parentId !== "0" && gantt.isTaskExists(parentId)) {
-              const parentWBS = getWBS(gantt.getTask(parentId))
-              return parentWBS ? `${parentWBS}.${idx}` : `${idx}`
-            }
-            return `${idx}`
+          try {
+            const index = gantt.getWBSCode(task) || "";
+            const warn = task.userWarning ? `<span style="color:#ef4444;font-size:11px;margin-right:4px;">👤</span>` : '';
+            return `<div class="gantt-index-cell" style="justify-content:center;font-weight:700;">${warn}${index}</div>`;
+          } catch {
+            return "";
           }
-          const index = getWBS(task)
-          const depth = (index.match(/\./g) || []).length
-          const warn = task.userWarning ? `<span style="color:#ef4444;font-size:11px;margin-right:4px;">👤</span>` : ''
-          return `<div class="gantt-index-cell" style="padding-left:${depth * 12}px;">${warn}${index}</div>`
         }
       },
       {
-        name: "text", tree: true, width: 280, resize: true,
-        header: [
-          { html: "<div style='display:flex;justify-content:space-between;align-items:center;width:100%;font-weight:700;'><span>Name</span><span style='font-weight:normal;color:#64748b;font-size:13px;margin-right:4px;display:inline-flex;gap:4px;'><span>⇳</span><span>⛶</span></span></div>" },
-          { html: "<div class='search-container-wrapper'><input type='text' id='gantt-search-input' class='gantt-search-input' placeholder='Search...' /></div>" }
-        ],
-        template: (task) =>
-          `<span style="font-weight:${task.type === 'project' ? 'bold' : 'normal'};color:${task.type === 'project' ? '#1e293b' : '#475569'};">${task.text}</span>`
+        name: "text",
+        label: "Task Name",
+        tree: true,
+        width: 220,
+        resize: true,
+        editor: textEditor,
+        header: [{ text: "Task Name", align: "center" }],
+        template: (task) => {
+          const isProj = task.type === 'project';
+          return `<span style="font-weight:${isProj ? 'bold' : 'normal'};color:${isProj ? '#1e293b' : '#475569'};">${task.text}</span>`;
+        }
+      },
+      {
+        name: "start_date",
+        label: "Start",
+        width: 95,
+        align: "center",
+        resize: true,
+        editor: dateEditor,
+        header: [{ text: "Start", align: "center" }],
+        template: (task) => formatDateShort(task.start_date)
+      },
+      {
+        name: "end_date",
+        label: "End",
+        width: 95,
+        align: "center",
+        resize: true,
+        editor: endEditor,
+        header: [{ text: "End", align: "center" }],
+        template: (task) => formatDateShort(task.end_date)
+      },
+      {
+        name: "assignees",
+        label: "Resource",
+        width: 120,
+        align: "center",
+        resize: true,
+        editor: resourceEditor,
+        header: [{ text: "Resource", align: "center" }],
+        template: (task) => task.assignees || "-"
+      },
+      {
+        name: "predecessors",
+        label: "Predecessor",
+        width: 90,
+        align: "center",
+        resize: true,
+        editor: predecessorEditor,
+        header: [{ text: "Predecessor", align: "center" }],
+        template: (task) => getPredecessorsText(task)
       }
-    ]
+    ];
 
     gantt.config.scale_height = 50
 
@@ -426,7 +644,20 @@ function GanttChart({ tasks, projectName, onClose }) {
     gantt.ext.zoom.init(zoomConfig)
     gantt.ext.zoom.setLevel(zoomLevel)
 
-    gantt.templates.task_class = (s, e, task) => task.barClass ? task.barClass : ""
+    gantt.templates.task_class = (s, e, task) => {
+      const classes = [];
+      if (task.barClass) classes.push(task.barClass);
+      if (criticalPath && gantt.isCriticalTask && gantt.isCriticalTask(task)) {
+        classes.push("gantt_critical_task");
+      }
+      return classes.join(" ");
+    }
+    gantt.templates.grid_row_class = (s, e, task) => {
+      if (criticalPath && gantt.isCriticalTask && gantt.isCriticalTask(task)) {
+        return "critical-row";
+      }
+      return "";
+    }
     gantt.templates.grid_cell_class = (col, task) => col.name === "wbs_code" ? (task.borderClass || "border-left-none") : ""
     gantt.templates.rightside_text = (s, e, task) => task.assignees ? `<span class="gantt-assignees-label">${task.assignees}</span>` : ""
     gantt.templates.timeline_cell_class = (item, date) => (date.getDay() === 0 || date.getDay() === 6) ? "weekend-cell" : ""
@@ -435,34 +666,38 @@ function GanttChart({ tasks, projectName, onClose }) {
     gantt.clearAll()
     gantt.parse(tasks)
 
-    const searchInput = document.getElementById("gantt-search-input")
-    if (searchInput) {
-      searchInput.addEventListener("input", (e) => {
-        gantt.filterValue = e.target.value
-        gantt.refreshData()
-      })
-      if (gantt.filterValue) searchInput.value = gantt.filterValue
-    }
+    const events = [];
 
-    gantt.attachEvent("onBeforeTaskDisplay", (id, task) => {
-      if (gantt.filterValue) return task.text.toLowerCase().includes(gantt.filterValue.toLowerCase())
-      return true
-    })
-
-    const ev1 = gantt.attachEvent("onLightbox", () => {
+    events.push(gantt.attachEvent("onLightbox", () => {
       document.body.style.overflow = "hidden"
       document.documentElement.style.overflow = "hidden"
       return true
-    })
-    const ev2 = gantt.attachEvent("onAfterLightbox", () => {
+    }));
+
+    events.push(gantt.attachEvent("onAfterLightbox", () => {
       document.body.style.overflow = ""
       document.documentElement.style.overflow = ""
-    })
+    }));
+
+    // Hook into inline edit updates
+    events.push(gantt.attachEvent("onAfterTaskUpdate", (id, task) => {
+      gantt.refreshData();
+      syncTaskWithAPI(task); 
+    }));
+
+    // Hook into new task creation
+    events.push(gantt.attachEvent("onAfterTaskAdd", (id, task) => {
+      syncTaskWithAPI(task);
+    }));
+
+    // Block lightbox popup on double click
+    events.push(gantt.attachEvent("onTaskDblClick", () => {
+      return false;
+    }));
 
     return () => {
       gantt.clearAll()
-      gantt.detachEvent(ev1)
-      gantt.detachEvent(ev2)
+      events.forEach(ev => gantt.detachEvent(ev))
       document.body.style.overflow = ""
       document.documentElement.style.overflow = ""
     }
@@ -483,14 +718,19 @@ function GanttChart({ tasks, projectName, onClose }) {
     const newTask = {
       id: `task_${Date.now()}`,
       text: type === 'project' ? "New Category" : type === 'milestone' ? "Milestone" : "New Task",
-      start_date: new Date(2020, 5, 8),
+      start_date: new Date(2026, 4, 5),
       duration: type === 'milestone' ? 0 : 5,
       progress: 0, parent: parentId, type,
-      barClass: type === 'project' ? 'gantt-bar-dark-green' : type === 'milestone' ? 'gantt-bar-green' : 'gantt-bar-blue',
+      barClass: type === 'project' ? 'gantt-bar-dark-blue' : type === 'milestone' ? 'gantt-bar-green' : 'gantt-bar-blue',
       borderClass: type === 'project' ? 'border-left-none' : 'border-left-blue'
     }
     gantt.addTask(newTask)
-    gantt.showLightbox(newTask.id)
+    gantt.selectTask(newTask.id)
+    try {
+      gantt.ext.inlineEditors.startEdit(newTask.id, "text")
+    } catch (e) {
+      // fallback if editors extension is in transition
+    }
   }
 
   const handleScrollToday = () => gantt.showDate(new Date(2020, 5, 15))
@@ -511,7 +751,8 @@ function GanttChart({ tasks, projectName, onClose }) {
       boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
       overflow: 'hidden', marginTop: 24,
       userSelect: 'none', position: 'relative',
-      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      resize: 'vertical', minHeight: 400, maxHeight: 1200
     }}>
 
       {/* ══ ROW 1 — Title + Zoom ══════════════════════════════════════════════ */}
@@ -762,6 +1003,100 @@ function GanttChart({ tasks, projectName, onClose }) {
       {/* ══ Gantt chart area ══════════════════════════════════════════════════ */}
       <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
         <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+        
+        {/* Dynamic Grid Resizer Splitter Overlay */}
+        {showGantt && (
+          <div 
+            onMouseDown={handleMouseDown}
+            style={{
+              position: 'absolute',
+              left: gridWidth - 6,
+              top: 0,
+              bottom: 0,
+              width: 12,
+              cursor: 'col-resize',
+              zIndex: 100,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              userSelect: 'none'
+            }}
+          >
+            <div style={{
+              width: 2,
+              height: '100%',
+              background: '#e2e8f0',
+              position: 'relative'
+            }}>
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: 4,
+                width: 14,
+                height: 24,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.08)',
+                color: '#64748b',
+                fontSize: 10,
+                fontWeight: 'bold',
+                pointerEvents: 'none'
+              }}>
+                ⋮
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ══ Legend Footer ════════════════════════════════════════════════════ */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px 24px',
+        background: '#ffffff',
+        borderTop: '1px solid #e2e8f0',
+        fontSize: 11,
+        color: '#64748b',
+        fontWeight: 600,
+        flexShrink: 0
+      }}>
+        {/* Left: Legend items */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 2, background: '#3b82f6' }}></span>
+            <span>Task</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ 
+              display: 'inline-block', 
+              width: 8, 
+              height: 8, 
+              transform: 'rotate(45deg)', 
+              background: '#10b981' 
+            }}></span>
+            <span>Milestone</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ color: '#94a3b8', letterSpacing: '1px', fontSize: 13, fontWeight: 'bold' }}>- - -</span>
+            <span>Baseline</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ display: 'inline-block', width: 16, height: 2, background: '#ef4444' }}></span>
+            <span>Critical Path</span>
+          </div>
+        </div>
+
+        {/* Right: Task Count */}
+        <div>
+          Showing 1 - 12 of 12 tasks
+        </div>
       </div>
 
     </div>
