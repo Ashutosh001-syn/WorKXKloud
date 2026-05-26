@@ -45,6 +45,7 @@ function Sidebar() {
   const [openMenu, setOpenMenu] = useState(() =>
     findActiveGroupKey(location.pathname),
   )
+  const [userRole, setUserRole] = useState('')
 
   const activeGroupKey = findActiveGroupKey(location.pathname)
 
@@ -57,6 +58,26 @@ function Sidebar() {
     document.addEventListener('open-sidebar', handler)
     return () => document.removeEventListener('open-sidebar', handler)
   }, [])
+
+  useEffect(() => {
+    try {
+      const profileStr = localStorage.getItem('user_profile')
+      if (profileStr) {
+        const profile = JSON.parse(profileStr)
+        setUserRole(profile.role?.toLowerCase() || '')
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [])
+
+  const filteredMenu = sidebarMenu.filter(item => {
+    if (userRole === 'admin') return true;
+    if (userRole === 'pm' || userRole === 'project manager') {
+      return item.key === 'new-assigned-project' || item.key === 'my-projects';
+    }
+    return true; // fallback
+  });
 
   return (
     <>
@@ -96,7 +117,7 @@ function Sidebar() {
         </div>
 
         <nav className="sidebar-scroll flex-1 space-y-3 overflow-y-auto px-2.5 pb-8 pr-1 scroll-smooth">
-          {sidebarMenu.map((item) => {
+          {filteredMenu.map((item) => {
             if (item.type === 'group') {
               const isOpen = openMenu === item.key || activeGroupKey === item.key
               const isActive = item.children.some((child) =>

@@ -15,6 +15,7 @@ import ProfilePage from './pages/ProfilePage'
 import CalendarPage from './pages/CalendarPage'
 import NewAssignedProjectPage from './pages/NewAssignedProjectPage'
 import MyProjectsPage from './pages/MyProjectsPage'
+import { hasPermission } from './utils/permissions'
 
 function ProtectedLayout() {
   if (!isAuthenticated()) {
@@ -22,6 +23,41 @@ function ProtectedLayout() {
   }
 
   return <DashboardLayout />
+}
+
+function RoleProtectedRoute({ element, allowedRoles }) {
+  let role = ''
+  try {
+    const userProfileStr = localStorage.getItem('user_profile')
+    if (userProfileStr) {
+      const profile = JSON.parse(userProfileStr)
+      role = profile.role?.toLowerCase() || ''
+    }
+  } catch (e) {}
+
+  if (!hasPermission(role, allowedRoles)) {
+    const isPM = role === 'pm' || role === 'project manager'
+    return <Navigate to={isPM ? "/new-assigned-project" : "/"} replace />
+  }
+
+  return element;
+}
+
+function RoleBasedHome() {
+  let role = ''
+  try {
+    const userProfileStr = localStorage.getItem('user_profile')
+    if (userProfileStr) {
+      const profile = JSON.parse(userProfileStr)
+      role = profile.role?.toLowerCase() || ''
+    }
+  } catch (e) {}
+
+  if (role === 'pm' || role === 'project manager') {
+    return <Navigate to="/new-assigned-project" replace />
+  }
+
+  return <Dashboard />
 }
 
 function App() {
@@ -40,40 +76,59 @@ function App() {
         />
 
         <Route element={<ProtectedLayout />}>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={<RoleBasedHome />} />
           <Route path="/profile" element={<ProfilePage />} />
-          {allWorkspaceRoutes.map((route) => (
-            <Route
-              key={route.to}
-              path={route.to}
-              element={
-                route.to === '/create-user' ? (
-                  <CreateUserPage />
-                ) : route.to === '/all-project' ? (
-                  <AllProjectPage />
-                ) : route.to === '/new-assigned-project' ? (
-                  <NewAssignedProjectPage />
-                ) : route.to === '/my-projects' ? (
-                  <MyProjectsPage />
-                ) : route.to === '/project-management/create-project' ? (
-                  <CreateProjectPage />
-                ) : route.to === '/resource/resource-master' ? (
-                  <ResourceMasterPage />
-                ) : route.to === '/resource/resource-allocation' ? (
-                  <ResourceAllocationPage />
-                ) : route.to === '/calendar' ? (
-                  <CalendarPage />
-                ) : (
-                  <WorkspacePage
-                    eyebrow={route.eyebrow}
-                    title={route.title}
-                    description={route.description}
-                    highlights={route.highlights}
+          {allWorkspaceRoutes.map((route) => {
+            // Determine allowed roles based on route path
+            let allowedRoles = [] // Empty array means all roles are allowed
+            
+            // PMs only get access to specific routes, Admins get everything
+            if (
+              route.to !== '/new-assigned-project' && 
+              route.to !== '/my-projects'
+            ) {
+              allowedRoles = ['admin'] 
+              // Any other roles like HR, Management could be added here in the future
+            }
+
+            return (
+              <Route
+                key={route.to}
+                path={route.to}
+                element={
+                  <RoleProtectedRoute 
+                    allowedRoles={allowedRoles}
+                    element={
+                      route.to === '/create-user' ? (
+                        <CreateUserPage />
+                      ) : route.to === '/all-project' ? (
+                        <AllProjectPage />
+                      ) : route.to === '/new-assigned-project' ? (
+                        <NewAssignedProjectPage />
+                      ) : route.to === '/my-projects' ? (
+                        <MyProjectsPage />
+                      ) : route.to === '/project-management/create-project' ? (
+                        <CreateProjectPage />
+                      ) : route.to === '/resource/resource-master' ? (
+                        <ResourceMasterPage />
+                      ) : route.to === '/resource/resource-allocation' ? (
+                        <ResourceAllocationPage />
+                      ) : route.to === '/calendar' ? (
+                        <CalendarPage />
+                      ) : (
+                        <WorkspacePage
+                          eyebrow={route.eyebrow}
+                          title={route.title}
+                          description={route.description}
+                          highlights={route.highlights}
+                        />
+                      )
+                    }
                   />
-                )
-              }
-            />
-          ))}
+                }
+              />
+            )
+          })}
         </Route>
 
         <Route

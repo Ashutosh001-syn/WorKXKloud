@@ -343,14 +343,29 @@ function AllProjectPage() {
       setError('')
 
       try {
-        const response = await fetch(API_ENDPOINTS.ALL_PROJECTS)
+        const response = await fetch(API_ENDPOINTS.GET_PROJECT_LIST)
         const data = await response.json()
 
         if (!response.ok || !data?.success) {
           throw new Error(data?.message || 'Failed to fetch projects')
         }
 
-        setRows(Array.isArray(data.data) ? data.data : [])
+        const mappedData = (Array.isArray(data.data) ? data.data : []).map(row => ({
+          ...row,
+          // Map properties for the table view
+          projectName: row.project_name || "-",
+          budget: row.budget ?? "-",
+          cost: row.budget ?? "-",
+          priority: row.priority || "-",
+          schedule: row.duration ? `${row.duration} days` : "-",
+          plannedStartDate: row.start_date || "-",
+          deadline: row.end_date || "-",
+          clientName: row.company_name || "-",
+          pm: row.project_manager || "-",
+          status: row.status || "Pending",
+        }))
+
+        setRows(mappedData)
       } catch (fetchError) {
         setRows([])
         setError(fetchError.message || 'Unable to fetch projects')

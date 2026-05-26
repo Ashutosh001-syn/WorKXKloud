@@ -141,7 +141,6 @@ const EmptyBoxIcon = () => (
       <line x1="53" y1="32" x2="63" y2="32" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </g>
 
-    {/* Cardboard Box */}
     <path
       d="M30 65 L60 52 L90 65 L60 78 Z"
       fill="#cbd5e1"
