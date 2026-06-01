@@ -29,6 +29,9 @@ import {
   RefreshCw
 } from 'lucide-react'
 import GanttChart from '../components/projects/GanttChart'
+import ProjectBoardSection from '../components/projects/ProjectBoardSection'
+import ProjectDiscussionSection from '../components/projects/ProjectDiscussionSection'
+import ProjectBacklogsSection from '../components/projects/ProjectBacklogsSection'
 import { API_ENDPOINTS, API_ROOT_URL } from '../config/api'
 
 // Helper to format date strings
@@ -588,7 +591,7 @@ function MyProjectsPage() {
               {/* Tabs list */}
               <div className="mt-6 border-b border-slate-100 overflow-x-auto scrollbar-none">
                 <div className="flex justify-between items-center text-sm font-bold w-full pb-px px-2 sm:px-6">
-                  {['Overview', 'Schedule', 'Timeline', 'Discussion', 'Financial'].map((tab) => (
+                  {['Overview', 'Schedule', 'Board', 'Backlogs', 'Discussion', 'Financial'].map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setActiveTab(tab)}
@@ -780,6 +783,8 @@ function MyProjectsPage() {
 
                 </div>
 
+              ) : activeTab === 'Board' ? (
+                <ProjectBoardSection />
               ) : activeTab === 'Schedule' ? (
                 <GanttChart
                   tasks={getMockTasksForProject(selectedProject)}
@@ -824,6 +829,10 @@ function MyProjectsPage() {
                     </div>
                   </div>
                 </div>
+              ) : activeTab === 'Backlogs' ? (
+                <ProjectBacklogsSection />
+              ) : activeTab === 'Discussion' ? (
+                <ProjectDiscussionSection />
               ) : (
                 <div className="mt-8 flex flex-col items-center justify-center py-20 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
                   <Inbox size={48} className="text-slate-300 mb-3 animate-pulse" />

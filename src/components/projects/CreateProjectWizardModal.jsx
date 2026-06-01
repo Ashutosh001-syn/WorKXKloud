@@ -600,6 +600,18 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
   const [allUsers, setAllUsers] = useState([]);
   const [userData, setUserData] = useState([]);
   const [resourceData, setResourceData] = useState([]);
+  const getNormalizedUserType = (user) => {
+    const rawType = String(user?.user_type || user?.resource_type || "").toLowerCase().trim();
+    if (rawType === "inhouse" || rawType === "in-house") return "inhouse";
+    if (rawType === "freelancer") return "freelancer";
+    return "";
+  };
+  const getDisplayNameWithType = (user) => {
+    const name = user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim();
+    const userType = getNormalizedUserType(user);
+    const typeLabel = userType === "inhouse" ? "(In-house)" : userType === "freelancer" ? "(Freelancer)" : "";
+    return typeLabel ? `${name} ${typeLabel}` : name;
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -648,27 +660,19 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
 
   async function fetchManagers() {
     try {
-      const response = await fetch(API_ENDPOINTS.USER_LIST);
+      const response = await fetch(API_ENDPOINTS.RESOURCE_LIST);
       const data = await response.json();
-      console.log("Raw User List:", data);
+      console.log("Raw Resource List:", data);
       const rawUsers = data.data || data;
       if (Array.isArray(rawUsers)) {
         const pmNames = rawUsers
           .filter(user => user.role && user.role.toLowerCase().trim() === 'project manager')
-          .map(user => {
-            const name = user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim();
-            const type = user.user_type === 'inhouse' ? '(In-house)' : '(Freelancer)';
-            return `${name} ${type}`;
-          })
+          .map(getDisplayNameWithType)
           .filter(name => name.length > 0);
         
         const tlNames = rawUsers
           .filter(user => user.role && (user.role.toLowerCase().trim() === 'tech lead' || user.role.toLowerCase().trim() === 'technical lead'))
-          .map(user => {
-            const name = user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim();
-            const type = user.user_type === 'inhouse' ? '(In-house)' : '(Freelancer)';
-            return `${name} ${type}`;
-          })
+          .map(getDisplayNameWithType)
           .filter(name => name.length > 0);
           
         console.log("Filtered Managers:", pmNames);
@@ -892,9 +896,7 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
           `${u.first_name || ''} ${u.last_name || ''}`.trim() === val
         );
         if (user) {
-          const name = user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim();
-          const type = user.user_type === 'inhouse' ? '(In-house)' : '(Freelancer)';
-          return `${name} ${type}`;
+          return getDisplayNameWithType(user);
         }
         return val;
       };
@@ -1070,7 +1072,8 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
       if (!val) return null;
       const user = userData.find(u => {
         const name = (u.name || `${u.first_name || ''} ${u.last_name || ''}`).trim();
-        const type = u.user_type === 'inhouse' ? '(In-house)' : '(Freelancer)';
+        const normalizedType = getNormalizedUserType(u);
+        const type = normalizedType === 'inhouse' ? '(In-house)' : normalizedType === 'freelancer' ? '(Freelancer)' : '';
         return `${name} ${type}` === val || name === val || String(u.id) === String(val) || String(u.user_id) === String(val);
       });
       if (user) return user.id || user.user_id;
@@ -1138,13 +1141,16 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
             });
             const userId = user ? (user.id || user.user_id || null) : null;
             
-            // Send both the name and the IDs
+            // Include row-level id and pm_id for API compatibility
+            const rowId = row.id ?? userId;
+            const rowPmId = row.pm_id ?? (row.role === "Project Manager" ? userId : pmId ?? null);
+
             if (row.role === "Project Manager") {
-              return { ...row, pm_id: userId };
+              return { ...row, id: rowId, pm_id: rowPmId };
             } else if (row.role === "Tech Lead" || row.role === "Technical Lead") {
-              return { ...row, tl_id: userId, technical_lead_id: userId };
+              return { ...row, id: rowId, pm_id: rowPmId, tl_id: userId, technical_lead_id: userId };
             } else {
-              return { ...row, resource_id: userId };
+              return { ...row, id: rowId, pm_id: rowPmId, resource_id: userId };
             }
           })
         };
@@ -1490,7 +1496,8 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
                       <tbody>
                         {alloc.rows.map((row, rIdx) => {
                           const filteredPeople = userData.filter(u => {
-                            const isType = alloc.type === "In-house" ? u.user_type === "inhouse" : u.user_type === "freelancer";
+                            const userType = getNormalizedUserType(u);
+                            const isType = alloc.type === "In-house" ? userType === "inhouse" : userType === "freelancer";
                             const isRole = row.role ? (u.role && u.role.toLowerCase() === row.role.toLowerCase()) : true;
                             return isType && isRole;
                           }).map(u => u.name || `${u.first_name || ''} ${u.last_name || ''}`.trim());

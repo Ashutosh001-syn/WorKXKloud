@@ -74,11 +74,15 @@ const buildFormData = (form, isUpdate = false) => {
   if (isUpdate) fd.append('id', form.id)
 
   const typeMap = { 'In-house': 'inhouse', Freelancer: 'freelancer', Material: 'material', Cost: 'cost' }
-  fd.append('resource_type', typeMap[form.type] || form.type.toLowerCase())
+  const resourceType = typeMap[form.type] || form.type.toLowerCase()
+  fd.append('resource_type', resourceType)
   fd.append('name', form.name || '')
   fd.append('role', form.role || '')
   fd.append('email', form.email || '')
   fd.append('mobile', form.mobile || '')
+  if (resourceType === 'inhouse' || resourceType === 'freelancer') {
+    fd.append('password', form.password || '')
+  }
   fd.append('shift', form.shift || '')
   fd.append('salary_ctc', form.salary || '')
   fd.append('start_time', toApiTime(form.startTime))
@@ -553,6 +557,7 @@ function EditModal({ row, onClose, onSave }) {
 function AddResourceModal({ activeTab, onClose, onSave }) {
   const [form, setForm] = useState({
     type: activeTab || 'In-house', name: '', role: '', email: '', mobile: '',
+    password: '',
     experience: '', hourlyRate: '', shift: 'Day', salary: '',
     startTime: '09:00 AM', endTime: '06:00 PM',
     unit: '', rate: '', cost: '', image: null,
@@ -653,8 +658,12 @@ function AddResourceModal({ activeTab, onClose, onSave }) {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div><label className={lbl}>Email</label><input className={inp} type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="Email address" /></div>
+              <div><label className={lbl}>Email</label><input className={inp} type="email" autoComplete="off" name="resource_add_email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="Email address" /></div>
               <div><label className={lbl}>Mobile</label><input className={inp} value={form.mobile} onChange={e => set('mobile', e.target.value)} placeholder="Phone number" /></div>
+            </div>
+            <div>
+              <label className={lbl}>Password</label>
+              <input className={inp} type="password" autoComplete="new-password" name="resource_add_password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="Enter password" />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
