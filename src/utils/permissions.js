@@ -6,11 +6,15 @@
  * @returns {boolean} - True if permitted, false otherwise
  */
 export const hasPermission = (userRole, allowedRoles) => {
-  if (!userRole) return false;
-  if (!allowedRoles || allowedRoles.length === 0) return true; // No specific restrictions
-  
-  const normalizedRole = userRole.toLowerCase();
-  const normalizedAllowedRoles = allowedRoles.map(role => role.toLowerCase());
-  
-  return normalizedAllowedRoles.includes(normalizedRole);
-};
+  if (!userRole) return false
+
+  if (!allowedRoles || allowedRoles.length === 0) {
+    return true
+  }
+
+  const normalizedRole = userRole.toLowerCase()
+
+  return allowedRoles
+    .map(role => role.toLowerCase())
+    .includes(normalizedRole)
+}

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { API_ENDPOINTS } from '../config/api'
 import {
   ClipboardList,
   CheckCircle2,
@@ -72,162 +73,141 @@ const getStatusDetails = (project) => {
   }
 }
 
-const DEFAULT_PROJECTS = [
-  {
-    id: 'PJ-2026001',
-    code: 'XPM-2024-001',
-    name: 'Website Redesign',
-    clientName: 'ABC Corporation',
-    dueDate: '30 Jun 2026',
-    createdOn: '10 May 2024',
-    department: 'IT',
-    priority: 'High',
-    priorityColor: 'text-[#f56a5d] bg-[#ffe6e3]',
-    status: 'Pending Acceptance',
-    isAccepted: false,
-    icon: Briefcase,
-    iconColor: 'bg-emerald-50 text-emerald-600',
-    resourcesAllocated: [
-      { name: 'Ravi Sharma', role: 'Tester', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&fit=crop&auto=format' },
-      { name: 'Sagar Patel', role: 'Developer', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&fit=crop&auto=format' },
-      { name: 'Anita Verma', role: 'Ui Designer', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&fit=crop&auto=format' },
-    ],
-    clientDetails: {
-      companyName: 'R & S Technologies',
-      location: 'Noida',
-      personName: 'Nishant',
-      mobileNumber: '982723688',
-      emailId: 'nishant@gmail.com',
-      role: 'Sales',
-    },
-    paymentMilestones: [
-      { srNo: 1, milestone: 'BRD Sign off', person: 'Ravi Sharma', percentage: '100%' },
-      { srNo: 2, milestone: 'Designing', person: 'Sagar Patel', percentage: '00' },
-      { srNo: 3, milestone: 'Development process', person: 'Anita Verma', percentage: '70%' },
-    ],
-  },
-  {
-    id: 'PJ-2026002',
-    code: 'XPM-2024-002',
-    name: 'Mobile App Development',
-    clientName: 'XYZ Corporation',
-    dueDate: '20 Jul 2026',
-    createdOn: '08 May 2024',
-    department: 'IT',
-    priority: 'High',
-    priorityColor: 'text-[#f56a5d] bg-[#ffe6e3]',
-    status: 'Scheduling in Progress',
-    isAccepted: false,
-    icon: Smartphone,
-    iconColor: 'bg-amber-50 text-amber-600',
-    resourcesAllocated: [
-      { name: 'Sagar Patel', role: 'Developer', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&fit=crop&auto=format' },
-      { name: 'Anita Verma', role: 'Ui Designer', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&fit=crop&auto=format' },
-      { name: 'Ravi Sharma', role: 'Tester', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&fit=crop&auto=format' },
-    ],
-    clientDetails: {
-      companyName: 'XYZ Corporation',
-      location: 'Gurgaon',
-      personName: 'Aman',
-      mobileNumber: '9811223344',
-      emailId: 'aman@xyz.com',
-      role: 'Project Head',
-    },
-    paymentMilestones: [
-      { srNo: 1, milestone: 'UX Design Signoff', person: 'Anita Verma', percentage: '20%' },
-      { srNo: 2, milestone: 'App Prototype', person: 'Sagar Patel', percentage: '30%' },
-      { srNo: 3, milestone: 'App Build Signoff', person: 'Ravi Sharma', percentage: '50%' },
-    ],
-  },
-  {
-    id: 'PJ-2026003',
-    code: 'XPM-2024-003',
-    name: 'Data Analytics Platform',
-    clientName: 'ABC Corporation',
-    dueDate: '15 Aug 2026',
-    createdOn: '05 May 2024',
-    department: 'IT',
-    priority: 'Low',
-    priorityColor: 'text-[#2bbb44] bg-[#ddf9df]',
-    status: 'In Progress',
-    isAccepted: false,
-    icon: Cloud,
-    iconColor: 'bg-indigo-50 text-indigo-600',
-    resourcesAllocated: [
-      { name: 'Ravi Sharma', role: 'Tester', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&fit=crop&auto=format' },
-      { name: 'Sagar Patel', role: 'Developer', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&fit=crop&auto=format' },
-      { name: 'Anita Verma', role: 'Ui Designer', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&fit=crop&auto=format' },
-      { name: 'Neha Gupta', role: 'Data Analyst', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format' },
-    ],
-    clientDetails: {
-      companyName: 'ABC Corporation',
-      location: 'Mumbai',
-      personName: 'Vikram',
-      mobileNumber: '9988776655',
-      emailId: 'vikram@abc.com',
-      role: 'Director',
-    },
-    paymentMilestones: [
-      { srNo: 1, milestone: 'Requirement Specification', person: 'Neha Gupta', percentage: '10%' },
-      { srNo: 2, milestone: 'Architecture Design', person: 'Sagar Patel', percentage: '20%' },
-      { srNo: 3, milestone: 'Core Processing Unit', person: 'Anita Verma', percentage: '40%' },
-      { srNo: 4, milestone: 'Analytics Dashboard', person: 'Ravi Sharma', percentage: '30%' },
-    ],
-  },
-]
-
 const getInitialResources = (project) => {
-  const devCount = project?.resourcesAllocated?.filter(r => r.role.toLowerCase() === 'developer').length || 0;
-  const testerCount = project?.resourcesAllocated?.filter(r => r.role.toLowerCase() === 'tester').length || 0;
-  const uiCount = project?.resourcesAllocated?.filter(r => ['ui designer', 'ui/ux designer', 'designer'].includes(r.role.toLowerCase())).length || 0;
-
-  const isProj1 = project?.id === 'PJ-2026001';
+  const devCount = project?.resourcesAllocated?.filter(r => r.role?.toLowerCase() === 'developer').length || 0
+  const testerCount = project?.resourcesAllocated?.filter(r => r.role?.toLowerCase() === 'tester').length || 0
+  const uiCount = project?.resourcesAllocated?.filter(r => ['ui designer', 'ui/ux designer', 'designer'].includes(r.role?.toLowerCase())).length || 0
 
   return [
     {
       roleName: 'Developer',
-      current: isProj1 ? 2 : devCount,
+      current: devCount,
       required: '',
       placeholder: '0',
       isCustom: false
     },
     {
       roleName: 'Tester',
-      current: isProj1 ? 1 : testerCount,
+      current: testerCount,
       required: '',
       placeholder: '0',
       isCustom: false
     },
     {
       roleName: 'UI/UX Designer',
-      current: isProj1 ? 0 : uiCount,
+      current: uiCount,
       required: '',
       placeholder: '0',
       isCustom: false
     }
-  ];
+  ]
+}
+
+const formatProjectDate = (dateString) => {
+  if (!dateString) return '-'
+  const date = new Date(dateString)
+  if (Number.isNaN(date.getTime())) return dateString
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  }).format(date)
+}
+
+const getPriorityColor = (priority) => {
+  switch ((priority || '').toLowerCase()) {
+    case 'high':
+      return 'text-[#f56a5d] bg-[#ffe6e3]'
+    case 'medium':
+      return 'text-[#f59e0b] bg-[#fffaeb]'
+    case 'low':
+      return 'text-[#2bbb44] bg-[#ddf9df]'
+    default:
+      return 'text-[#64748b] bg-[#f8fafc]'
+  }
+}
+
+const isValidReactComponent = (Component) => {
+  if (!Component) return false
+  return typeof Component === 'function' || (typeof Component === 'object' && Component !== null && Component.$$typeof != null)
+}
+
+const mapRemoteProjectToView = (project) => {
+  const contacts = Array.isArray(project.contacts) ? project.contacts : []
+  const resourcesAllocated = contacts.map((contact, index) => ({
+    name: contact.person_name || contact.name || `Team Member ${index + 1}`,
+    role: contact.role || 'Team Member',
+    avatar: `https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&fit=crop&auto=format&sig=${index}`
+  }))
+
+  const rawRequestStatus = project.request_status ?? project.requestStatus ?? project.status
+  const normalizedRequestStatus = String(rawRequestStatus || '').trim().toLowerCase()
+  let resolvedStatus = 'Pending Acceptance'
+  let resolvedAccepted = false
+
+  if (normalizedRequestStatus) {
+    if (normalizedRequestStatus.includes('accept')) {
+      resolvedStatus = 'Accept'
+      resolvedAccepted = true
+    } else if (normalizedRequestStatus.includes('decline')) {
+      resolvedStatus = 'Declined'
+    } else {
+      resolvedStatus = String(rawRequestStatus)
+    }
+  }
+
+  return {
+    id: String(project.id ?? project.project_id ?? project.code ?? ''),
+    code: project.project_code || project.projectCode || project.code || 'N/A',
+    name: project.project_name || project.name || 'Untitled Project',
+    clientName: project.company_name || project.companyName || project.client || 'N/A',
+    dueDate: formatProjectDate(project.end_date || project.dueDate || project.deadline),
+    createdOn: formatProjectDate(project.created_at || project.contact_sign_date || project.createdOn),
+    department: project.project_type || project.department || 'IT',
+    priority: project.priority || 'Medium',
+    priorityColor: getPriorityColor(project.priority),
+    status: resolvedStatus,
+    isAccepted: resolvedAccepted,
+    icon: Briefcase,
+    iconColor: 'bg-blue-50 text-blue-600',
+    resourcesAllocated: resourcesAllocated,
+    clientDetails: {
+      companyName: project.company_name || project.companyName || 'N/A',
+      location: project.location || 'N/A',
+      personName: contacts[0]?.person_name || contacts[0]?.name || '',
+      mobileNumber: contacts[0]?.mobile || '',
+      emailId: contacts[0]?.email || '',
+      role: contacts[0]?.role || ''
+    },
+    paymentMilestones: (() => {
+      const milestoneSource = Array.isArray(project.milestones)
+        ? project.milestones
+        : Array.isArray(project.payment_milestones)
+          ? project.payment_milestones
+          : []
+
+      return milestoneSource.map((milestone, index) => {
+        const rawDate = milestone.milestone_date ?? milestone.date ?? milestone.due_date ?? milestone.dueDate
+        const rawPercentage = milestone.percentage ?? milestone.pct ?? milestone.percent ?? 0
+        const percentageValue = String(rawPercentage).trim().replace(/%$/, '')
+
+        return {
+          srNo: index + 1,
+          milestone: milestone.milestone || milestone.name || `Milestone ${index + 1}`,
+          milestone_date: formatProjectDate(rawDate),
+          person: contacts[index]?.person_name || contacts[index]?.name || '',
+          percentage: `${percentageValue}%`
+        }
+      })
+    })()
+  }
 }
 
 function NewAssignedProjectPage() {
   const navigate = useNavigate()
-  const [projects, setProjects] = useState(() => {
-    const saved = localStorage.getItem('assigned_projects_list')
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        return DEFAULT_PROJECTS.map(defaultP => {
-          const savedP = parsed.find(p => p.id === defaultP.id)
-          if (savedP) {
-            return { ...defaultP, isAccepted: savedP.isAccepted, status: savedP.status }
-          }
-          return defaultP
-        })
-      } catch (e) {
-        return DEFAULT_PROJECTS
-      }
-    }
-    return DEFAULT_PROJECTS
-  })
+  const [projects, setProjects] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [fetchError, setFetchError] = useState(null)
 
   const [selectedProjectId, setSelectedProjectId] = useState(null)
   const [activeTab, setActiveTab] = useState('project-detail')
@@ -237,14 +217,7 @@ function NewAssignedProjectPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [showAddResourceModal, setShowAddResourceModal] = useState(false)
   const [resourceRows, setResourceRows] = useState([])
-
-  // Save projects to local storage and dispatch badge updates
-  useEffect(() => {
-    localStorage.setItem('assigned_projects_list', JSON.stringify(projects))
-    const pendingCount = projects.filter(p => !p.isAccepted).length
-    localStorage.setItem('assigned_projects_badge', pendingCount.toString())
-    window.dispatchEvent(new Event('badge-update'))
-  }, [projects])
+  const [isSubmittingApproval, setIsSubmittingApproval] = useState(false)
 
   // Block background scroll when any modal is open
   useEffect(() => {
@@ -258,23 +231,143 @@ function NewAssignedProjectPage() {
     }
   }, [showDeclineModal, showConfirmModal, showAddResourceModal])
 
-  const selectedProject = projects.find(p => p.id === selectedProjectId)
-
-  const handleAcceptProject = (projectId, requestedResources = null, shouldNavigate = false) => {
-    setProjects(prev =>
-      prev.map(p =>
-        p.id === projectId
-          ? { ...p, isAccepted: true, status: 'Scheduling in Progress', requestedResources }
-          : p
-      )
-    )
-    setShowToast({ type: 'success', message: 'Project accepted successfully! Proceeding to scheduling...' })
-    setTimeout(() => {
-      setShowToast(null)
-      if (shouldNavigate) {
-        navigate('/resource/resource-allocation')
+  const selectedProject = projects.find(p => String(p.id) === String(selectedProjectId))
+  useEffect(() => {
+    const fetchAssignedProjects = async () => {
+      const pmId = getPmId()
+      if (!pmId) {
+        console.warn('NewAssignedProjectPage: pmId not found in localStorage, skipping API fetch')
+        return
       }
-    }, 1500)
+
+      setIsLoading(true)
+      setFetchError(null)
+
+      try {
+        const response = await fetch(API_ENDPOINTS.GET_PROJECTS_BY_PM, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pm_id: pmId })
+        })
+        const data = await response.json()
+
+        if (!response.ok || !data?.success || !Array.isArray(data.data)) {
+          const errorMessage = data?.message || 'Unable to fetch assigned projects.'
+          console.warn('NewAssignedProjectPage fetch error:', errorMessage, data)
+          setFetchError(errorMessage)
+          return
+        }
+
+        const mappedProjects = data.data.map(rawProject => mapRemoteProjectToView(rawProject))
+        setProjects(mappedProjects)
+      } catch (error) {
+        console.error('Failed to fetch PM assigned projects:', error)
+        setFetchError('Unable to load assigned projects. Please try again later.')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchAssignedProjects()
+  }, [])
+
+  const submitProjectApproval = async (projectId, status, reason = '') => {
+    const pmId = getPmId()
+    if (!pmId) {
+      throw new Error('PM id not found')
+    }
+
+    const response = await fetch(API_ENDPOINTS.PROJECT_APPROVAL_BY_PM, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pm_id: pmId,
+        project_id: Number(projectId),
+        request_status: status,
+        reason: reason || ''
+      })
+    })
+
+    const data = await response.json()
+    if (!response.ok || !data?.success) {
+      throw new Error(data?.message || 'Failed to submit project approval response.')
+    }
+
+    return data
+  }
+
+  const submitRequiredResources = async (projectId, requestedResources) => {
+    const pmId = getPmId()
+    if (!pmId) {
+      throw new Error('PM id not found')
+    }
+
+    // Approve the project alongside the required resource request
+    await submitProjectApproval(projectId, 'Accept', 'Accepted by PM')
+
+    // Filter out invalid or empty resource requests
+    const resourcesToSubmit = requestedResources.filter(r => {
+      const requiredVal = parseInt(r.required) || 0
+      return requiredVal > 0 && r.roleName.trim() !== ''
+    })
+
+    if (resourcesToSubmit.length === 0) {
+      return { success: true, message: 'No resources to submit' }
+    }
+
+    // Submit each resource
+    for (const resource of resourcesToSubmit) {
+      const requiredVal = parseInt(resource.required) || 0
+      const response = await fetch(API_ENDPOINTS.CREATE_REQUIRED_RESOURCE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pm_id: pmId,
+          project_id: Number(projectId),
+          resources_id: Number(projectId),
+          role: resource.roleName.trim(),
+          required_resource: requiredVal,
+          status: 'pending'
+        })
+      })
+
+      const data = await response.json()
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.message || `Failed to add ${resource.roleName} resource.`)
+      }
+    }
+
+    return { success: true, message: 'Required resources added successfully' }
+  }
+  const handleAcceptProject = async (projectId, requestedResources = null, shouldNavigate = false) => {
+    setIsSubmittingApproval(true)
+    try {
+      if (requestedResources && requestedResources.length > 0) {
+        await submitRequiredResources(projectId, requestedResources)
+      } else {
+        await submitProjectApproval(projectId, 'Accept', 'Accepted by PM')
+      }
+      setProjects(prev =>
+        prev.map(p =>
+          p.id === projectId
+            ? { ...p, isAccepted: true, status: 'Scheduling in Progress', requestedResources }
+            : p
+        )
+      )
+      setShowToast({ type: 'success', message: 'Project accepted successfully! Proceeding to scheduling...' })
+      setTimeout(() => {
+        setShowToast(null)
+        if (shouldNavigate) {
+          navigate('/resource/resource-allocation')
+        }
+      }, 1500)
+    } catch (error) {
+      console.error('Project approval submit failed:', error)
+      setShowToast({ type: 'error', message: error.message || 'Unable to accept project. Try again.' })
+      setTimeout(() => setShowToast(null), 3500)
+    } finally {
+      setIsSubmittingApproval(false)
+    }
   }
 
   const handleAddCustomResource = () => {
@@ -312,23 +405,45 @@ function NewAssignedProjectPage() {
     setResourceRows(prev => prev.filter((_, idx) => idx !== index));
   }
 
-  const handleDeclineProject = (projectId, reason) => {
-    setProjects(prev =>
-      prev.map(p =>
-        p.id === projectId
-          ? { ...p, isAccepted: false, status: 'Declined', declineReason: reason }
-          : p
+  const handleDeclineProject = async (projectId, reason) => {
+    setIsSubmittingApproval(true)
+    try {
+      await submitProjectApproval(projectId, 'Declined', reason)
+      setProjects(prev =>
+        prev.map(p =>
+          p.id === projectId
+            ? { ...p, isAccepted: false, status: 'Declined', declineReason: reason }
+            : p
+        )
       )
-    )
-    setShowToast({ type: 'error', message: 'Project response submitted as declined.' })
-    setTimeout(() => setShowToast(null), 3500)
+      setShowToast({ type: 'error', message: 'Project response submitted as declined.' })
+      setTimeout(() => setShowToast(null), 3500)
+    } catch (error) {
+      console.error('Project approval submit failed:', error)
+      setShowToast({ type: 'error', message: error.message || 'Unable to decline project. Try again.' })
+      setTimeout(() => setShowToast(null), 3500)
+    } finally {
+      setIsSubmittingApproval(false)
+    }
   }
 
-  const onSubmitDecline = () => {
+  const onSubmitDecline = async () => {
     if (!declineReason.trim()) return
-    handleDeclineProject(selectedProject.id, declineReason.trim())
+    await handleDeclineProject(selectedProject.id, declineReason.trim())
     setShowDeclineModal(false)
   }
+const getPmId = () => {
+  try {
+    const authUser = localStorage.getItem('auth_user')
+    if (authUser) {
+      const user = JSON.parse(authUser)
+      return user.id || user.user_id || null
+    }
+  } catch {
+    // ignore
+  }
+  return null
+}
 
   return (
     <div className="min-h-screen bg-[#0d2646] p-4 sm:p-6 lg:p-8">
@@ -367,7 +482,7 @@ function NewAssignedProjectPage() {
             {/* Grid of Cards */}
             <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {projects.map((project) => {
-                const ProjectIcon = project.icon
+                const ProjectIcon = isValidReactComponent(project.icon) ? project.icon : Briefcase
                 return (
                   <div
                     key={project.id}
@@ -376,7 +491,9 @@ function NewAssignedProjectPage() {
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${project.iconColor}`}>
-                          <ProjectIcon size={20} strokeWidth={2} />
+                          {isValidReactComponent(ProjectIcon)
+                            ? <ProjectIcon size={20} strokeWidth={2} />
+                            : <Briefcase size={20} strokeWidth={2} />}
                         </div>
                         <div>
                           <h3 className="font-bold text-slate-800 text-[15px] leading-snug">
@@ -431,11 +548,13 @@ function NewAssignedProjectPage() {
                     {/* Status Pill */}
                     {(() => {
                       const statusInfo = getStatusDetails(project);
-                      const StatusIcon = statusInfo.icon;
+                      const StatusIcon = isValidReactComponent(statusInfo.icon) ? statusInfo.icon : Clock;
                       return (
                         <div className={`mt-6 flex flex-row items-center justify-between gap-3 rounded-xl p-3 text-xs border ${statusInfo.bg} transition-all duration-300`}>
                           <div className="flex items-center gap-1.5 font-semibold opacity-95 flex-shrink-0">
-                            <StatusIcon size={14} className="flex-shrink-0" />
+                            {isValidReactComponent(StatusIcon)
+                              ? <StatusIcon size={14} className="flex-shrink-0" />
+                              : <Clock size={14} className="flex-shrink-0" />}
                             <span>Status</span>
                           </div>
                           <span className="font-bold tracking-wide text-right">{statusInfo.label}</span>
@@ -524,10 +643,12 @@ function NewAssignedProjectPage() {
                     </h1>
                     {(() => {
                       const statusInfo = getStatusDetails(selectedProject);
-                      const StatusIcon = statusInfo.icon;
+                      const StatusIcon = isValidReactComponent(statusInfo.icon) ? statusInfo.icon : Clock;
                       return (
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${statusInfo.bg}`}>
-                          <StatusIcon size={12} strokeWidth={2.5} className="flex-shrink-0" />
+                          {isValidReactComponent(StatusIcon)
+                            ? <StatusIcon size={12} strokeWidth={2.5} className="flex-shrink-0" />
+                            : <Clock size={12} strokeWidth={2.5} className="flex-shrink-0" />}
                           {statusInfo.label}
                         </span>
                       )
@@ -755,11 +876,13 @@ function NewAssignedProjectPage() {
                   <div className="flex items-center gap-3">
                     {(() => {
                       const statusInfo = getStatusDetails(selectedProject);
-                      const StatusIcon = statusInfo.icon;
+                      const StatusIcon = isValidReactComponent(statusInfo.icon) ? statusInfo.icon : Clock;
                       return (
                         <>
                           <div className={`flex h-10 w-10 items-center justify-center rounded-full flex-shrink-0 bg-blue-50 text-blue-500`}>
-                            <StatusIcon size={18} />
+                            {isValidReactComponent(StatusIcon)
+                              ? <StatusIcon size={18} />
+                              : <Clock size={18} />}
                           </div>
                           <div>
                             <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Project Status</p>
@@ -914,7 +1037,7 @@ function NewAssignedProjectPage() {
                         <tr key={index}>
                           <td className="px-4 py-3.5 text-slate-400">{index + 1}.</td>
                           <td className="px-4 py-3.5 text-slate-700">{milestone.milestone}</td>
-                          <td className="px-4 py-3.5 text-slate-700">{milestone.person}</td>
+                          <td className="px-4 py-3.5 text-slate-700">{milestone.milestone_date}</td>
                           <td className="px-4 py-3.5 text-slate-700">
                             <span className="font-bold text-slate-800">{milestone.percentage}</span>
                           </td>
@@ -1044,7 +1167,7 @@ function NewAssignedProjectPage() {
               </button>
               <button
                 onClick={onSubmitDecline}
-                disabled={!declineReason.trim()}
+                disabled={!declineReason.trim() || isSubmittingApproval}
                 className="px-8 h-10 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-xs font-bold text-white shadow-sm transition flex items-center justify-center cursor-pointer min-w-[110px] disabled:opacity-50 disabled:pointer-events-none"
               >
                 Submit
@@ -1099,7 +1222,8 @@ function NewAssignedProjectPage() {
                   setShowConfirmModal(false);
                   setShowAddResourceModal(true);
                 }}
-                className="px-6 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-xs font-bold text-white shadow-sm transition flex items-center justify-center cursor-pointer min-w-[130px]"
+                disabled={isSubmittingApproval}
+                className="px-6 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-xs font-bold text-white shadow-sm transition flex items-center justify-center cursor-pointer min-w-[130px] disabled:opacity-50 disabled:pointer-events-none"
               >
                 Yes
               </button>
@@ -1272,7 +1396,8 @@ function NewAssignedProjectPage() {
                   setShowAddResourceModal(false);
                   handleAcceptProject(selectedProject.id, cleanedRows);
                 }}
-                className="px-6 h-10 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-xs font-bold text-white shadow-sm transition flex items-center justify-center cursor-pointer min-w-[110px]"
+                disabled={isSubmittingApproval}
+                className="px-6 h-10 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-xs font-bold text-white shadow-sm transition flex items-center justify-center cursor-pointer min-w-[110px] disabled:opacity-50 disabled:pointer-events-none"
               >
                 Submit
               </button>

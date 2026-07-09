@@ -22,6 +22,7 @@ export const API_ENDPOINTS = {
     RESOURCE_LIST: `${API_BASE_URL}/resource_list`,
   CREATE_RESOURCE: `${API_BASE_URL}/create_resource`,
   UPDATE_RESOURCE: `${API_BASE_URL}/update_resource`,
+  ASSIGN_PROJECT: `${API_ROOT_URL}/projectManager/assign_project`,
   DEACTIVATE_RESOURCE: `${API_BASE_URL}/deactivate_resource`,
   // Holidays
   HOLIDAYS: `${API_BASE_URL}/holidays`,
@@ -31,4 +32,11 @@ export const API_ENDPOINTS = {
   CHECK_HOLIDAYS: `${API_BASE_URL}/check_holidays`,
   // Project Manager
   GET_PROJECTS_BY_PM: `${API_ROOT_URL}/projectManager/get_projectsByPm`,
+  PROJECT_APPROVAL_BY_PM: `${API_ROOT_URL}/projectManager/project_approvalBYPM`,
+  CREATE_REQUIRED_RESOURCE: `${API_ROOT_URL}/projectManager/create_requiredResource`,
+  GET_PM_BACKLOG: `${API_ROOT_URL}/projectManager/get_pmBacklog`,
+  GET_BOARDS_BY_RESOURCE: `${API_ROOT_URL}/users/get_BoardsByResource`,
+  CREATE_BOARD: `${API_ROOT_URL}/users/create_board`,
+  GET_USER_DISCUSSION: `${API_ROOT_URL}/users/get_userDiscussion`,
+  UPDATE_PROJECT_MILESTONE: `${API_ROOT_URL}/projectManager/update_project_milestone`,
 };

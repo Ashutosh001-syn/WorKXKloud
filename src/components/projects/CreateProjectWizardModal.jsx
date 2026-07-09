@@ -87,7 +87,7 @@ const METHODOLOGY_OPTIONS = ["Agile", "Predictive", "Hybrid"];
 const BILLING_OPTIONS = ["No Billing", "Fixed Cost", "Time and Material"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-const STEPS = ["Project Details", "Customer Details", "Resource Allocation", "Milestone & Payment"];
+const STEPS = ["Project Details", "Customer Details", "Resource Allocation", "Payment Milestone"];
 
 const OPTION_FIELDS = [
   { key: "tasksStart", label: "Tasks should start when all predecessors are complete." },

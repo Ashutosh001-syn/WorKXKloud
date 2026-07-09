@@ -27,8 +27,10 @@ function ProtectedLayout() {
 
 function RoleProtectedRoute({ element, allowedRoles }) {
   let role = ''
+
   try {
     const userProfileStr = localStorage.getItem('user_profile')
+
     if (userProfileStr) {
       const profile = JSON.parse(userProfileStr)
       role = profile.role?.toLowerCase() || ''
@@ -36,17 +38,18 @@ function RoleProtectedRoute({ element, allowedRoles }) {
   } catch (e) {}
 
   if (!hasPermission(role, allowedRoles)) {
-    const isPM = role === 'pm' || role === 'project manager'
-    return <Navigate to={isPM ? "/new-assigned-project" : "/"} replace />
+    return <Navigate to="/" replace />
   }
 
-  return element;
+  return element
 }
 
 function RoleBasedHome() {
   let role = ''
+
   try {
     const userProfileStr = localStorage.getItem('user_profile')
+
     if (userProfileStr) {
       const profile = JSON.parse(userProfileStr)
       role = profile.role?.toLowerCase() || ''
@@ -61,34 +64,45 @@ function RoleBasedHome() {
 }
 
 function App() {
-  const allWorkspaceRoutes = [...workspaceRoutes, ...hiddenWorkspaceRoutes]
+  const allWorkspaceRoutes = [
+    ...workspaceRoutes,
+    ...hiddenWorkspaceRoutes,
+  ]
 
   return (
     <BrowserRouter>
       <Routes>
         <Route
           path="/login"
-          element={isAuthenticated() ? <Navigate to="/" replace /> : <Login />}
+          element={
+            isAuthenticated()
+              ? <Navigate to="/" replace />
+              : <Login />
+          }
         />
+
         <Route
           path="/forgot-password"
-          element={isAuthenticated() ? <Navigate to="/" replace /> : <ForgotPassword />}
+          element={
+            isAuthenticated()
+              ? <Navigate to="/" replace />
+              : <ForgotPassword />
+          }
         />
 
         <Route element={<ProtectedLayout />}>
           <Route path="/" element={<RoleBasedHome />} />
           <Route path="/profile" element={<ProfilePage />} />
+
           {allWorkspaceRoutes.map((route) => {
-            // Determine allowed roles based on route path
-            let allowedRoles = [] // Empty array means all roles are allowed
-            
-            // PMs only get access to specific routes, Admins get everything
+            let allowedRoles = []
+
+            // ONLY PM can access these routes
             if (
-              route.to !== '/new-assigned-project' && 
-              route.to !== '/my-projects'
+              route.to === '/new-assigned-project' ||
+              route.to === '/my-projects'
             ) {
-              allowedRoles = ['admin'] 
-              // Any other roles like HR, Management could be added here in the future
+              allowedRoles = ['pm', 'project manager']
             }
 
             return (
@@ -96,7 +110,7 @@ function App() {
                 key={route.to}
                 path={route.to}
                 element={
-                  <RoleProtectedRoute 
+                  <RoleProtectedRoute
                     allowedRoles={allowedRoles}
                     element={
                       route.to === '/create-user' ? (
@@ -134,7 +148,10 @@ function App() {
         <Route
           path="*"
           element={
-            <Navigate to={isAuthenticated() ? '/' : '/login'} replace />
+            <Navigate
+              to={isAuthenticated() ? '/' : '/login'}
+              replace
+            />
           }
         />
       </Routes>

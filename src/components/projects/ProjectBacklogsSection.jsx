@@ -7,20 +7,41 @@ import {
   ArrowUp, 
   Minus 
 } from 'lucide-react';
+import { API_ENDPOINTS } from '../../config/api';
 
 function ProjectBacklogsSection() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const getPmId = () => {
+    const userStr = localStorage.getItem('auth_user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        return user.id || null;
+      } catch (e) {
+        console.error('Error parsing auth_user:', e);
+      }
+    }
+    return null;
+  };
+
   useEffect(() => {
     const fetchBacklogs = async () => {
       try {
-        // Adjust method to POST if your backend requires it (along with body: JSON.stringify({ pm_id: 4 }))
-        const response = await fetch('http://103.185.75.124:8021/api/projectManager/get_pmBacklog?pm_id=4', {
-          method: 'GET',
+        const pmId = getPmId();
+        if (!pmId) {
+          console.warn("pm_id not found in localStorage");
+          setLoading(false);
+          return;
+        }
+
+        const response = await fetch(API_ENDPOINTS.GET_PM_BACKLOG, {
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json'
-          }
+          },
+          body: JSON.stringify({ pm_id: pmId })
         });
         const result = await response.json();
         

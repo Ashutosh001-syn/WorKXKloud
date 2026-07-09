@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Search, Filter, MoreHorizontal, Calendar, 
-  ArrowUp, Minus, CheckCircle2, ChevronDown, Plus, Loader2 
+import {
+  Search, Filter, MoreHorizontal, Calendar,
+  ArrowUp, Minus, CheckCircle2, ChevronDown, Plus, Loader2
 } from 'lucide-react';
+import { API_ENDPOINTS } from '../../config/api';
 
 // --- Sub-components ---
 const PriorityBadge = ({ level }) => {
@@ -21,7 +22,7 @@ const PriorityBadge = ({ level }) => {
 };
 
 const TaskCard = ({ task, onDragStart }) => (
-  <div 
+  <div
     draggable
     onDragStart={onDragStart}
     className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col gap-3 hover:shadow-md cursor-grab active:cursor-grabbing transition-all"
@@ -67,18 +68,48 @@ export default function KanbanBoard() {
     { title: 'Review', color: 'bg-orange-500', tasks: [] },
     { title: 'Completed', color: 'bg-green-500', tasks: [] }
   ]);
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [draggingTask, setDraggingTask] = useState(null);
-  
+
   const [activeColumn, setActiveColumn] = useState(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const getResourceId = () => {
+    const userStr = localStorage.getItem('auth_user');
+
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        return {
+          id: user.id || null,
+          role: user.role || user.user_type || null
+        };
+      } catch (e) {
+        console.error('Error parsing auth_user:', e);
+      }
+    }
+    return { id: null, role: null };
+  };
+
+
   // 1. REUSABLE GET FUNCTION
   const fetchBoardData = useCallback(async () => {
     try {
-      const response = await fetch('http://103.185.75.124:8021/api/users/get_BoardsByResource?resource_id=10');
+      const { id: resourceId, role } = getResourceId();
+      if (!resourceId) {
+        console.warn("resource_id not found in localStorage");
+        setIsLoading(false);
+        return;
+      }
+      const response = await fetch(API_ENDPOINTS.GET_BOARDS_BY_RESOURCE, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ resource_id: resourceId, type: role })
+      });
       const result = await response.json();
 
       if (result.success && result.data) {
@@ -91,10 +122,10 @@ export default function KanbanBoard() {
 
         result.data.forEach((item) => {
           const mappedTask = {
-            id: `BRD-${item.board_id}`, 
-            title: item.sub_project_name, 
+            id: `BRD-${item.board_id}`,
+            title: item.sub_project_name,
             projectName: item.project_name,
-            priority: 'Medium', 
+            priority: 'Medium',
             avatar: 'https://i.pravatar.cc/150?img=47',
             date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
             isCompleted: item.status.toLowerCase() === 'completed',
@@ -133,16 +164,17 @@ export default function KanbanBoard() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch('http://103.185.75.124:8021/api/users/create_board', {
+      const { id: resourceId } = getResourceId();
+      const response = await fetch(API_ENDPOINTS.CREATE_BOARD, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: 4,
-          sub_project_id: 2, 
-          status: columnTitle.toLowerCase(), 
-          resource_id: 10,
+          sub_project_id: 2,
+          status: columnTitle.toLowerCase(),
+          resource_id: resourceId,
           pm_id: 4,
-          title: newTaskTitle.trim() 
+          title: newTaskTitle.trim()
         }),
       });
 
@@ -151,10 +183,10 @@ export default function KanbanBoard() {
       if (data.success) {
         setNewTaskTitle('');
         setActiveColumn(null);
-        
+
         // 4. RE-FETCH DATA FROM SERVER AFTER SUCCESSFUL POST!
-        await fetchBoardData(); 
-        
+        await fetchBoardData();
+
       } else {
         alert('Failed to create task: ' + data.message);
       }
@@ -170,11 +202,11 @@ export default function KanbanBoard() {
   const handleDragStart = (e, task, sourceColumnTitle) => {
     setDraggingTask({ task, sourceColumnTitle });
     e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData('text/plain', task.id); 
+    e.dataTransfer.setData('text/plain', task.id);
   };
 
   const handleDragOver = (e) => {
-    e.preventDefault(); 
+    e.preventDefault();
     e.dataTransfer.dropEffect = "move";
   };
 
@@ -182,7 +214,7 @@ export default function KanbanBoard() {
     e.preventDefault();
     if (!draggingTask || draggingTask.sourceColumnTitle === targetColumnTitle) {
       setDraggingTask(null);
-      return; 
+      return;
     }
 
     setBoardData((prevData) => {
@@ -190,11 +222,11 @@ export default function KanbanBoard() {
       const sourceColIndex = newData.findIndex(col => col.title === draggingTask.sourceColumnTitle);
       const targetColIndex = newData.findIndex(col => col.title === targetColumnTitle);
       const taskIndex = newData[sourceColIndex].tasks.findIndex(t => t.id === draggingTask.task.id);
-      
+
       const [movedTask] = newData[sourceColIndex].tasks.splice(taskIndex, 1);
       movedTask.isCompleted = targetColumnTitle === 'Completed';
       newData[targetColIndex].tasks.push(movedTask);
-      
+
       return newData;
     });
 
@@ -204,7 +236,7 @@ export default function KanbanBoard() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#F8F9FB] flex items-center justify-center font-sans text-slate-500">
-        <Loader2 className="w-8 h-8 animate-spin mr-3 text-blue-600" /> 
+        <Loader2 className="w-8 h-8 animate-spin mr-3 text-blue-600" />
         Loading your workspace...
       </div>
     );
@@ -218,8 +250,8 @@ export default function KanbanBoard() {
 
       <div className="flex gap-6 overflow-x-auto pb-4">
         {boardData.map((column, index) => (
-          <div 
-            key={index} 
+          <div
+            key={index}
             className="flex-shrink-0 w-[300px] flex flex-col bg-slate-50/50 rounded-2xl p-4 border border-slate-100/50"
             onDragOver={handleDragOver}
             onDrop={(e) => handleDrop(e, column.title)}
@@ -236,16 +268,16 @@ export default function KanbanBoard() {
             {/* Task List */}
             <div className="flex flex-col gap-3 min-h-[50px] mb-3">
               {column.tasks.map((task) => (
-                <TaskCard 
-                  key={task.id} 
-                  task={task} 
+                <TaskCard
+                  key={task.id}
+                  task={task}
                   onDragStart={(e) => handleDragStart(e, task, column.title)}
                 />
               ))}
             </div>
 
             {/* Add Task Input Area */}
-            <div className="mt-auto pt-2">
+            {/* <div className="mt-auto pt-2">
               {activeColumn === column.title ? (
                 <div className="bg-white p-3 rounded-xl border border-blue-200 shadow-sm flex flex-col gap-2">
                   <input
@@ -259,14 +291,14 @@ export default function KanbanBoard() {
                     className="w-full text-sm outline-none placeholder:text-slate-400"
                   />
                   <div className="flex items-center justify-end gap-2 mt-2">
-                    <button 
+                    <button
                       onClick={() => { setActiveColumn(null); setNewTaskTitle(''); }}
                       className="text-xs font-semibold text-slate-500 hover:text-slate-700"
                       disabled={isSubmitting}
                     >
                       Cancel
                     </button>
-                    <button 
+                    <button
                       onClick={() => handleCreateTaskAPI(column.title)}
                       disabled={isSubmitting}
                       className="bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50"
@@ -276,14 +308,14 @@ export default function KanbanBoard() {
                   </div>
                 </div>
               ) : (
-                <button 
+                <button
                   onClick={() => setActiveColumn(column.title)}
                   className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-slate-500 hover:bg-slate-200/50 rounded-xl transition-colors"
                 >
                   <Plus className="w-4 h-4" /> Add Task
                 </button>
               )}
-            </div>
+            </div> */}
           </div>
         ))}
       </div>

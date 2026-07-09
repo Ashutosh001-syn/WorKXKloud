@@ -71,13 +71,17 @@ function Sidebar() {
     }
   }, [])
 
-  const filteredMenu = sidebarMenu.filter(item => {
-    if (userRole === 'admin') return true;
-    if (userRole === 'pm' || userRole === 'project manager') {
-      return item.key === 'new-assigned-project' || item.key === 'my-projects';
-    }
-    return true; // fallback
-  });
+ const filteredMenu = sidebarMenu.filter((item) => {
+  const isPmMenu =
+    item.key === 'new-assigned-project' ||
+    item.key === 'my-projects';
+
+  if (userRole === 'pm' || userRole === 'project manager') {
+    return isPmMenu;
+  }
+
+  return !isPmMenu;
+});
 
   return (
     <>

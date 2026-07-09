@@ -219,40 +219,66 @@ const EmptyBoxIcon = () => (
   </svg>
 )
 
-const getMockTasksForProject = (project) => {
+
+
+  // Calculate overall milestone progress
+  const getOverallProgress = (project) => {
+    if (!project.milestones || project.milestones.length === 0) return 0
+    const today = new Date()
+    const completed = project.milestones.filter(m => new Date(m.milestone_date) <= today)
+    if (completed.length === 0) return 0
+    return completed[completed.length - 1]?.percentage || 0
+  }
+  const getGanttDataForProject = (project) => {
+  if (!project) {
+    return { data: [], links: [] }
+  }
+
+  const projectId = project.id || project.project_code || 'project_root'
+  const rootTaskId = `project_${projectId}`
+  const milestones = Array.isArray(project.milestones) ? [...project.milestones] : []
+
+  const sortedMilestones = milestones.sort((a, b) => new Date(a.milestone_date) - new Date(b.milestone_date))
+
+  const projectTask = {
+    id: rootTaskId,
+    text: project.project_name || 'Project Timeline',
+    start_date: project.start_date || sortedMilestones[0]?.milestone_date || new Date().toISOString().split('T')[0],
+    end_date: project.end_date || sortedMilestones[sortedMilestones.length - 1]?.milestone_date,
+    duration: project.duration || 0,
+    progress: getOverallProgress(project) / 100,
+    open: true,
+    type: 'project',
+    borderClass: 'border-left-none',
+    barClass: 'gantt-bar-dark-blue',
+    assignees: project.project_manager || 'PM'
+  }
+
+  const milestoneTasks = sortedMilestones.map((ms, index) => ({
+    id: `${rootTaskId}_ms_${index + 1}`,
+    text: ms.milestone || `Milestone ${index + 1}`,
+    start_date: ms.milestone_date || project.start_date || projectTask.start_date,
+    duration: 0,
+    progress: (ms.percentage || 0) / 100,
+    parent: rootTaskId,
+    borderClass: 'border-left-green',
+    barClass: 'gantt-bar-green',
+    assignees: ms.resource || ms.assigned_to || project.project_manager || 'Team'
+  }))
+
+  const links = milestoneTasks
+    .slice(1)
+    .map((task, idx) => ({
+      id: `link_${idx + 1}`,
+      source: milestoneTasks[idx].id,
+      target: task.id,
+      type: '0'
+    }))
+
   return {
-    data: [
-      // 1.0 Project Initiation
-      { id: "1", text: "1.0 Project Initiation", start_date: "2026-05-05", duration: 7, progress: 0.6, open: true, type: "project", borderClass: "border-left-none", barClass: "gantt-bar-dark-green", assignees: "PMO" },
-      { id: "1.1", text: "Project Charter", start_date: "2026-05-05", duration: 2, progress: 0.8, parent: "1", borderClass: "border-left-green", barClass: "gantt-bar-green", assignees: "PMO" },
-      { id: "1.2", text: "Stakeholder Analysis", start_date: "2026-05-07", duration: 5, progress: 0.4, parent: "1", borderClass: "border-left-green", barClass: "gantt-bar-green", assignees: "Business Analyst" },
-      
-      // 2.0 Planning
-      { id: "2", text: "2.0 Planning", start_date: "2026-05-13", duration: 13, progress: 0.3, open: true, type: "project", borderClass: "border-left-none", barClass: "gantt-bar-dark-blue", assignees: "Project Manager" },
-      { id: "2.1", text: "Requirements Gathering", start_date: "2026-05-13", duration: 5, progress: 0.5, parent: "2", borderClass: "border-left-blue", barClass: "gantt-bar-blue", assignees: "Team" },
-      { id: "2.2", text: "System Design", start_date: "2026-05-18", duration: 8, progress: 0.2, parent: "2", borderClass: "border-left-blue", barClass: "gantt-bar-blue", assignees: "Technical Lead" },
-      
-      // 3.0 Development
-      { id: "3", text: "3.0 Development", start_date: "2026-05-27", duration: 22, progress: 0.1, open: true, type: "project", borderClass: "border-left-none", barClass: "gantt-bar-dark-purple", assignees: "Dev Team" },
-      { id: "3.1", text: "Module 1 Development", start_date: "2026-05-27", duration: 9, progress: 0.2, parent: "3", borderClass: "border-left-purple", barClass: "gantt-bar-purple", assignees: "Developers" },
-      { id: "3.2", text: "Module 2 Development", start_date: "2026-06-08", duration: 10, progress: 0.0, parent: "3", borderClass: "border-left-purple", barClass: "gantt-bar-purple", assignees: "Developers" },
-      
-      // 4.0 Testing
-      { id: "4", text: "4.0 Testing", start_date: "2026-06-19", duration: 13, progress: 0.0, open: true, type: "project", borderClass: "border-left-none", barClass: "gantt-bar-dark-pink", assignees: "QA Team" },
-      { id: "4.1", text: "System Testing", start_date: "2026-06-19", duration: 8, progress: 0.0, parent: "4", borderClass: "border-left-pink", barClass: "gantt-bar-pink", assignees: "QA Team" },
-      { id: "4.2", text: "User Acceptance Testing", start_date: "2026-06-28", duration: 4, progress: 0.0, parent: "4", borderClass: "border-left-pink", barClass: "gantt-bar-pink", assignees: "QA Team" }
-    ],
-    links: [
-      { id: "l1", source: "1.1", target: "1.2", type: "0" },
-      { id: "l2", source: "1.2", target: "2", type: "0" },
-      { id: "l3", source: "2.1", target: "2.2", type: "0" },
-      { id: "l4", source: "2.2", target: "3", type: "0" },
-      { id: "l5", source: "2.2", target: "3.1", type: "0" },
-      { id: "l6", source: "3.1", target: "3.2", type: "0" },
-      { id: "l7", source: "3.2", target: "4", type: "0" },
-      { id: "l8", source: "4.1", target: "4.2", type: "0" }
-    ]
-  };
+    data: [projectTask, ...milestoneTasks],
+    links,
+  }
 };
 
 function MyProjectsPage() {
@@ -306,14 +332,6 @@ function MyProjectsPage() {
     fetchProjects()
   }, [])
 
-  // Calculate overall milestone progress
-  const getOverallProgress = (project) => {
-    if (!project.milestones || project.milestones.length === 0) return 0
-    const today = new Date()
-    const completed = project.milestones.filter(m => new Date(m.milestone_date) <= today)
-    if (completed.length === 0) return 0
-    return completed[completed.length - 1]?.percentage || 0
-  }
 
   return (
     <div className="min-h-screen bg-[#0d2646] p-4 sm:p-6 lg:p-8">
@@ -787,7 +805,7 @@ function MyProjectsPage() {
                 <ProjectBoardSection />
               ) : activeTab === 'Schedule' ? (
                 <GanttChart
-                  tasks={getMockTasksForProject(selectedProject)}
+                  tasks={getGanttDataForProject(selectedProject)}
                   projectName={selectedProject.project_name}
                   onClose={() => setActiveTab('Overview')}
                   pmId={getPmId()}
