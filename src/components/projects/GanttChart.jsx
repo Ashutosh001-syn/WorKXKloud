@@ -645,74 +645,10 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   }
 
   const syncTaskWithAPI = async (task, isSubTaskOverride = null) => {
-    if (syncingTasksRef.current.has(task.id)) return
-    try {
-      if (task.type === 'project' || task.id === `project_${projectId}`) return
-
-      const parsedResource = task.assignees && !isNaN(parseInt(task.assignees))
-        ? parseInt(task.assignees)
-        : task.assignees || ''
-
-      const backendId = task.api_id ?? null
-      const isSub = isSubTaskOverride !== null
-        ? isSubTaskOverride
-        : isSubTask(task, projectId)
-      const parentTask = task.parent && gantt.isTaskExists(task.parent)
-        ? gantt.getTask(task.parent)
-        : null
-
-      const payload = isSub ? {
-        id: backendId,
-        pm_id: pmId ? parseInt(pmId) : null,
-        project_id: projectId ? parseInt(projectId) : null,
-        project_sub_id: parentTask?.api_id || null,
-        milestone_id: parentTask?.api_id || null,
-        task_name: task.text || task.name || '',
-        planned_start: formatToAPI(task.start_date, false),
-        planned_end: formatToAPI(task.end_date, true),
-        duration: task.duration || 0,
-        resource: parsedResource,
-        predecessor: getPredecessorsText(task) || 'None',
-        milestone: null,
-        milestone_date: null,
-        percentage: null,
-      } : {
-        project_id: projectId ? parseInt(projectId) : null,
-        milestone: task.text || task.name || '',
-        percentage: Math.round((task.progress || 0) * 100),
-        milestone_date: formatToAPIDateOnly(task.start_date),
-      }
-
-      const apiUrl = isSub ? API_ENDPOINTS.ASSIGN_PROJECT : API_ENDPOINTS.UPDATE_PROJECT_MILESTONE
-      const logPrefix = isSub ? 'assign_project' : 'update_project_milestone'
-
-      console.log(`Sending payload to ${logPrefix} API:`, payload)
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      const data = await response.json()
-      if (data.success) {
-        const returnedId = data.data?.id || data.id || null
-        if (returnedId) {
-          const taskToUpdate = gantt.getTask(task.id)
-          if (taskToUpdate && taskToUpdate.api_id !== returnedId) {
-            syncingTasksRef.current.add(task.id)
-            taskToUpdate.api_id = returnedId
-            gantt.updateTask(task.id)
-            syncingTasksRef.current.delete(task.id)
-          }
-        }
-        console.log(`Successfully synced task (${logPrefix}):`, data.message || data)
-      } else {
-        console.error(`API sync error (${logPrefix}):`, data)
-      }
-    } catch (error) {
-      console.error('Network/API Error:', error)
-    }
+    // API logic removed to use dummy data locally
+    console.log("Mock syncTaskWithAPI called for task:", task.id);
   }
+
 
   // ── Main gantt setup ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1207,7 +1143,26 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
 
     gantt.init(containerRef.current)
     gantt.clearAll()
-    gantt.parse(tasks)
+    
+    const dummyTasks = {
+      data: [
+        { id: '1', text: 'Project Kickoff', start_date: '2026-07-01', duration: 3, progress: 1, open: true, type: 'project' },
+        { id: '2', text: 'Requirement Analysis', start_date: '2026-07-04', duration: 5, progress: 0.8, parent: '1', barClass: 'gantt-bar-blue', borderClass: 'border-left-blue' },
+        { id: '3', text: 'Design Phase', start_date: '2026-07-09', duration: 7, progress: 0.5, parent: '1', barClass: 'gantt-bar-purple', borderClass: 'border-left-purple' },
+        { id: '4', text: 'Development', start_date: '2026-07-16', duration: 14, progress: 0.2, parent: '1', barClass: 'gantt-bar-green', borderClass: 'border-left-green' },
+        { id: '5', text: 'Testing', start_date: '2026-07-30', duration: 7, progress: 0, parent: '1', barClass: 'gantt-bar-pink', borderClass: 'border-left-pink' },
+        { id: '6', text: 'Deployment', start_date: '2026-08-06', duration: 2, progress: 0, parent: '1', barClass: 'gantt-bar-dark-green', borderClass: 'border-left-green' }
+      ],
+      links: [
+        { id: '1', source: '1', target: '2', type: '0' },
+        { id: '2', source: '2', target: '3', type: '0' },
+        { id: '3', source: '3', target: '4', type: '0' },
+        { id: '4', source: '4', target: '5', type: '0' },
+        { id: '5', source: '5', target: '6', type: '0' }
+      ]
+    };
+    
+    gantt.parse(dummyTasks)
 
     // ── Initial roll-up: recalculate parent dates/duration from children on load ─
     gantt.eachTask(task => {
