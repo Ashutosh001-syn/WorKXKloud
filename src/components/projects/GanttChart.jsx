@@ -799,8 +799,76 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
 
   const [alertMessage, setAlertMessage] = useState('')
 
+  const [calendarType, setCalendarType] = useState('standard')
+  const [customWorkingDays, setCustomWorkingDays] = useState([1, 2, 3, 4, 5])
+  const [includeHolidays, setIncludeHolidays] = useState(true)
+  const [customDropdownOpen, setCustomDropdownOpen] = useState(false)
+  const [holidaysData, setHolidaysData] = useState([])
+
   useEffect(() => {
-    const h = () => { setAddOpen(false); setBaselineOpen(false); setMoreOpen(false); setLinkMenu(null) }
+    const fetchHolidays = async () => {
+      try {
+        const res = await fetch(API_ENDPOINTS.HOLIDAYS)
+        const data = await res.json()
+        if (data.success) {
+          setHolidaysData(data.data || [])
+        }
+      } catch (err) {
+        console.error('Failed to load holidays:', err)
+      }
+    }
+    fetchHolidays()
+  }, [])
+
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    if (calendarType === 'alldays') {
+      gantt.config.work_time = false
+    } else if (calendarType === 'standard') {
+      gantt.config.work_time = true
+      gantt.setWorkTime({ day: 0, hours: false }) // Sun
+      gantt.setWorkTime({ day: 6, hours: false }) // Sat
+      gantt.setWorkTime({ day: 1, hours: true })
+      gantt.setWorkTime({ day: 2, hours: true })
+      gantt.setWorkTime({ day: 3, hours: true })
+      gantt.setWorkTime({ day: 4, hours: true })
+      gantt.setWorkTime({ day: 5, hours: true })
+      
+      holidaysData.forEach(h => {
+        if (h.holiday_date) {
+          try {
+            const d = new Date(h.holiday_date)
+            gantt.setWorkTime({ date: d, hours: false })
+          } catch(e) {}
+        }
+      })
+    } else if (calendarType === 'custom') {
+      gantt.config.work_time = true
+      for (let i = 0; i <= 6; i++) {
+        gantt.setWorkTime({ day: i, hours: customWorkingDays.includes(i) })
+      }
+      
+      if (includeHolidays) {
+        holidaysData.forEach(h => {
+          if (h.holiday_date) {
+            try {
+              const d = new Date(h.holiday_date)
+              gantt.setWorkTime({ date: d, hours: false })
+            } catch(e) {}
+          }
+        })
+      }
+    }
+
+    try {
+      topologicalSchedule()
+      gantt.render()
+    } catch (e) {}
+  }, [calendarType, holidaysData, customWorkingDays, includeHolidays])
+
+  useEffect(() => {
+    const h = () => { setAddOpen(false); setBaselineOpen(false); setMoreOpen(false); setLinkMenu(null); setCustomDropdownOpen(false) }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [])
@@ -890,7 +958,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     gantt.config.link_line_width = 1.5
     gantt.config.show_chart = showGantt
     gantt.config.highlight_critical_path = criticalPath
-    gantt.config.work_time = true
+    // work_time is managed by the calendarType effect
     gantt.config.start_on_monday = false
     gantt.config.inline_editors_date_format = '%Y-%m-%d'
     gantt.config.details_on_dblclick = false
@@ -1862,7 +1930,67 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Calendar:</span>
+              <select
+                value={calendarType}
+                onChange={(e) => setCalendarType(e.target.value)}
+                style={{
+                  padding: '4px 8px', borderRadius: 6, border: '1px solid #e2e8f0',
+                  fontSize: 12, fontWeight: 500, color: '#1e293b', outline: 'none',
+                  background: '#f8fafc', cursor: 'pointer'
+                }}
+              >
+                <option value="alldays">All Days (24/7)</option>
+                <option value="standard">Standard (Mon-Fri + Holidays)</option>
+                <option value="custom">Custom...</option>
+              </select>
+            </div>
+            
+            {calendarType === 'custom' && (
+              <div style={{ position: 'relative' }} onMouseDown={stopProp}>
+                <button
+                  onClick={() => { setCustomDropdownOpen(!customDropdownOpen); setMoreOpen(false); setAddOpen(false); setBaselineOpen(false) }}
+                  style={{ ...btnBase, padding: '4px 10px', height: 28, fontSize: 12, background: '#f8fafc' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}
+                >
+                  Select Days <ChevronDown size={12} color="#94a3b8" />
+                </button>
+                {customDropdownOpen && (
+                  <div style={{ ...dropdownMenu, padding: '8px', minWidth: 160, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', paddingBottom: 4, borderBottom: '1px solid #f1f5f9' }}>
+                      WORKING DAYS
+                    </div>
+                    {[
+                      { label: 'Monday', val: 1 }, { label: 'Tuesday', val: 2 }, { label: 'Wednesday', val: 3 },
+                      { label: 'Thursday', val: 4 }, { label: 'Friday', val: 5 }, { label: 'Saturday', val: 6 }, { label: 'Sunday', val: 0 }
+                    ].map(day => {
+                      const isChecked = customWorkingDays.includes(day.val)
+                      return (
+                        <label key={day.val} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 500, color: '#334155', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={isChecked} onChange={(e) => {
+                            if (e.target.checked) setCustomWorkingDays([...customWorkingDays, day.val])
+                            else setCustomWorkingDays(customWorkingDays.filter(d => d !== day.val))
+                          }} style={{ width: 14, height: 14, accentColor: '#3b82f6' }} />
+                          {day.label}
+                        </label>
+                      )
+                    })}
+                    <div style={{ borderTop: '1px solid #f1f5f9', marginTop: 4, paddingTop: 8 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: '#1e293b', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={includeHolidays} onChange={e => setIncludeHolidays(e.target.checked)} style={{ width: 14, height: 14, accentColor: '#3b82f6' }} />
+                        Include Holidays
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div style={{
             display: 'flex', alignItems: 'center',
             border: '1px solid #e2e8f0', borderRadius: 8,
