@@ -316,98 +316,7 @@ const customStyles = `
     font-style: italic !important;
   }
 
-  .gantt_resizer {
-    background-color: transparent !important;
-    border-left: 1px solid #e2e8f0 !important;
-    border-right: 1px solid #e2e8f0 !important;
-    width: 6px !important;
-    cursor: col-resize !important;
-    position: relative !important;
-    transition: background-color 0.2s;
-  }
-  .gantt_resizer:hover {
-    background-color: rgba(37,99,235,0.05) !important;
-  }
-  .gantt_resizer::after {
-    content: "⋮";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: #ffffff;
-    border: 1px solid #cbd5e1;
-    border-radius: 4px;
-    width: 14px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-    color: #64748b;
-    font-size: 11px;
-    font-weight: bold;
-    line-height: 24px;
-    pointer-events: none;
-    z-index: 10;
-  }
-  .gantt_resizer_x {
-    background-color: #f8fafc !important;
-    border-left: 1px solid #e2e8f0 !important;
-    border-right: 1px solid #e2e8f0 !important;
-    width: 8px !important;
-    cursor: col-resize !important;
-    position: relative !important;
-    z-index: 10;
-    -webkit-user-select: none !important;
-    user-select: none !important;
-    touch-action: none !important;
-    transition: background-color 0.15s ease, border-color 0.15s ease !important;
-  }
-  .gantt_resizer_x:hover {
-    background-color: #eff6ff !important;
-    border-left-color: #93c5fd !important;
-    border-right-color: #93c5fd !important;
-  }
-  .gantt_resizer_x:active {
-    background-color: #dbeafe !important;
-    border-left-color: #3b82f6 !important;
-    border-right-color: #3b82f6 !important;
-  }
-  .gantt_resizer_x .gantt_resizer_x_line {
-    background: transparent !important;
-  }
-  .gantt_resizer_x::after {
-    content: "⋮";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: #ffffff;
-    border: 1px solid #cbd5e1;
-    border-radius: 4px;
-    width: 14px;
-    height: 26px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-    color: #64748b;
-    font-size: 12px;
-    font-weight: bold;
-    line-height: 26px;
-    pointer-events: none;
-    z-index: 11;
-    transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
-  }
-  .gantt_resizer_x:hover::after {
-    border-color: #93c5fd;
-    color: #2563eb;
-  }
-  .gantt_resizer_x:active::after {
-    border-color: #3b82f6;
-    color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(59,130,246,0.15), 0 2px 4px rgba(0,0,0,0.1);
-  }
+
 
   body.gantt_row_resize,
   .gantt_container.gantt_grid_resizing {
@@ -803,7 +712,11 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   const [customWorkingDays, setCustomWorkingDays] = useState([1, 2, 3, 4, 5])
   const [includeHolidays, setIncludeHolidays] = useState(true)
   const [customDropdownOpen, setCustomDropdownOpen] = useState(false)
+  
+  const [gridWidth, setGridWidth] = useState(400)
+  const isResizing = useRef(false)
   const [holidaysData, setHolidaysData] = useState([])
+  const [ganttError, setGanttError] = useState(null)
 
   useEffect(() => {
     const fetchHolidays = async () => {
@@ -872,6 +785,42 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [])
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isResizing.current || !containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
+      let newWidth = e.clientX - rect.left
+      
+      const SNAP_THRESHOLD = 150;
+      if (newWidth < SNAP_THRESHOLD) {
+        newWidth = 0; // Collapse table
+      } else if (newWidth > rect.width - SNAP_THRESHOLD) {
+        newWidth = rect.width; // Collapse chart
+      }
+      
+      setGridWidth(newWidth)
+    }
+    const handleMouseUp = () => {
+      if (isResizing.current) {
+        isResizing.current = false
+        document.body.style.cursor = 'default'
+      }
+    }
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (window.gantt && containerRef.current) {
+      gantt.config.grid_width = gridWidth
+      try { gantt.render() } catch(e){}
+    }
+  }, [gridWidth])
 
   useEffect(() => {
     const styleEl = document.createElement('style')
@@ -947,9 +896,18 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     if (!containerRef.current) return
 
     try {
-      gantt.plugins({ critical_path: true, tooltip: true, auto_scheduling: true, inline_editors: true, marker: true })
+      gantt.plugins({ critical_path: true, tooltip: true, auto_scheduling: true, inline_editors: true, marker: true, drag_timeline: true })
     } catch {
-      gantt.plugins({ critical_path: true, tooltip: true, inline_editors: true, marker: true })
+      try {
+        gantt.plugins({ critical_path: true, tooltip: true, inline_editors: true, marker: true, drag_timeline: true })
+      } catch(e) {
+        console.warn('Gantt plugins error', e)
+      }
+    }
+    
+    gantt.config.drag_timeline = {
+      ignore: ".gantt_task_line, .gantt_task_link",
+      useKey: false
     }
 
     gantt.config.date_format = '%Y-%m-%d'
@@ -962,9 +920,11 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     gantt.config.start_on_monday = false
     gantt.config.inline_editors_date_format = '%Y-%m-%d'
     gantt.config.details_on_dblclick = false
-
-    gantt.config.grid_width = 640
-    gantt.config.grid_resize = true
+    
+    // We handle resizing via custom React overlay instead of native dhtmlx resizer
+    gantt.config.grid_width = gridWidth
+    gantt.config.grid_resize = false
+    gantt.config.keep_grid_width = true
 
     // Today Marker
     if (gantt.addMarker) {
@@ -1472,30 +1432,35 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
               ${predStr ? `<br/><b>Predecessors:</b> ${predStr}` : ''}`
     }
 
-    gantt.init(containerRef.current)
-    gantt.clearAll()
+    try {
+      gantt.init(containerRef.current)
+      gantt.clearAll()
 
-    const dummyTasks = {
-      data: [
-        { id: '1', text: 'Project Kickoff', start_date: '2026-07-01', duration: 3, progress: 1, open: true, type: 'project' },
-        { id: '2', text: 'Requirement Analysis', start_date: '2026-07-04', duration: 5, progress: 0.8, parent: '1', barClass: 'gantt-bar-blue', borderClass: 'border-left-blue' },
-        { id: '3', text: 'Design Phase', start_date: '2026-07-09', duration: 7, progress: 0.5, parent: '1', barClass: 'gantt-bar-purple', borderClass: 'border-left-purple' },
-        { id: '4', text: 'Development', start_date: '2026-07-16', duration: 14, progress: 0.2, parent: '1', barClass: 'gantt-bar-green', borderClass: 'border-left-green' },
-        { id: '5', text: 'Testing', start_date: '2026-07-30', duration: 7, progress: 0, parent: '1', barClass: 'gantt-bar-pink', borderClass: 'border-left-pink' },
-        { id: '6', text: 'Deployment', start_date: '2026-08-06', duration: 2, progress: 0, parent: '1', barClass: 'gantt-bar-dark-green', borderClass: 'border-left-green' }
-      ],
-      links: [
-        { id: '1', source: '1', target: '2', type: '0' },
-        { id: '2', source: '2', target: '3', type: '0' },
-        { id: '3', source: '3', target: '4', type: '0' },
-        { id: '4', source: '4', target: '5', type: '0' },
-        { id: '5', source: '5', target: '6', type: '0' }
-      ]
-    };
+      const dummyTasks = {
+        data: [
+          { id: '1', text: 'Project Kickoff', start_date: '2026-07-01', duration: 3, progress: 1, open: true, type: 'project' },
+          { id: '2', text: 'Requirement Analysis', start_date: '2026-07-04', duration: 5, progress: 0.8, parent: '1', barClass: 'gantt-bar-blue', borderClass: 'border-left-blue' },
+          { id: '3', text: 'Design Phase', start_date: '2026-07-09', duration: 7, progress: 0.5, parent: '1', barClass: 'gantt-bar-purple', borderClass: 'border-left-purple' },
+          { id: '4', text: 'Development', start_date: '2026-07-16', duration: 14, progress: 0.2, parent: '1', barClass: 'gantt-bar-green', borderClass: 'border-left-green' },
+          { id: '5', text: 'Testing', start_date: '2026-07-30', duration: 7, progress: 0, parent: '1', barClass: 'gantt-bar-pink', borderClass: 'border-left-pink' },
+          { id: '6', text: 'Deployment', start_date: '2026-08-06', duration: 2, progress: 0, parent: '1', barClass: 'gantt-bar-dark-green', borderClass: 'border-left-green' }
+        ],
+        links: [
+          { id: '1', source: '1', target: '2', type: '0' },
+          { id: '2', source: '2', target: '3', type: '0' },
+          { id: '3', source: '3', target: '4', type: '0' },
+          { id: '4', source: '4', target: '5', type: '0' },
+          { id: '5', source: '5', target: '6', type: '0' }
+        ]
+      };
 
-    gantt.parse(dummyTasks)
-
-    topologicalSchedule()
+      gantt.parse(dummyTasks)
+      topologicalSchedule()
+      setGanttError(null)
+    } catch (e) {
+      console.error('Gantt Init Error:', e)
+      setGanttError(e.message || String(e))
+    }
 
     gantt.eachTask(task => {
       const children = gantt.getChildren(task.id)
@@ -2220,7 +2185,41 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
 
       {/* Gantt area */}
       <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
-        <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+        {ganttError ? (
+          <div style={{ padding: 20, color: 'red', fontWeight: 'bold' }}>
+            Failed to initialize Gantt: {ganttError}
+          </div>
+        ) : (
+          <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+        )}
+        
+        {/* Custom React Resizer Overlay */}
+        <div 
+          onMouseDown={() => { isResizing.current = true; document.body.style.cursor = 'col-resize' }}
+          style={{
+            position: 'absolute',
+            left: `calc(max(0px, min(${gridWidth}px - 4px, 100% - 8px)))`,
+            top: 0,
+            bottom: 0,
+            width: 8,
+            cursor: 'col-resize',
+            zIndex: 10,
+            backgroundColor: 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'background-color 0.15s'
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(37,99,235,0.1)' }}
+          onMouseLeave={(e) => { if(!isResizing.current) e.currentTarget.style.backgroundColor = 'transparent' }}
+        >
+          {/* Visual dots */}
+          <div style={{
+            width: 14, height: 26, background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 4,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.08)', color: '#64748b', fontSize: 12, fontWeight: 'bold', pointerEvents: 'none'
+          }}>⋮</div>
+        </div>
       </div>
 
       {/* Footer */}
