@@ -56,6 +56,22 @@ const CELL_COLOR_MAP = {
 }
 
 export default function CalendarPage() {
+  const [userRole, setUserRole] = useState('')
+
+  useEffect(() => {
+    try {
+      const profileStr = localStorage.getItem('user_profile')
+      if (profileStr) {
+        const profile = JSON.parse(profileStr)
+        setUserRole(profile.role?.toLowerCase() || '')
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [])
+
+  const isReadOnly = userRole === 'pm' || userRole === 'project manager'
+
   const today = new Date()
   const [currentDate, setCurrentDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
   const [holidays, setHolidays] = useState([])
@@ -102,6 +118,7 @@ export default function CalendarPage() {
     longPressTriggeredRef.current = false
 
     pressTimerRef.current = setTimeout(() => {
+      if (isReadOnly) return
       longPressTriggeredRef.current = true
       // Vibrate mobile device if API is supported for high-end tactile feedback!
       if (navigator.vibrate) navigator.vibrate(50)
@@ -538,32 +555,34 @@ export default function CalendarPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => {
-              setPreviewHolidays([])
-              setIsUploadModalOpen(true)
-            }}
-            className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-95 cursor-pointer"
-          >
-            <Upload size={18} className="text-slate-500" />
-            <span>Import Excel/CSV</span>
-          </button>
-          
-          <button
-            onClick={() => {
-              const formattedDate = '2026-05-18'
-              setNewHolidayStartDate(formattedDate)
-              setNewHolidayEndDate(formattedDate)
-              setStagedHolidays([])
-              setIsModalOpen(true)
-            }}
-            className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white shadow-md transition-all hover:bg-blue-700 hover:shadow-lg active:scale-95 cursor-pointer"
-          >
-            <Plus size={18} />
-            <span>Add Holidays</span>
-          </button>
-        </div>
+        {!isReadOnly && (
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => {
+                setPreviewHolidays([])
+                setIsUploadModalOpen(true)
+              }}
+              className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-95 cursor-pointer"
+            >
+              <Upload size={18} className="text-slate-500" />
+              <span>Import Excel/CSV</span>
+            </button>
+            
+            <button
+              onClick={() => {
+                const formattedDate = '2026-05-18'
+                setNewHolidayStartDate(formattedDate)
+                setNewHolidayEndDate(formattedDate)
+                setStagedHolidays([])
+                setIsModalOpen(true)
+              }}
+              className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white shadow-md transition-all hover:bg-blue-700 hover:shadow-lg active:scale-95 cursor-pointer"
+            >
+              <Plus size={18} />
+              <span>Add Holidays</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Grid: Left is Calendar, Right is List of upcoming events */}
@@ -837,13 +856,15 @@ export default function CalendarPage() {
                           </div>
                         </div>
 
-                        <button
-                          onClick={() => handleDeleteHolidayTrigger(h)}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-500 transition active:scale-90 shrink-0"
-                          title="Delete Holiday"
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        {!isReadOnly && (
+                          <button
+                            onClick={() => handleDeleteHolidayTrigger(h)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-500 transition active:scale-90 shrink-0"
+                            title="Delete Holiday"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
                       </div>
                     )
                   })
@@ -1115,17 +1136,19 @@ export default function CalendarPage() {
                               </p>
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsDetailsModalOpen(false)
-                              handleDeleteHolidayTrigger(h)
-                            }}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50/50 transition active:scale-90 shrink-0"
-                            title="Delete Holiday"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          {!isReadOnly && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsDetailsModalOpen(false)
+                                handleDeleteHolidayTrigger(h)
+                              }}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50/50 transition active:scale-90 shrink-0"
+                              title="Delete Holiday"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
                         </div>
                       )
                     })}
@@ -1140,19 +1163,21 @@ export default function CalendarPage() {
 
             {/* Simple OK cut button */}
             <div className="mt-6 flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setNewHolidayStartDate(selectedDateDetails.dateString)
-                  setNewHolidayEndDate(selectedDateDetails.dateString)
-                  setStagedHolidays([])
-                  setIsDetailsModalOpen(false)
-                  setIsModalOpen(true)
-                }}
-                className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-600 hover:bg-blue-100 transition active:scale-95"
-              >
-                + Add Holiday
-              </button>
+              {!isReadOnly && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewHolidayStartDate(selectedDateDetails.dateString)
+                    setNewHolidayEndDate(selectedDateDetails.dateString)
+                    setStagedHolidays([])
+                    setIsDetailsModalOpen(false)
+                    setIsModalOpen(true)
+                  }}
+                  className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-600 hover:bg-blue-100 transition active:scale-95"
+                >
+                  + Add Holiday
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setIsDetailsModalOpen(false)}

@@ -72,6 +72,8 @@ function Sidebar() {
   }, [])
 
  const filteredMenu = sidebarMenu.filter((item) => {
+  if (item.key === 'calendar') return true;
+
   const isPmMenu =
     item.key === 'new-assigned-project' ||
     item.key === 'my-projects';

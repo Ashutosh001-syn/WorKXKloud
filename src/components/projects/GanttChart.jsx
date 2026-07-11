@@ -198,21 +198,33 @@ const customStyles = `
   .critical-row           { background-color: #fef2f2 !important; }
   .critical-row:hover     { background-color: #fee2e2 !important; }
 
-  /* ── Resource cell: dim if not a sub-task ── */
+  /* Today Marker Line */
+  .today {
+    background-color: #3b82f6 !important;
+    width: 2px !important;
+    box-shadow: 0 0 5px rgba(59,130,246,0.6);
+  }
+  .gantt_marker.today .gantt_marker_content {
+    background-color: #3b82f6 !important;
+    color: white !important;
+    font-weight: 600 !important;
+    border-radius: 4px;
+    padding: 2px 8px;
+    margin-left: -15px;
+  }
+
   .resource-disabled-cell {
     color: #cbd5e1 !important;
     font-style: italic !important;
     font-size: 11px !important;
   }
 
-  /* ── Duration cell: dim if parent/project (auto roll-up, not manually editable) ── */
   .duration-disabled-cell {
     color: #cbd5e1 !important;
     font-style: italic !important;
     font-size: 11px !important;
   }
 
-  /* ── Predecessor type badge (color-coded) ── */
   .pred-badge {
     display: inline-flex;
     align-items: center;
@@ -231,7 +243,6 @@ const customStyles = `
   .pred-badge-ff { background: #fef3c7; color: #b45309; }
   .pred-badge-sf { background: #f3e8ff; color: #7c3aed; }
 
-  /* ── Predecessor editor inline styles ── */
   @keyframes predDropdownIn {
     from { opacity: 0; transform: translateY(-4px); }
     to   { opacity: 1; transform: translateY(0); }
@@ -245,6 +256,34 @@ const customStyles = `
   }
   .pred-type-opt:hover {
     background: #f1f5f9 !important;
+  }
+
+  /* Adjustable divider between the Type dropdown and the Lag number input */
+  .pred-editor-divider {
+    width: 8px !important;
+    align-self: stretch;
+    cursor: col-resize !important;
+    position: relative;
+    flex: 0 0 auto;
+    -webkit-user-select: none !important;
+    user-select: none !important;
+    touch-action: none !important;
+  }
+  .pred-editor-divider::after {
+    content: "";
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    border-radius: 2px;
+    background: #cbd5e1;
+    transition: background 0.15s;
+  }
+  .pred-editor-divider:hover::after,
+  .pred-editor-divider.dragging::after {
+    background: #3b82f6;
   }
 
   .gantt_cal_light {
@@ -272,13 +311,11 @@ const customStyles = `
     -webkit-backdrop-filter: blur(4px) !important;
   }
 
-  /* ── Inline-editor override: resource column shows "—" hint for non-subtasks ── */
   .gantt_grid_editor_placeholder {
     color: #94a3b8 !important;
     font-style: italic !important;
   }
 
-  /* ── Custom native resizer handle ── */
   .gantt_resizer {
     background-color: transparent !important;
     border-left: 1px solid #e2e8f0 !important;
@@ -314,11 +351,107 @@ const customStyles = `
     z-index: 10;
   }
   .gantt_resizer_x {
-    display: none !important; /* Hide horizontal resizer */
+    background-color: #f8fafc !important;
+    border-left: 1px solid #e2e8f0 !important;
+    border-right: 1px solid #e2e8f0 !important;
+    width: 8px !important;
+    cursor: col-resize !important;
+    position: relative !important;
+    z-index: 10;
+    -webkit-user-select: none !important;
+    user-select: none !important;
+    touch-action: none !important;
+    transition: background-color 0.15s ease, border-color 0.15s ease !important;
+  }
+  .gantt_resizer_x:hover {
+    background-color: #eff6ff !important;
+    border-left-color: #93c5fd !important;
+    border-right-color: #93c5fd !important;
+  }
+  .gantt_resizer_x:active {
+    background-color: #dbeafe !important;
+    border-left-color: #3b82f6 !important;
+    border-right-color: #3b82f6 !important;
+  }
+  .gantt_resizer_x .gantt_resizer_x_line {
+    background: transparent !important;
+  }
+  .gantt_resizer_x::after {
+    content: "⋮";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    width: 14px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    color: #64748b;
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 26px;
+    pointer-events: none;
+    z-index: 11;
+    transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .gantt_resizer_x:hover::after {
+    border-color: #93c5fd;
+    color: #2563eb;
+  }
+  .gantt_resizer_x:active::after {
+    border-color: #3b82f6;
+    color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15), 0 2px 4px rgba(0,0,0,0.1);
+  }
+
+  body.gantt_row_resize,
+  .gantt_container.gantt_grid_resizing {
+    cursor: col-resize !important;
+    -webkit-user-select: none !important;
+    user-select: none !important;
+  }
+
+  .gantt_task_line .gantt_link_control {
+    transition: opacity 0.2s ease !important;
+  }
+  .gantt_link_point {
+    width: 14px !important;
+    height: 14px !important;
+    border: 2.5px solid #3b82f6 !important;
+    border-radius: 50% !important;
+    background: #ffffff !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15), 0 2px 4px rgba(0,0,0,0.1) !important;
+    cursor: crosshair !important;
+    transition: all 0.2s ease !important;
+  }
+  .gantt_link_point:hover {
+    background: #3b82f6 !important;
+    border-color: #1d4ed8 !important;
+    transform: scale(1.25) !important;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25), 0 2px 8px rgba(37, 99, 235, 0.3) !important;
+  }
+  @keyframes nodePulse {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15), 0 2px 4px rgba(0,0,0,0.1); }
+    50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.25), 0 2px 8px rgba(37, 99, 235, 0.3); }
+  }
+  .gantt_link_point.gantt_link_source {
+    animation: nodePulse 1.5s ease-in-out infinite !important;
+    background: #3b82f6 !important;
+    border-color: #1d4ed8 !important;
+  }
+
+  @keyframes linkMenuIn {
+    from { opacity: 0; transform: translateY(-6px) scale(0.95); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
   }
 `
 
-// ── Inline style helpers ─────────────────────────────────────────────────────
+// Inline style helpers
 const btnBase = {
   display: 'flex', alignItems: 'center', gap: 6,
   height: 34, borderRadius: 8, fontSize: 12,
@@ -349,18 +482,13 @@ const dropdownItem = {
   color: '#374151', fontWeight: 600, fontSize: 12,
 }
 
-// ── Link type constants ───────────────────────────────────────────────────────
+// Link type constants
 // dhtmlx-gantt: 0 = FS, 1 = SS, 2 = FF, 3 = SF
 const LINK_FS = 0
 const LINK_SS = 1
 const LINK_FF = 2
 const LINK_SF = 3
 
-// ── Calendar-aware "add N work days backward" helper ──────────────────────────
-// dhtmlx-gantt ships gantt.calculateEndDate() (forward, work-time aware) but has
-// no built-in reverse equivalent. This walks backward one day at a time and
-// skips non-work days when gantt.config.work_time is enabled, so FF/SF stay
-// aligned with the same calendar gantt uses for everything else.
 function calculateStartDateFromEnd(endDate, duration) {
   if (!duration || duration <= 0) return new Date(endDate)
   let current = new Date(endDate)
@@ -377,34 +505,12 @@ function calculateStartDateFromEnd(endDate, duration) {
   return current
 }
 
-// ── Auto-scheduling helper ────────────────────────────────────────────────────
-/**
- * Given a link connecting sourceTask → targetTask, compute the new
- * start_date (and end_date) for targetTask based on the link type.
- *
- * Rules:
- *  FS  – target starts when source finishes       → target.start = source.end
- *  SS  – target starts when source starts          → target.start = source.start
- *  FF  – target finishes when source finishes      → target.end = source.end
- *  SF  – target must finish before source starts    → target.end = source.start
- *
- * All date math is delegated to gantt's own calendar (gantt.calculateEndDate
- * for forward calculation, calculateStartDateFromEnd for backward), instead of
- * raw millisecond arithmetic. Raw ms math ignores gantt's own duration/work-time
- * rules and is what was causing the "end date off by a day" and "imprecise SF
- * dates" issues.
- *
- * Returns { start_date, end_date } or null if nothing should change.
- */
 function computeAutoScheduledDates(link, sourceTask, targetTask) {
   if (!sourceTask || !targetTask) return null
 
   const srcStart = new Date(sourceTask.start_date)
   const srcEnd = new Date(sourceTask.end_date)
 
-  // NOTE: `targetTask.duration || 1` previously turned a legitimate 0-day
-  // milestone duration into 1 (since 0 is falsy), silently making linked
-  // milestones spawn a 1-day bar. Use an explicit numeric check instead.
   const duration = typeof targetTask.duration === 'number' ? targetTask.duration : 1
 
   const linkType = parseInt(link.type, 10)
@@ -414,26 +520,34 @@ function computeAutoScheduledDates(link, sourceTask, targetTask) {
 
   switch (linkType) {
     case LINK_FS: {
-      // Target starts when source finishes (+ optional lag)
       newStart = lag ? gantt.date.add(srcEnd, lag, 'day') : new Date(srcEnd)
+      if (gantt.config.work_time && !gantt.isWorkTime({ date: newStart, task: targetTask })) {
+        newStart = gantt.getClosestWorkTime({ date: newStart, dir: 'future' })
+      }
       newEnd = gantt.calculateEndDate({ start_date: newStart, duration })
       break
     }
     case LINK_SS: {
-      // Target starts when source starts (+ optional lag)
       newStart = lag ? gantt.date.add(srcStart, lag, 'day') : new Date(srcStart)
+      if (gantt.config.work_time && !gantt.isWorkTime({ date: newStart, task: targetTask })) {
+        newStart = gantt.getClosestWorkTime({ date: newStart, dir: 'future' })
+      }
       newEnd = gantt.calculateEndDate({ start_date: newStart, duration })
       break
     }
     case LINK_FF: {
-      // Target finishes when source finishes (+ optional lag)
       newEnd = lag ? gantt.date.add(srcEnd, lag, 'day') : new Date(srcEnd)
+      if (gantt.config.work_time && !gantt.isWorkTime({ date: newEnd, task: targetTask })) {
+        newEnd = gantt.getClosestWorkTime({ date: newEnd, dir: 'past' })
+      }
       newStart = calculateStartDateFromEnd(newEnd, duration)
       break
     }
     case LINK_SF: {
-      // Target must finish before source starts → target.end = source.start
       newEnd = lag ? gantt.date.add(srcStart, lag, 'day') : new Date(srcStart)
+      if (gantt.config.work_time && !gantt.isWorkTime({ date: newEnd, task: targetTask })) {
+        newEnd = gantt.getClosestWorkTime({ date: newEnd, dir: 'past' })
+      }
       newStart = calculateStartDateFromEnd(newEnd, duration)
       break
     }
@@ -444,30 +558,99 @@ function computeAutoScheduledDates(link, sourceTask, targetTask) {
   return { start_date: newStart, end_date: newEnd }
 }
 
-/**
- * Propagate scheduling changes from a single updated task through all
- * downstream links, using BFS so cascades work correctly.
- *
- * visited set prevents infinite loops on circular references.
- */
-function propagateScheduling(changedTaskId, visited = new Set()) {
-  if (visited.has(changedTaskId)) return
-  visited.add(changedTaskId)
+function computeConstrainedDates(targetId) {
+  let targetTask
+  try { targetTask = gantt.getTask(targetId) } catch { return null }
+  if (!targetTask) return null
 
-  let sourceTask
-  try { sourceTask = gantt.getTask(changedTaskId) } catch { return }
-  if (!sourceTask) return
+  const allLinks = gantt.getLinks()
+  const incoming = allLinks.filter(l => String(l.target) === String(targetId))
+  if (incoming.length === 0) return null
+
+  const duration = typeof targetTask.duration === 'number' ? targetTask.duration : 1
+  let latestStart = null
+  let latestEnd = null
+
+  incoming.forEach(link => {
+    let sourceTask
+    try { sourceTask = gantt.getTask(link.source) } catch { return }
+    if (!sourceTask) return
+
+    const dates = computeAutoScheduledDates(link, sourceTask, targetTask)
+    if (!dates) return
+
+    if (!latestStart || dates.start_date > latestStart) latestStart = dates.start_date
+    if (!latestEnd || dates.end_date > latestEnd) latestEnd = dates.end_date
+  })
+
+  if (!latestStart) return null
+
+  if (latestEnd) {
+    const startFromEnd = calculateStartDateFromEnd(latestEnd, duration)
+    if (startFromEnd > latestStart) latestStart = startFromEnd
+  }
+
+  const newEnd = gantt.calculateEndDate({ start_date: latestStart, duration })
+  return { start_date: latestStart, end_date: newEnd }
+}
+
+function hasCircularDependency(sourceId, targetId) {
+  if (String(sourceId) === String(targetId)) return true
+  const visited = new Set()
+  const stack = [String(targetId)]
+  const sourceStr = String(sourceId)
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (visited.has(current)) continue
+    visited.add(current)
+    const outgoing = gantt.getLinks().filter(l => String(l.source) === current)
+    for (const link of outgoing) {
+      const tgt = String(link.target)
+      if (tgt === sourceStr) return true
+      stack.push(tgt)
+    }
+  }
+  return false
+}
+
+function parsePredecessorEntries(text) {
+  if (!text || !text.trim()) return []
+  return text.split(',').map(entry => {
+    entry = entry.trim()
+    if (!entry) return null
+    const match = entry.match(/^([\d.]+)\s*(FS|SS|FF|SF)?\s*([+-]\d+)\s*d?$/i)
+    if (match) {
+      const wbs = match[1]
+      const typeStr = match[2] ? match[2].toUpperCase() : 'FS'
+      const lag = parseInt(match[3], 10)
+      const typeMap = { 'FS': LINK_FS, 'SS': LINK_SS, 'FF': LINK_FF, 'SF': LINK_SF }
+      return { wbs, linkType: typeMap[typeStr] || LINK_FS, lag }
+    }
+    const match2 = entry.match(/^([\d.]+)\s*(FS|SS|FF|SF)?$/i)
+    if (match2) {
+      const wbs = match2[1]
+      const typeStr = match2[2] ? match2[2].toUpperCase() : 'FS'
+      const typeMap = { 'FS': LINK_FS, 'SS': LINK_SS, 'FF': LINK_FF, 'SF': LINK_SF }
+      return { wbs, linkType: typeMap[typeStr] || LINK_FS, lag: 0 }
+    }
+    return null
+  }).filter(Boolean)
+}
+
+function propagateScheduling(changedTaskId, visited = new Set()) {
+  if (visited.has(String(changedTaskId))) return
+  visited.add(String(changedTaskId))
 
   const allLinks = gantt.getLinks()
   const outgoing = allLinks.filter(l => String(l.source) === String(changedTaskId))
+  const targetIds = [...new Set(outgoing.map(l => String(l.target)))]
 
-  outgoing.forEach(link => {
-    const targetId = link.target
+  targetIds.forEach(targetId => {
     let targetTask
     try { targetTask = gantt.getTask(targetId) } catch { return }
     if (!targetTask) return
 
-    const newDates = computeAutoScheduledDates(link, sourceTask, targetTask)
+    const newDates = computeConstrainedDates(targetId)
     if (!newDates) return
 
     const startChanged = newDates.start_date.getTime() !== new Date(targetTask.start_date).getTime()
@@ -476,25 +659,16 @@ function propagateScheduling(changedTaskId, visited = new Set()) {
     if (startChanged || endChanged) {
       targetTask.start_date = newDates.start_date
       targetTask.end_date = newDates.end_date
-      // Keep gantt's own duration field consistent with the dates we just set,
-      // so the Duration column and the grid's internal editor validation agree.
       targetTask.duration = gantt.calculateDuration({
         start_date: newDates.start_date,
         end_date: newDates.end_date,
       })
       gantt.updateTask(targetId)
-      // Cascade further
       propagateScheduling(targetId, visited)
     }
   })
 }
 
-/**
- * Roll up dates from children to parent (and ancestors).
- * Parent start_date = earliest child start, end_date = latest child end,
- * duration = calculated from those dates via gantt's calendar.
- * Walks up the tree so grandparents also update.
- */
 function rollUpParentDates(taskId, visited = new Set()) {
   if (visited.has(taskId)) return
   visited.add(taskId)
@@ -506,7 +680,6 @@ function rollUpParentDates(taskId, visited = new Set()) {
   let parentTask
   try { parentTask = gantt.getTask(parentId) } catch { return }
 
-  // Roll up for any task that has children (not just 'project' type)
   const children = gantt.getChildren(parentId)
   if (!children || children.length === 0) return
 
@@ -536,12 +709,10 @@ function rollUpParentDates(taskId, visited = new Set()) {
       end_date: latestEnd,
     })
     gantt.updateTask(parentId)
-    // Continue rolling up to grandparent
     rollUpParentDates(parentId, visited)
   }
 }
 
-// ── isSubTask helper: checks if a task's parent is NOT the root project task ──
 function isSubTask(task, projectId) {
   if (!task.parent) return false
   if (String(task.parent) === `project_${projectId}`) return false
@@ -550,11 +721,61 @@ function isSubTask(task, projectId) {
   return true
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+function topologicalSchedule() {
+  const allLinks = gantt.getLinks()
+  if (!allLinks || allLinks.length === 0) return
+
+  const inDegree = {}
+  const successors = {}
+
+  gantt.eachTask(task => {
+    const id = String(task.id)
+    if (!(id in inDegree)) inDegree[id] = 0
+    if (!(id in successors)) successors[id] = new Set()
+  })
+
+  allLinks.forEach(link => {
+    const src = String(link.source)
+    const tgt = String(link.target)
+    if (!(src in successors)) successors[src] = new Set()
+    successors[src].add(tgt)
+    if (!(tgt in inDegree)) inDegree[tgt] = 0
+    inDegree[tgt] += 1
+  })
+
+  const queue = Object.keys(inDegree).filter(id => inDegree[id] === 0)
+  const order = []
+
+  while (queue.length > 0) {
+    const current = queue.shift()
+    order.push(current)
+    if (successors[current]) {
+      successors[current].forEach(succ => {
+        inDegree[succ] -= 1
+        if (inDegree[succ] === 0) queue.push(succ)
+      })
+    }
+  }
+
+  order.forEach(taskId => {
+    const newDates = computeConstrainedDates(taskId)
+    if (!newDates) return
+    try {
+      const task = gantt.getTask(taskId)
+      task.start_date = newDates.start_date
+      task.end_date = newDates.end_date
+      task.duration = gantt.calculateDuration({
+        start_date: newDates.start_date,
+        end_date: newDates.end_date,
+      })
+    } catch { /* skip */ }
+  })
+}
+
+// Component
 function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   const containerRef = useRef(null)
   const syncingTasksRef = useRef(new Set())
-  // Guard: prevent re-entrant onAfterTaskUpdate loops from propagateScheduling
   const schedulingRef = useRef(false)
 
   const [zoomLevel, setZoomLevel] = useState('day')
@@ -569,11 +790,17 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [taskToDelete, setTaskToDelete] = useState(null)
   const [deleteText, setDeleteText] = useState('')
+  const [linkMenu, setLinkMenu] = useState(null)
 
   const [activeBaseline, setActiveBaseline] = useState('Baseline 1')
 
+  const [taskModalOpen, setTaskModalOpen] = useState(false)
+  const [taskModalData, setTaskModalData] = useState(null)
+
+  const [alertMessage, setAlertMessage] = useState('')
+
   useEffect(() => {
-    const h = () => { setAddOpen(false); setBaselineOpen(false); setMoreOpen(false) }
+    const h = () => { setAddOpen(false); setBaselineOpen(false); setMoreOpen(false); setLinkMenu(null) }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [])
@@ -585,7 +812,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     return () => document.head.removeChild(styleEl)
   }, [])
 
-  // ── Formatting helpers ───────────────────────────────────────────────────────
+  // Formatting helpers
   const getLinkTypeLabel = (type) => {
     const t = parseInt(type, 10)
     return t === LINK_SS ? 'SS' : t === LINK_FF ? 'FF' : t === LINK_SF ? 'SF' : 'FS'
@@ -620,8 +847,6 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     } catch { return '-' }
   }
 
-  // dhtmlx-gantt end_date is exclusive (1d task Jul 1→Jul 2).
-  // This returns the inclusive last day so "1d" shows same start & end date.
   const getInclusiveEndDate = (date) => {
     if (!date) return null
     const d = new Date(date)
@@ -649,15 +874,14 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     console.log("Mock syncTaskWithAPI called for task:", task.id);
   }
 
-
-  // ── Main gantt setup ──────────────────────────────────────────────────────────
+  // Main gantt setup
   useEffect(() => {
     if (!containerRef.current) return
 
     try {
-      gantt.plugins({ critical_path: true, tooltip: true, auto_scheduling: true, inline_editors: true })
+      gantt.plugins({ critical_path: true, tooltip: true, auto_scheduling: true, inline_editors: true, marker: true })
     } catch {
-      gantt.plugins({ critical_path: true, tooltip: true, inline_editors: true })
+      gantt.plugins({ critical_path: true, tooltip: true, inline_editors: true, marker: true })
     }
 
     gantt.config.date_format = '%Y-%m-%d'
@@ -674,284 +898,314 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     gantt.config.grid_width = 640
     gantt.config.grid_resize = true
 
-    // Auto-scheduling: keep native plugin OFF so our custom propagation handles it
-    // (avoids conflicts with custom predecessor editor)
+    // Today Marker
+    if (gantt.addMarker) {
+      const today = new Date()
+      try {
+        gantt.addMarker({
+          id: "today_marker",
+          start_date: today,
+          css: "today",
+          text: "Today",
+          title: `Today: ${today.toLocaleDateString()}`
+        })
+      } catch (e) { /* ignore */ }
+    }
+
     gantt.config.auto_scheduling = false
 
-    // ── Inline editors ──────────────────────────────────────────────────────────
+    // Inline editors
     const textEditor = { type: 'text', map_to: 'text' }
     const dateEditor = { type: 'date', map_to: 'start_date' }
     const endEditor = { type: 'date', map_to: 'end_date' }
     const durationEditor = { type: 'number', map_to: 'duration', min: 0, max: 1000 }
     const resourceEditor = { type: 'text', map_to: 'assignees' }
 
-    // ── Custom predecessor inline editor with FS/SS/FF/SF selection ──────────
-    // Register the custom editor type once
-    if (!gantt._predecessorEditorRegistered) {
-      gantt.config.editor_types.custom_predecessor = {
-        show: function (id, column, config, placeholder) {
-          const task = gantt.getTask(id)
-          const links = gantt.getLinks() || []
-          const existingLink = links.find(l => String(l.target) === String(id))
-          let currentWbs = ''
-          let currentType = LINK_FS
+    // ── Predecessor inline editor: single predecessor per task, laid out as
+    //    [WBS "node" input] [Type dropdown: FS/SS/FF/SF] | (drag) | [Lag number input]
+    //    The divider between the type dropdown and the lag input is user-draggable,
+    //    so the two sections can be resized relative to each other.
+    gantt.config.editor_types.custom_predecessor = {
+      show: function (id, column, config, placeholder) {
+        const task = gantt.getTask(id)
+        const links = gantt.getLinks() || []
+        // Single predecessor only: take the first (and only) incoming link, if any
+        const existingLink = links.find(l => String(l.target) === String(id))
 
-          if (existingLink && gantt.isTaskExists(existingLink.source)) {
-            const srcTask = gantt.getTask(existingLink.source)
-            currentWbs = gantt.getWBSCode(srcTask) || ''
-            currentType = parseInt(existingLink.type, 10)
-          }
+        let currentWbs = ''
+        let currentType = LINK_FS
+        let currentLag = 0
 
-          // ── Color scheme per link type ────────────────────────────
-          const TYPE_COLORS = {
-            [LINK_FS]: { bg: '#dbeafe', color: '#1d4ed8', activeBg: '#2563eb' },
-            [LINK_SS]: { bg: '#dcfce7', color: '#15803d', activeBg: '#16a34a' },
-            [LINK_FF]: { bg: '#fef3c7', color: '#b45309', activeBg: '#d97706' },
-            [LINK_SF]: { bg: '#f3e8ff', color: '#7c3aed', activeBg: '#8b5cf6' },
-          }
-          const getTypeColor = (v) => TYPE_COLORS[v] || TYPE_COLORS[LINK_FS]
+        if (existingLink && gantt.isTaskExists(existingLink.source)) {
+          const srcTask = gantt.getTask(existingLink.source)
+          currentWbs = gantt.getWBSCode(srcTask) || ''
+          currentType = parseInt(existingLink.type, 10)
+          currentLag = existingLink.lag ? parseInt(existingLink.lag, 10) : 0
+        }
 
-          // ── Container ────────────────────────────────────────────
-          const container = document.createElement('div')
-          container.style.cssText = 'display:flex;align-items:center;gap:3px;width:100%;height:100%;padding:2px 4px;box-sizing:border-box;'
+        const TYPE_COLORS = {
+          [LINK_FS]: { bg: '#dbeafe', color: '#1d4ed8', activeBg: '#2563eb' },
+          [LINK_SS]: { bg: '#dcfce7', color: '#15803d', activeBg: '#16a34a' },
+          [LINK_FF]: { bg: '#fef3c7', color: '#b45309', activeBg: '#d97706' },
+          [LINK_SF]: { bg: '#f3e8ff', color: '#7c3aed', activeBg: '#8b5cf6' },
+        }
+        const getTypeColor = (v) => TYPE_COLORS[v] || TYPE_COLORS[LINK_FS]
+        const typeLabels = { [LINK_FS]: 'FS', [LINK_SS]: 'SS', [LINK_FF]: 'FF', [LINK_SF]: 'SF' }
 
-          // ── WBS input ────────────────────────────────────────────
-          const input = document.createElement('input')
-          input.className = 'pred-editor-wbs-input'
-          input.type = 'text'
-          input.value = currentWbs
-          input.placeholder = '#'
-          input.style.cssText = 'width:36px;height:28px;border:1.5px solid #e2e8f0;border-radius:6px;padding:0 4px;font-size:11px;text-align:center;outline:none;background:#fff;color:#0f172a;font-weight:700;font-family:inherit;transition:border-color 0.15s,box-shadow 0.15s;'
+        // Container: node input | type dropdown | draggable divider | lag input
+        const container = document.createElement('div')
+        container.style.cssText = 'display:flex;align-items:stretch;gap:3px;width:100%;height:100%;padding:2px 4px;box-sizing:border-box;'
 
-          // ── Type selector wrapper ────────────────────────────────
-          const typeWrapper = document.createElement('div')
-          typeWrapper.style.cssText = 'position:relative;flex:1;min-width:0;'
+        // Node (WBS) input — the predecessor task's number
+        const nodeInput = document.createElement('input')
+        nodeInput.className = 'pred-editor-wbs-input'
+        nodeInput.type = 'text'
+        nodeInput.value = currentWbs
+        nodeInput.placeholder = 'Node'
+        nodeInput.title = 'Predecessor task number (WBS)'
+        nodeInput.style.cssText = 'width:34px;flex:0 0 34px;height:28px;border:1.5px solid #e2e8f0;border-radius:6px;padding:0 4px;font-size:11px;text-align:center;outline:none;background:#fff;color:#0f172a;font-weight:700;font-family:inherit;transition:border-color 0.15s,box-shadow 0.15s;align-self:center;'
 
-          // ── Type button ──────────────────────────────────────────
-          const typeBtn = document.createElement('button')
-          typeBtn.type = 'button'
-          const typeLabels = { [LINK_FS]: 'FS', [LINK_SS]: 'SS', [LINK_FF]: 'FF', [LINK_SF]: 'SF' }
-          typeBtn.dataset.value = String(currentType)
+        // Type dropdown wrapper (this section will flex/shrink as the divider moves)
+        const typeWrapper = document.createElement('div')
+        typeWrapper.style.cssText = 'position:relative;flex:1 1 0;min-width:44px;align-self:center;'
 
-          const renderBtnContent = (typeVal) => {
-            const tc = getTypeColor(typeVal)
-            const lbl = typeLabels[typeVal] || 'FS'
-            typeBtn.style.cssText = `width:100%;height:28px;border:1.5px solid ${tc.bg};border-radius:6px;background:${tc.bg};color:${tc.color};font-weight:700;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:3px;padding:0 8px;transition:all 0.15s;font-family:inherit;letter-spacing:0.3px;`
-            typeBtn.innerHTML = `<span>${lbl}</span><svg width="8" height="8" viewBox="0 0 12 12" fill="none" style="opacity:0.6;"><path d="M3 5L6 8L9 5" stroke="${tc.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-          }
-          renderBtnContent(currentType)
+        const typeBtn = document.createElement('button')
+        typeBtn.type = 'button'
+        typeBtn.dataset.value = String(currentType)
 
-          // ── Dropdown panel (appended to body to escape overflow) ──
-          const dropdown = document.createElement('div')
-          dropdown.className = 'pred-type-dropdown-panel'
-          dropdown.style.cssText = 'display:none;position:fixed;background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,0.15),0 4px 12px rgba(0,0,0,0.08);z-index:99999;padding:5px;width:235px;box-sizing:border-box;'
+        const renderBtnContent = (typeVal) => {
+          const tc = getTypeColor(typeVal)
+          const lbl = typeLabels[typeVal] || 'FS'
+          typeBtn.style.cssText = `width:100%;height:28px;border:1.5px solid ${tc.bg};border-radius:6px;background:${tc.bg};color:${tc.color};font-weight:700;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:3px;padding:0 6px;transition:all 0.15s;font-family:inherit;letter-spacing:0.3px;`
+          typeBtn.innerHTML = `<span>${lbl}</span><svg width="8" height="8" viewBox="0 0 12 12" fill="none" style="opacity:0.6;flex-shrink:0;"><path d="M3 5L6 8L9 5" stroke="${tc.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+        }
+        renderBtnContent(currentType)
 
-          // Header
-          const header = document.createElement('div')
-          header.style.cssText = 'padding:6px 10px 5px;font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid #f1f5f9;margin-bottom:3px;'
-          header.textContent = 'Link Type'
-          dropdown.appendChild(header)
+        const dropdown = document.createElement('div')
+        dropdown.className = 'pred-type-dropdown-panel'
+        dropdown.style.cssText = 'display:none;position:fixed;background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,0.15),0 4px 12px rgba(0,0,0,0.08);z-index:99999;padding:5px;width:235px;box-sizing:border-box;'
 
-          const linkTypes = [
-            { value: LINK_FS, label: 'FS', desc: 'Finish → Start' },
-            { value: LINK_SS, label: 'SS', desc: 'Start → Start' },
-            { value: LINK_FF, label: 'FF', desc: 'Finish → Finish' },
-            { value: LINK_SF, label: 'SF', desc: 'Start → Finish' },
-          ]
+        const header = document.createElement('div')
+        header.style.cssText = 'padding:6px 10px 5px;font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid #f1f5f9;margin-bottom:3px;'
+        header.textContent = 'When Start'
+        dropdown.appendChild(header)
 
-          const renderOptions = () => {
-            dropdown.querySelectorAll('.pred-type-opt').forEach(el => el.remove())
-            linkTypes.forEach(lt => {
-              const tc = getTypeColor(lt.value)
-              const isActive = parseInt(typeBtn.dataset.value, 10) === lt.value
-              const opt = document.createElement('button')
-              opt.type = 'button'
-              opt.className = 'pred-type-opt'
-              opt.style.cssText = `display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:none;border-radius:6px;cursor:pointer;font-size:12px;transition:background 0.1s;background:${isActive ? tc.bg : 'transparent'};font-family:inherit;outline:none;box-sizing:border-box;text-align:left;`
-              opt.innerHTML = `
-                <span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:20px;border-radius:4px;font-weight:700;font-size:10px;letter-spacing:0.4px;background:${isActive ? tc.activeBg : '#f1f5f9'};color:${isActive ? '#fff' : tc.color};">${lt.label}</span>
-                <span style="color:${isActive ? '#0f172a' : '#64748b'};font-weight:${isActive ? '600' : '500'};flex:1;text-align:left;white-space:nowrap;">${lt.desc}</span>
-                ${isActive ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${tc.color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>` : ''}
-              `
-              opt.addEventListener('click', (e) => {
-                e.stopPropagation()
-                e.preventDefault()
-                typeBtn.dataset.value = String(lt.value)
-                renderBtnContent(lt.value)
-                hideDropdown()
-                renderOptions()
-                input.focus()
-              })
-              dropdown.appendChild(opt)
-            })
-          }
-          renderOptions()
+        const linkTypes = [
+          { value: LINK_FS, label: 'FS', desc: 'Finish → Start' },
+          { value: LINK_SS, label: 'SS', desc: 'Start → Start' },
+          { value: LINK_FF, label: 'FF', desc: 'Finish → Finish' },
+          { value: LINK_SF, label: 'SF', desc: 'Start → Finish' },
+        ]
 
-          // Position dropdown below the type button using fixed positioning
-          const positionDropdown = () => {
-            const btnRect = typeBtn.getBoundingClientRect()
-            const dropW = 235
-            // Right-align to button's right edge (predecessor column is near the right)
-            let left = btnRect.right - dropW
-            // If it would go off the left edge, push it right
-            if (left < 8) left = 8
-            // If it would go off the right edge, clamp using clientWidth (excludes scrollbar width)
-            const viewportWidth = document.documentElement.clientWidth
-            if (left + dropW > viewportWidth - 12) {
-              left = viewportWidth - dropW - 12
-            }
-            dropdown.style.top = (btnRect.bottom + 4) + 'px'
-            dropdown.style.left = left + 'px'
-          }
-
-          const showDropdown = () => {
-            dropdown.style.display = 'block'
-            positionDropdown()
-          }
-          const hideDropdown = () => {
-            dropdown.style.display = 'none'
-          }
-
-          typeBtn.addEventListener('click', (e) => {
-            e.stopPropagation()
-            e.preventDefault()
-            if (dropdown.style.display !== 'none') {
-              hideDropdown()
-            } else {
-              showDropdown()
-            }
-          })
-
-          // Keyboard: Tab on WBS input opens the type dropdown
-          input.addEventListener('keydown', (e) => {
-            if (e.key === 'Tab') {
+        const renderOptions = () => {
+          dropdown.querySelectorAll('.pred-type-opt').forEach(el => el.remove())
+          linkTypes.forEach(lt => {
+            const tc = getTypeColor(lt.value)
+            const isActive = parseInt(typeBtn.dataset.value, 10) === lt.value
+            const opt = document.createElement('button')
+            opt.type = 'button'
+            opt.className = 'pred-type-opt'
+            opt.style.cssText = `display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:none;border-radius:6px;cursor:pointer;font-size:12px;transition:background 0.1s;background:${isActive ? tc.bg : 'transparent'};font-family:inherit;outline:none;box-sizing:border-box;text-align:left;`
+            opt.innerHTML = `
+              <span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:20px;border-radius:4px;font-weight:700;font-size:10px;letter-spacing:0.4px;background:${isActive ? tc.activeBg : '#f1f5f9'};color:${isActive ? '#fff' : tc.color};">${lt.label}</span>
+              <span style="color:${isActive ? '#0f172a' : '#64748b'};font-weight:${isActive ? '600' : '500'};flex:1;text-align:left;white-space:nowrap;">${lt.desc}</span>
+              ${isActive ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${tc.color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>` : ''}
+            `
+            opt.addEventListener('click', (e) => {
+              e.stopPropagation()
               e.preventDefault()
-              if (dropdown.style.display !== 'none') hideDropdown()
-              else showDropdown()
-            }
-          })
-
-          // Close dropdown on outside click (don't interfere with other elements)
-          const closeHandler = (e) => {
-            if (!typeWrapper.contains(e.target) && !dropdown.contains(e.target)) {
+              typeBtn.dataset.value = String(lt.value)
+              renderBtnContent(lt.value)
               hideDropdown()
-            }
-          }
-          document.addEventListener('mousedown', closeHandler, true)
-
-          // Reposition on scroll (gantt area scrolls)
-          const scrollHandler = () => {
-            if (dropdown.style.display !== 'none') positionDropdown()
-          }
-          window.addEventListener('scroll', scrollHandler, true)
-
-          container._closeHandler = closeHandler
-          container._scrollHandler = scrollHandler
-
-          typeWrapper.appendChild(typeBtn)
-          // Append dropdown to body so it's never clipped
-          document.body.appendChild(dropdown)
-
-          container.appendChild(input)
-          container.appendChild(typeWrapper)
-
-          placeholder.innerHTML = ''
-          placeholder.appendChild(container)
-
-          this._container = container
-          this._dropdown = dropdown
-          this._input = input
-          this._typeBtn = typeBtn
-
-          requestAnimationFrame(() => { input.focus(); input.select() })
-        },
-
-        hide: function () {
-          if (this._container && this._container._closeHandler) {
-            document.removeEventListener('mousedown', this._container._closeHandler, true)
-          }
-          if (this._container && this._container._scrollHandler) {
-            window.removeEventListener('scroll', this._container._scrollHandler, true)
-          }
-          // Remove dropdown from body
-          if (this._dropdown && this._dropdown.parentNode) {
-            this._dropdown.parentNode.removeChild(this._dropdown)
-          }
-          this._container = null
-          this._dropdown = null
-          this._input = null
-          this._typeBtn = null
-        },
-
-        set_value: function (value, id, column, node) {
-          // Already handled in show()
-        },
-
-        get_value: function (id, column, node) {
-          const wbs = this._input ? this._input.value.trim() : ''
-          const linkType = this._typeBtn ? parseInt(this._typeBtn.dataset.value, 10) : LINK_FS
-          return { wbs, linkType }
-        },
-
-        is_changed: function (value, id, column, node) {
-          return true // Always treat as changed to allow save
-        },
-
-        is_valid: function (value, id, column, node) {
-          return true
-        },
-
-        save: function (id, column, node) {
-          const val = this.get_value(id, column, node)
-          if (!val.wbs) {
-            // Empty WBS → remove any existing link targeting this task
-            const links = gantt.getLinks() || []
-            links.filter(l => String(l.target) === String(id)).forEach(l => {
-              gantt.deleteLink(l.id)
+              renderOptions()
+              nodeInput.focus()
             })
-            return
-          }
-          // Find the source task by WBS code
-          let sourceTask = null
-          gantt.eachTask(t => {
-            if (gantt.getWBSCode(t) === val.wbs) {
-              sourceTask = t
-            }
+            dropdown.appendChild(opt)
           })
-          if (!sourceTask) {
-            alert(`No task found with WBS code "${val.wbs}"`)
-            return
+        }
+        renderOptions()
+
+        const positionDropdown = () => {
+          const btnRect = typeBtn.getBoundingClientRect()
+          const dropW = 235
+          let left = btnRect.right - dropW
+          if (left < 8) left = 8
+          const viewportWidth = document.documentElement.clientWidth
+          if (left + dropW > viewportWidth - 12) {
+            left = viewportWidth - dropW - 12
           }
-          if (String(sourceTask.id) === String(id)) {
-            alert('A task cannot be its own predecessor.')
-            return
+          dropdown.style.top = (btnRect.bottom + 4) + 'px'
+          dropdown.style.left = left + 'px'
+        }
+
+        const showDropdown = () => { dropdown.style.display = 'block'; positionDropdown() }
+        const hideDropdown = () => { dropdown.style.display = 'none' }
+
+        typeBtn.addEventListener('click', (e) => {
+          e.stopPropagation()
+          e.preventDefault()
+          if (dropdown.style.display !== 'none') hideDropdown()
+          else showDropdown()
+        })
+
+        nodeInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Tab') {
+            e.preventDefault()
+            if (dropdown.style.display !== 'none') hideDropdown()
+            else showDropdown()
           }
+        })
 
-          // Remove existing links targeting this task
-          const links = gantt.getLinks() || []
-          links.filter(l => String(l.target) === String(id)).forEach(l => {
-            gantt.deleteLink(l.id)
-          })
+        const closeHandler = (e) => {
+          if (!typeWrapper.contains(e.target) && !dropdown.contains(e.target)) hideDropdown()
+        }
+        document.addEventListener('mousedown', closeHandler, true)
 
-          // Add the new link
-          gantt.addLink({
-            id: `link_${Date.now()}`,
-            source: sourceTask.id,
-            target: id,
-            type: String(val.linkType),
-          })
-        },
+        const scrollHandler = () => { if (dropdown.style.display !== 'none') positionDropdown() }
+        window.addEventListener('scroll', scrollHandler, true)
 
-        focus: function (node) {
-          if (this._input) this._input.focus()
-        },
-      }
-      gantt._predecessorEditorRegistered = true
+        typeWrapper.appendChild(typeBtn)
+        document.body.appendChild(dropdown)
+
+        // Draggable divider between the Type dropdown and the Lag number input
+        const divider = document.createElement('div')
+        divider.className = 'pred-editor-divider'
+
+        // Lag (day offset) input — accepts +/- directly, e.g. "-2" or "3"
+        const lagWrapper = document.createElement('div')
+        lagWrapper.style.cssText = 'flex:1 1 0;min-width:34px;align-self:center;'
+        const lagInput = document.createElement('input')
+        lagInput.type = 'text'
+        lagInput.inputMode = 'numeric'
+        lagInput.value = currentLag ? String(currentLag) : ''
+        lagInput.placeholder = '±d'
+        lagInput.title = 'Lag in days, e.g. -2 or 3'
+        lagInput.style.cssText = 'width:100%;height:28px;border:1.5px solid #e2e8f0;border-radius:6px;padding:0 4px;font-size:11px;text-align:center;outline:none;background:#fff;color:#0f172a;font-weight:700;font-family:inherit;transition:border-color 0.15s,box-shadow 0.15s;box-sizing:border-box;'
+        lagInput.addEventListener('input', () => {
+          // Allow only an optional leading +/- followed by digits while typing
+          lagInput.value = lagInput.value.replace(/[^\d+-]/g, '').replace(/(?!^)[+-]/g, '')
+        })
+        lagWrapper.appendChild(lagInput)
+
+        // Divider drag logic: resizes typeWrapper vs lagWrapper flex-basis
+        let dragging = false
+        let startX = 0
+        let startTypeWidth = 0
+        let startLagWidth = 0
+
+        const onPointerMove = (e) => {
+          if (!dragging) return
+          const dx = e.clientX - startX
+          const totalWidth = startTypeWidth + startLagWidth
+          let newTypeWidth = startTypeWidth + dx
+          const minWidth = 30
+          newTypeWidth = Math.max(minWidth, Math.min(totalWidth - minWidth, newTypeWidth))
+          const newLagWidth = totalWidth - newTypeWidth
+          typeWrapper.style.flex = `0 0 ${newTypeWidth}px`
+          lagWrapper.style.flex = `0 0 ${newLagWidth}px`
+        }
+        const onPointerUp = () => {
+          dragging = false
+          divider.classList.remove('dragging')
+          document.removeEventListener('mousemove', onPointerMove)
+          document.removeEventListener('mouseup', onPointerUp)
+        }
+        divider.addEventListener('mousedown', (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          dragging = true
+          divider.classList.add('dragging')
+          startX = e.clientX
+          startTypeWidth = typeWrapper.getBoundingClientRect().width
+          startLagWidth = lagWrapper.getBoundingClientRect().width
+          document.addEventListener('mousemove', onPointerMove)
+          document.addEventListener('mouseup', onPointerUp)
+        })
+
+        container.appendChild(nodeInput)
+        container.appendChild(typeWrapper)
+        container.appendChild(divider)
+        container.appendChild(lagWrapper)
+
+        placeholder.innerHTML = ''
+        placeholder.appendChild(container)
+
+        this._container = container
+        this._dropdown = dropdown
+        this._nodeInput = nodeInput
+        this._typeBtn = typeBtn
+        this._lagInput = lagInput
+        this._closeHandler = closeHandler
+        this._scrollHandler = scrollHandler
+
+        requestAnimationFrame(() => { nodeInput.focus(); nodeInput.select() })
+      },
+
+      hide: function () {
+        if (this._closeHandler) document.removeEventListener('mousedown', this._closeHandler, true)
+        if (this._scrollHandler) window.removeEventListener('scroll', this._scrollHandler, true)
+        if (this._dropdown && this._dropdown.parentNode) this._dropdown.parentNode.removeChild(this._dropdown)
+        this._container = null
+        this._dropdown = null
+        this._nodeInput = null
+        this._typeBtn = null
+        this._lagInput = null
+      },
+
+      set_value: function () { /* handled in show() */ },
+
+      get_value: function () {
+        const wbs = this._nodeInput ? this._nodeInput.value.trim() : ''
+        const linkType = this._typeBtn ? parseInt(this._typeBtn.dataset.value, 10) : LINK_FS
+        const lagRaw = this._lagInput ? this._lagInput.value.trim() : ''
+        const lag = lagRaw ? parseInt(lagRaw, 10) || 0 : 0
+        return { wbs, linkType, lag }
+      },
+
+      is_changed: function () { return true },
+      is_valid: function () { return true },
+
+      save: function (id) {
+        const val = this.get_value()
+
+        // Single predecessor: always clear any existing incoming link(s) first
+        const links = gantt.getLinks() || []
+        links.filter(l => String(l.target) === String(id)).forEach(l => gantt.deleteLink(l.id))
+
+        if (!val.wbs) return
+
+        let sourceTask = null
+        gantt.eachTask(t => {
+          if (gantt.getWBSCode(t) === val.wbs) sourceTask = t
+        })
+        if (!sourceTask) {
+          setAlertMessage(`No task found with node "${val.wbs}"`)
+          return
+        }
+        if (String(sourceTask.id) === String(id)) {
+          setAlertMessage('A task cannot be its own predecessor.')
+          return
+        }
+        if (hasCircularDependency(sourceTask.id, id)) {
+          setAlertMessage(`Node "${val.wbs}" would create a circular dependency.`)
+          return
+        }
+
+        gantt.addLink({
+          id: `link_${Date.now()}`,
+          source: sourceTask.id,
+          target: id,
+          type: String(val.linkType),
+          lag: val.lag || 0,
+        })
+      },
+
+      focus: function () { if (this._nodeInput) this._nodeInput.focus() },
     }
 
     const predecessorEditor = { type: 'custom_predecessor', map_to: 'auto' }
 
-    // ── Columns ────────────────────────────────────────────────────────────────
+    // Columns
     gantt.config.columns = [
       {
         name: 'wbs_code', label: '#', width: 50, align: 'center', resize: true,
@@ -988,7 +1242,6 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         template: (task) => formatDateShort(getInclusiveEndDate(task.end_date)),
       },
       {
-        // ── DURATION column: dim + non-editable when task has children (auto rolled up) ──
         name: 'duration', label: 'Duration', width: 70, align: 'center', resize: true,
         editor: durationEditor,
         header: [{ text: 'Duration', align: 'center' }],
@@ -1010,14 +1263,12 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         },
       },
       {
-        // ── RESOURCE column: editable only for sub-tasks ──────────────────────
         name: 'assignees', label: 'Resource', width: 120, align: 'center', resize: true,
         editor: resourceEditor,
         header: [{ text: 'Resource', align: 'center' }],
         template: (task) => {
           const sub = isSubTask(task, projectId)
           if (!sub) {
-            // Not a sub-task → show a dim placeholder, no real value
             return '<span class="resource-disabled-cell">—</span>'
           }
           return task.assignees
@@ -1025,15 +1276,13 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             : '<span style="color:#94a3b8;">—</span>'
         },
         onrender: (task, node) => {
-          // Visual hint: sub-tasks get a light blue tint in the resource cell
           if (isSubTask(task, projectId)) {
             node.style.background = 'rgba(219,234,254,0.25)'
           }
         },
       },
       {
-        // ── PREDECESSOR column: shows WBS + link-type badge ───────────────────
-        name: 'predecessors', label: 'Predecessor', width: 100, align: 'center', resize: true,
+        name: 'predecessors', label: 'Predecessor', width: 90, align: 'center', resize: true,
         editor: predecessorEditor,
         header: [{ text: 'Predecessor', align: 'center' }],
         template: (task) => {
@@ -1041,18 +1290,32 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             const links = gantt.getLinks() || []
             const taskLinks = links.filter(l => String(l.target) === String(task.id))
             if (!taskLinks.length) return '<span style="color:#cbd5e1;">—</span>'
-            const badgeClass = { 0: 'pred-badge-fs', 1: 'pred-badge-ss', 2: 'pred-badge-ff', 3: 'pred-badge-sf' }
             return taskLinks.map(link => {
               if (!gantt.isTaskExists(link.source)) return ''
               const src = gantt.getTask(link.source)
               const wbs = gantt.getWBSCode(src) || ''
+              return `<span style="font-weight:600;color:#334155;font-size:11px;">${wbs}</span>`
+            }).filter(Boolean).join(', ') || '<span style="color:#cbd5e1;">—</span>'
+          } catch { return '<span style="color:#cbd5e1;">—</span>' }
+        },
+      },
+      {
+        name: 'dependency_type', label: 'Dependency', width: 90, align: 'center', resize: true,
+        header: [{ text: 'Dependency', align: 'center' }],
+        template: (task) => {
+          try {
+            const links = gantt.getLinks() || []
+            const taskLinks = links.filter(l => String(l.target) === String(task.id))
+            if (!taskLinks.length) return '<span style="color:#cbd5e1;">—</span>'
+            const badgeClass = { 0: 'pred-badge-fs', 1: 'pred-badge-ss', 2: 'pred-badge-ff', 3: 'pred-badge-sf' }
+            return taskLinks.map(link => {
               const label = getLinkTypeLabel(link.type)
               const cls = badgeClass[parseInt(link.type, 10)] || 'pred-badge-fs'
               const lag = link.lag
                 ? `<span style="color:#64748b;font-size:9px;margin-left:1px;font-weight:500;">${link.lag > 0 ? '+' : ''}${link.lag}d</span>`
                 : ''
-              return `<span style="font-weight:600;color:#334155;font-size:11px;">${wbs}</span><span class="pred-badge ${cls}">${label}</span>${lag}`
-            }).filter(Boolean).join('<br/>') || '<span style="color:#cbd5e1;">—</span>'
+              return `<span class="pred-badge ${cls}" data-link-id="${link.id}" style="cursor:pointer;" title="Click to change link type">${label}</span>${lag}`
+            }).filter(Boolean).join(' ') || '<span style="color:#cbd5e1;">—</span>'
           } catch { return '<span style="color:#cbd5e1;">—</span>' }
         },
       },
@@ -1117,7 +1380,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     gantt.templates.timeline_cell_class = (item, date) =>
       (date.getDay() === 0 || date.getDay() === 6) ? 'weekend-cell' : ''
 
-    // ── Tooltip ────────────────────────────────────────────────────────────────
+    // Tooltip
     gantt.templates.tooltip_text = (start, end, task) => {
       const links = gantt.getLinks() || []
       const taskLinks = links.filter(l => String(l.target) === String(task.id))
@@ -1143,7 +1406,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
 
     gantt.init(containerRef.current)
     gantt.clearAll()
-    
+
     const dummyTasks = {
       data: [
         { id: '1', text: 'Project Kickoff', start_date: '2026-07-01', duration: 3, progress: 1, open: true, type: 'project' },
@@ -1161,10 +1424,11 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         { id: '5', source: '5', target: '6', type: '0' }
       ]
     };
-    
+
     gantt.parse(dummyTasks)
 
-    // ── Initial roll-up: recalculate parent dates/duration from children on load ─
+    topologicalSchedule()
+
     gantt.eachTask(task => {
       const children = gantt.getChildren(task.id)
       if (children && children.length > 0) {
@@ -1193,7 +1457,6 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
 
     const events = []
 
-    // ── Block lightbox ─────────────────────────────────────────────────────────
     events.push(gantt.attachEvent('onLightbox', () => {
       document.body.style.overflow = 'hidden'
       document.documentElement.style.overflow = 'hidden'
@@ -1205,22 +1468,28 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     }))
     events.push(gantt.attachEvent('onTaskDblClick', () => false))
 
-    // ── Guard resource edits on non-sub-tasks + validate FF completion order ──
+    events.push(gantt.attachEvent('onBeforeLinkAdd', (id, link) => {
+      if (String(link.source) === String(link.target)) {
+        setAlertMessage('A task cannot link to itself.')
+        return false
+      }
+      if (hasCircularDependency(link.source, link.target)) {
+        setAlertMessage('Cannot create this link: it would create a circular dependency.')
+        return false
+      }
+      return true
+    }))
+
     events.push(gantt.attachEvent('onBeforeTaskChanged', (id, mode, originalTask) => {
       try {
         const task = gantt.getTask(id)
 
-        // Resource guard: parent/milestone rows never carry a resource
         if (!isSubTask(task, projectId)) {
           if (task.assignees !== originalTask.assignees) {
             task.assignees = originalTask.assignees
           }
         }
 
-        // FF completion guard: a task on the target end of a Finish-to-Finish
-        // link cannot be marked 100% complete until its FF predecessor is
-        // also complete. This is a business rule dhtmlx doesn't enforce on
-        // its own — it only fixes the *dates*, not the *completion order*.
         if (mode === 'update' && (task.progress || 0) >= 1 && (originalTask.progress || 0) < 1) {
           const ffLinks = gantt.getLinks().filter(
             l => String(l.target) === String(id) && parseInt(l.type, 10) === LINK_FF
@@ -1229,7 +1498,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             if (gantt.isTaskExists(link.source)) {
               const pred = gantt.getTask(link.source)
               if ((pred.progress || 0) < 1) {
-                alert(`Cannot mark "${task.text}" complete: its Finish-to-Finish predecessor "${pred.text}" is not finished yet.`)
+                setAlertMessage(`Cannot mark "${task.text}" complete: its Finish-to-Finish predecessor "${pred.text}" is not finished yet.`)
                 task.progress = originalTask.progress || 0
                 break
               }
@@ -1240,17 +1509,12 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       return true
     }))
 
-    // ── Intercept inline editor: block resource editing for non-sub-tasks
-    //    and block manual duration editing on parent/project rows (their
-    //    duration is a roll-up of children, not a directly editable field) ──
     events.push(gantt.attachEvent('onBeforeEditorOpen', (taskId, columnName) => {
       try {
         const task = gantt.getTask(taskId)
         if (columnName === 'assignees' && !isSubTask(task, projectId)) {
-          // Silently block the editor from opening
           return false
         }
-        // Block duration/start/end editing on any task that has children (auto roll-up)
         const hasChildren = (gantt.getChildren(taskId) || []).length > 0
         if ((task.type === 'project' || hasChildren) && (columnName === 'duration' || columnName === 'start_date' || columnName === 'end_date')) {
           return false
@@ -1259,17 +1523,13 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       return true
     }))
 
-    // ── After task update: auto-schedule downstream + roll up parent + sync API ─
     events.push(gantt.attachEvent('onAfterTaskUpdate', (id, task) => {
-      // Prevent re-entrant loops triggered by propagateScheduling/rollUp calling updateTask
       if (schedulingRef.current) return
       schedulingRef.current = true
 
       try {
         gantt.refreshData()
-        // Propagate scheduling changes to linked tasks
         propagateScheduling(id)
-        // Roll up dates to parent (and ancestors)
         rollUpParentDates(id)
       } finally {
         schedulingRef.current = false
@@ -1278,7 +1538,6 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       syncTaskWithAPI(task)
     }))
 
-    // ── After drag (move/resize bar): same propagation ─────────────────────────
     events.push(gantt.attachEvent('onAfterTaskDrag', (id, mode) => {
       if (schedulingRef.current) return
       if (mode === 'move' || mode === 'resize') {
@@ -1294,7 +1553,6 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       }
     }))
 
-    // ── After task add: roll up parent dates so parent duration auto-calculates ─
     events.push(gantt.attachEvent('onAfterTaskAdd', (id, task) => {
       if (schedulingRef.current) return
       schedulingRef.current = true
@@ -1307,13 +1565,11 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       syncTaskWithAPI(task)
     }))
 
-    // ── After task delete: re-roll-up parent so duration updates ───────────────
     events.push(gantt.attachEvent('onAfterTaskDelete', (id, task) => {
       if (schedulingRef.current) return
       if (task.parent && gantt.isTaskExists(task.parent)) {
         schedulingRef.current = true
         try {
-          // Re-roll-up from any remaining sibling
           const siblings = gantt.getChildren(task.parent)
           if (siblings && siblings.length > 0) {
             rollUpParentDates(siblings[0])
@@ -1325,15 +1581,13 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       }
     }))
 
-    // ── After link add: immediately apply scheduling ───────────────────────────
     events.push(gantt.attachEvent('onAfterLinkAdd', (id, link) => {
       if (schedulingRef.current) return
       schedulingRef.current = true
       try {
-        const srcTask = gantt.isTaskExists(link.source) ? gantt.getTask(link.source) : null
-        const targetTask = gantt.isTaskExists(link.target) ? gantt.getTask(link.target) : null
-        if (srcTask && targetTask) {
-          const newDates = computeAutoScheduledDates(link, srcTask, targetTask)
+        if (gantt.isTaskExists(link.target)) {
+          const targetTask = gantt.getTask(link.target)
+          const newDates = computeConstrainedDates(link.target)
           if (newDates) {
             targetTask.start_date = newDates.start_date
             targetTask.end_date = newDates.end_date
@@ -1343,23 +1597,22 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             })
             gantt.updateTask(link.target)
             propagateScheduling(link.target)
-            gantt.refreshData()
+            rollUpParentDates(link.target)
           }
         }
+        gantt.refreshData()
       } finally {
         schedulingRef.current = false
       }
     }))
 
-    // ── After link update (type change e.g. FS→SS): re-apply scheduling ────────
     events.push(gantt.attachEvent('onAfterLinkUpdate', (id, link) => {
       if (schedulingRef.current) return
       schedulingRef.current = true
       try {
-        const srcTask = gantt.isTaskExists(link.source) ? gantt.getTask(link.source) : null
-        const targetTask = gantt.isTaskExists(link.target) ? gantt.getTask(link.target) : null
-        if (srcTask && targetTask) {
-          const newDates = computeAutoScheduledDates(link, srcTask, targetTask)
+        if (gantt.isTaskExists(link.target)) {
+          const targetTask = gantt.getTask(link.target)
+          const newDates = computeConstrainedDates(link.target)
           if (newDates) {
             targetTask.start_date = newDates.start_date
             targetTask.end_date = newDates.end_date
@@ -1369,12 +1622,53 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             })
             gantt.updateTask(link.target)
             propagateScheduling(link.target)
-            gantt.refreshData()
+            rollUpParentDates(link.target)
           }
         }
+        gantt.refreshData()
       } finally {
         schedulingRef.current = false
       }
+    }))
+
+    events.push(gantt.attachEvent('onTaskClick', (id, e) => {
+      const target = e.target || e.srcElement
+      if (target && target.classList && target.classList.contains('pred-badge')) {
+        const linkId = target.getAttribute('data-link-id')
+        if (linkId) {
+          try {
+            const link = gantt.getLink(linkId)
+            if (link) {
+              setLinkMenu({
+                x: e.clientX,
+                y: e.clientY,
+                linkId: linkId,
+                currentType: parseInt(link.type, 10),
+                sourceId: link.source,
+                targetId: link.target,
+              })
+            }
+          } catch { /* ignore */ }
+          return false
+        }
+      }
+      return true
+    }))
+
+    events.push(gantt.attachEvent('onLinkClick', (id, e) => {
+      try {
+        const link = gantt.getLink(id)
+        if (!link) return false
+        setLinkMenu({
+          x: e.clientX,
+          y: e.clientY,
+          linkId: id,
+          currentType: parseInt(link.type, 10),
+          sourceId: link.source,
+          targetId: link.target,
+        })
+      } catch { /* ignore */ }
+      return false
     }))
 
     events.push(gantt.attachEvent('onTaskSelect', (id) => {
@@ -1394,8 +1688,8 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     }
   }, [tasks, zoomLevel, criticalPath, showGantt])
 
-  // ── Add task handler ──────────────────────────────────────────────────────────
-  const handleAddTask = async (type, isSubTaskFlag = false) => {
+  // Add task handler
+  const handleOpenAddTaskModal = (type, isSubTaskFlag = false) => {
     setAddOpen(false)
     const activeId = gantt.getSelectedId()
     let parentId
@@ -1404,39 +1698,55 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       if (isSubTaskFlag) { parentId = activeId; gantt.open(activeId) }
       else parentId = gantt.getParent(activeId) || undefined
     } else if (isSubTaskFlag) {
-      alert('Please select a task first to add a sub-task.')
+      setAlertMessage('Please select a task first to add a sub-task.')
       return
     }
 
+    setTaskModalData({
+      type,
+      isSubTaskFlag,
+      parentId,
+      text: '',
+      start_date: formatToAPIDateOnly(new Date()),
+      duration: type === 'milestone' ? 0 : 5,
+      assignees: '',
+    })
+    setTaskModalOpen(true)
+  }
+
+  const handleSubmitTaskModal = (e) => {
+    e.preventDefault()
+    
+    const { type, isSubTaskFlag, parentId, text, start_date, duration, assignees } = taskModalData
+    
     const newTask = {
       id: `task_${Date.now()}`,
       api_id: null,
-      text: type === 'project' ? 'New Category' : type === 'milestone' ? 'Milestone' : 'New Task',
-      start_date: new Date(),
-      duration: type === 'milestone' ? 0 : 5,
+      text: text || (type === 'project' ? 'New Category' : type === 'milestone' ? 'Milestone' : 'New Task'),
+      start_date: new Date(start_date || new Date()),
+      duration: type === 'milestone' ? 0 : Number(duration),
       progress: 0,
       parent: parentId,
       type,
       barClass: type === 'project' ? 'gantt-bar-dark-blue' : type === 'milestone' ? 'gantt-bar-green' : 'gantt-bar-blue',
       borderClass: type === 'project' ? 'border-left-none' : 'border-left-blue',
-      // Sub-tasks get an empty resource; parent tasks never have one
-      assignees: isSubTaskFlag ? '' : null,
+      assignees: isSubTaskFlag ? assignees : null,
     }
 
     gantt.addTask(newTask)
     gantt.selectTask(newTask.id)
-
-    try { gantt.ext.inlineEditors.startEdit(newTask.id, 'text') } catch { /* fallback */ }
+    setTaskModalOpen(false)
+    setTaskModalData(null)
   }
 
   const handleDeleteClick = () => {
     const selectedId = gantt.getSelectedId() || selectedTaskId
     if (!selectedId) {
-      alert('Please select a task or sub-task to delete.')
+      setAlertMessage('Please select a task or sub-task to delete.')
       return
     }
     if (selectedId === `project_${projectId}`) {
-      alert('The project root task cannot be deleted.')
+      setAlertMessage('The project root task cannot be deleted.')
       return
     }
     try {
@@ -1447,7 +1757,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         setDeleteConfirmOpen(true)
       }
     } catch (err) {
-      alert('Error finding the selected task.')
+      setAlertMessage('Error finding the selected task.')
     }
   }
 
@@ -1465,8 +1775,40 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   const handleScrollToday = () => gantt.showDate(new Date())
   const handleScrollLeft = () => { const s = gantt.getScrollState(); gantt.scrollTo(s.x - 250, null) }
   const handleScrollRight = () => { const s = gantt.getScrollState(); gantt.scrollTo(s.x + 250, null) }
-  const handleExport = (fmt) => { setMoreOpen(false); alert(`Exporting Gantt Chart to ${fmt.toUpperCase()}...`) }
+  const handleExport = (fmt) => { setMoreOpen(false); setAlertMessage(`Exporting Gantt Chart to ${fmt.toUpperCase()}...`) }
   const handleClearAll = () => { setMoreOpen(false); if (confirm('Clear all tasks?')) gantt.clearAll() }
+
+  // Indent / Outdent handlers
+  const handleIndent = () => {
+    const selectedId = gantt.getSelectedId()
+    if (!selectedId) { setAlertMessage('Select a task first.'); return }
+    const prevSibling = gantt.getPrevSibling(selectedId)
+    if (!prevSibling) { setAlertMessage('Cannot indent: no sibling above.'); return }
+    gantt.moveTask(selectedId, gantt.getChildren(prevSibling).length, prevSibling)
+    gantt.open(prevSibling)
+    schedulingRef.current = true
+    try {
+      rollUpParentDates(selectedId)
+      gantt.refreshData()
+    } finally { schedulingRef.current = false }
+  }
+
+  const handleOutdent = () => {
+    const selectedId = gantt.getSelectedId()
+    if (!selectedId) { setAlertMessage('Select a task first.'); return }
+    const parentId = gantt.getParent(selectedId)
+    if (!parentId || !gantt.isTaskExists(parentId)) { setAlertMessage('Cannot outdent: no parent.'); return }
+    const grandParentId = gantt.getParent(parentId)
+    const parentIndex = gantt.getTaskIndex(parentId)
+    gantt.moveTask(selectedId, parentIndex + 1, grandParentId || 0)
+    schedulingRef.current = true
+    try {
+      rollUpParentDates(selectedId)
+      const siblings = gantt.getChildren(parentId)
+      if (siblings && siblings.length > 0) rollUpParentDates(siblings[0])
+      gantt.refreshData()
+    } finally { schedulingRef.current = false }
+  }
 
   const stopProp = (e) => e.stopPropagation()
 
@@ -1486,7 +1828,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       resize: 'vertical', minHeight: 400, maxHeight: 1200,
     }}>
 
-      {/* ══ ROW 1 — Title + Zoom ══ */}
+      {/* ROW 1 — Title + Zoom */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         flexWrap: 'wrap', gap: 12, padding: '14px 24px',
@@ -1550,7 +1892,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         </div>
       </div>
 
-      {/* ══ ROW 2 — Actions + Nav + Toggles ══ */}
+      {/* ROW 2 — Actions + Nav + Toggles */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         flexWrap: 'wrap', gap: 12, padding: '10px 24px',
@@ -1578,10 +1920,10 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             {addOpen && (
               <div style={dropdownMenu}>
                 {[
-                  ['Add Task', () => handleAddTask('task')],
-                  ['Add Sub-task', () => handleAddTask('task', true)],
-                  ['Add Work Stream', () => handleAddTask('project')],
-                  ['Add Milestone', () => handleAddTask('milestone')],
+                  ['Add Task', () => handleOpenAddTaskModal('task')],
+                  ['Add Sub-task', () => handleOpenAddTaskModal('task', true)],
+                  ['Add Work Stream', () => handleOpenAddTaskModal('project')],
+                  ['Add Milestone', () => handleOpenAddTaskModal('milestone')],
                 ].map(([label, fn]) => (
                   <button key={label} onClick={fn} style={dropdownItem}
                     onMouseEnter={e => e.currentTarget.style.background = '#eff6ff'}
@@ -1608,6 +1950,22 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
           >
             <Trash2 size={14} strokeWidth={2.5} />
             Delete
+          </button>
+
+          {/* Indent / Outdent */}
+          <button onClick={handleOutdent} title="Outdent (move task up in hierarchy)"
+            style={btnBase}
+            onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+            onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="7 8 3 12 7 16"/><line x1="21" y1="12" x2="3" y2="12"/></svg>
+          </button>
+          <button onClick={handleIndent} title="Indent (make child of task above)"
+            style={btnBase}
+            onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+            onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 8 21 12 17 16"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
           </button>
 
           {/* Baseline */}
@@ -1720,7 +2078,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
 
           {/* Settings + Print */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 16, borderLeft: '1px solid #e2e8f0', height: 34 }}>
-            <button onClick={() => alert('Opening settings...')} title="Settings" style={iconBtnBase}
+            <button onClick={() => setAlertMessage('Opening settings...')} title="Settings" style={iconBtnBase}
               onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#1e293b' }}
               onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#64748b' }}
             ><Settings size={15} /></button>
@@ -1732,12 +2090,12 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         </div>
       </div>
 
-      {/* ══ Gantt area ══ */}
+      {/* Gantt area */}
       <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
         <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
       </div>
 
-      {/* ══ Footer ══ */}
+      {/* Footer */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '12px 24px', background: '#ffffff',
@@ -1790,6 +2148,162 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             : 'No schedule data available for this project.'}
         </div>
       </div>
+
+      {taskModalOpen && taskModalData && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(15, 23, 42, 0.5)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999,
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 16,
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
+            width: '100%',
+            maxWidth: 400,
+            padding: 24,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a', textTransform: 'capitalize' }}>
+                Add {taskModalData.type === 'project' ? 'Work Stream' : taskModalData.type === 'task' && taskModalData.isSubTaskFlag ? 'Sub-task' : taskModalData.type}
+              </h3>
+            </div>
+            
+            <form onSubmit={handleSubmitTaskModal} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Name</label>
+                <input
+                  type="text"
+                  required
+                  value={taskModalData.text}
+                  onChange={e => setTaskModalData({ ...taskModalData, text: e.target.value })}
+                  style={{ height: 38, borderRadius: 8, border: '1px solid #cbd5e1', padding: '0 12px', fontSize: 14, outline: 'none' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Start Date</label>
+                <input
+                  type="date"
+                  required
+                  value={taskModalData.start_date}
+                  onChange={e => setTaskModalData({ ...taskModalData, start_date: e.target.value })}
+                  style={{ height: 38, borderRadius: 8, border: '1px solid #cbd5e1', padding: '0 12px', fontSize: 14, outline: 'none' }}
+                />
+              </div>
+
+              {taskModalData.type !== 'milestone' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Duration (Days)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={taskModalData.duration}
+                    onChange={e => setTaskModalData({ ...taskModalData, duration: e.target.value })}
+                    style={{ height: 38, borderRadius: 8, border: '1px solid #cbd5e1', padding: '0 12px', fontSize: 14, outline: 'none' }}
+                  />
+                </div>
+              )}
+
+              {taskModalData.isSubTaskFlag && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Assignee</label>
+                  <input
+                    type="text"
+                    value={taskModalData.assignees}
+                    onChange={e => setTaskModalData({ ...taskModalData, assignees: e.target.value })}
+                    style={{ height: 38, borderRadius: 8, border: '1px solid #cbd5e1', padding: '0 12px', fontSize: 14, outline: 'none' }}
+                  />
+                </div>
+              )}
+              
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => setTaskModalOpen(false)}
+                  style={{
+                    height: 36, borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff',
+                    color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '0 16px',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    height: 36, borderRadius: 8, border: 'none', background: '#2563eb',
+                    color: '#ffffff', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '0 16px',
+                  }}
+                >
+                  Add
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {alertMessage && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(15, 23, 42, 0.5)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999,
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 16,
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
+            width: '100%',
+            maxWidth: 400,
+            padding: 24,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+              Notice
+            </h3>
+            <p style={{ margin: 0, fontSize: 14, color: '#475569', lineHeight: '1.5' }}>
+              {alertMessage}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+              <button
+                onClick={() => setAlertMessage('')}
+                style={{
+                  height: 36, borderRadius: 8, border: 'none', background: '#2563eb',
+                  color: '#ffffff', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '0 16px',
+                }}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteConfirmOpen && (
         <div style={{
@@ -1910,6 +2424,78 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Link context menu */}
+      {linkMenu && (
+        <div onMouseDown={stopProp} style={{
+          position: 'fixed', top: linkMenu.y, left: linkMenu.x,
+          background: '#ffffff', border: '1px solid #e2e8f0',
+          borderRadius: 10, boxShadow: '0 12px 32px rgba(0,0,0,0.15), 0 4px 12px rgba(0,0,0,0.08)',
+          zIndex: 99999, padding: 5, minWidth: 220,
+          animation: 'linkMenuIn 0.15s ease-out',
+          fontFamily: "'Inter', sans-serif",
+        }}>
+          <div style={{ padding: '6px 10px 5px', fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.8px', borderBottom: '1px solid #f1f5f9', marginBottom: 3 }}>
+            Change Link Type
+          </div>
+          {[
+            { value: LINK_FS, label: 'FS', desc: 'Finish → Start', bg: '#dbeafe', color: '#1d4ed8', activeBg: '#2563eb' },
+            { value: LINK_SS, label: 'SS', desc: 'Start → Start', bg: '#dcfce7', color: '#15803d', activeBg: '#16a34a' },
+            { value: LINK_FF, label: 'FF', desc: 'Finish → Finish', bg: '#fef3c7', color: '#b45309', activeBg: '#d97706' },
+            { value: LINK_SF, label: 'SF', desc: 'Start → Finish', bg: '#f3e8ff', color: '#7c3aed', activeBg: '#8b5cf6' },
+          ].map(lt => {
+            const isActive = linkMenu.currentType === lt.value
+            return (
+              <button key={lt.value} onClick={() => {
+                try {
+                  const link = gantt.getLink(linkMenu.linkId)
+                  if (link) {
+                    link.type = String(lt.value)
+                    gantt.updateLink(linkMenu.linkId)
+                  }
+                } catch { /* ignore */ }
+                setLinkMenu(null)
+              }} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                width: '100%', padding: '8px 10px', border: 'none',
+                borderRadius: 6, cursor: 'pointer', fontSize: 12,
+                background: isActive ? lt.bg : 'transparent',
+                fontFamily: 'inherit', textAlign: 'left', outline: 'none',
+              }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#f8fafc' }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+              >
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  minWidth: 30, height: 20, borderRadius: 4, fontWeight: 700,
+                  fontSize: 10, letterSpacing: '0.4px',
+                  background: isActive ? lt.activeBg : '#f1f5f9',
+                  color: isActive ? '#fff' : lt.color,
+                }}>{lt.label}</span>
+                <span style={{ color: isActive ? '#0f172a' : '#64748b', fontWeight: isActive ? 600 : 500, flex: 1 }}>{lt.desc}</span>
+                {isActive && <Check size={14} color={lt.color} />}
+              </button>
+            )
+          })}
+          <div style={{ borderTop: '1px solid #f1f5f9', margin: '3px 0' }} />
+          <button onClick={() => {
+            try { gantt.deleteLink(linkMenu.linkId) } catch { /* ignore */ }
+            setLinkMenu(null)
+          }} style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            width: '100%', padding: '8px 10px', border: 'none',
+            borderRadius: 6, cursor: 'pointer', fontSize: 12,
+            background: 'transparent', color: '#ef4444',
+            fontWeight: 600, fontFamily: 'inherit', textAlign: 'left', outline: 'none',
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
+          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            <Trash2 size={13} />
+            Delete Link
+          </button>
         </div>
       )}
 
