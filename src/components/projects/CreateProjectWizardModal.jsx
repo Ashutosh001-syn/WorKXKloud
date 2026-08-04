@@ -669,12 +669,12 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
           .filter(user => user.role && user.role.toLowerCase().trim() === 'project manager')
           .map(getDisplayNameWithType)
           .filter(name => name.length > 0);
-        
+
         const tlNames = rawUsers
           .filter(user => user.role && (user.role.toLowerCase().trim() === 'tech lead' || user.role.toLowerCase().trim() === 'technical lead'))
           .map(getDisplayNameWithType)
           .filter(name => name.length > 0);
-          
+
         console.log("Filtered Managers:", pmNames);
         setProjectManagers(pmNames);
         setTechLeads(tlNames);
@@ -778,7 +778,7 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
           // Check Resource Master data first
           const res = resourceData.find(r => r.name === value && r.resource_type.toLowerCase() === "material");
           if (res) return { unit: res.unit_bag_kg, rate: String(res.rate_per_unit), total: String((parseFloat(r.quantity) || 0) * res.rate_per_unit) };
-          
+
           // Fallback to MATERIAL_OPTIONS
           const mat = MATERIAL_OPTIONS.find(m => m.name === value);
           if (mat) return { unit: mat.unit, rate: String(mat.rate), total: String((parseFloat(r.quantity) || 0) * mat.rate) };
@@ -889,10 +889,10 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
     if (isOpen && userData.length > 0) {
       const resolveUserName = (val) => {
         if (!val) return "";
-        const user = userData.find(u => 
-          String(u.id) === String(val) || 
-          String(u.user_id) === String(val) || 
-          u.name === val || 
+        const user = userData.find(u =>
+          String(u.id) === String(val) ||
+          String(u.user_id) === String(val) ||
+          u.name === val ||
           `${u.first_name || ''} ${u.last_name || ''}`.trim() === val
         );
         if (user) {
@@ -930,7 +930,7 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
         const month = String(startDate.getMonth() + 1).padStart(2, "0");
         const day = String(startDate.getDate()).padStart(2, "0");
         const startStr = `${year}-${month}-${day}`;
-        
+
         const url = `${API_ENDPOINTS.CHECK_HOLIDAYS}?start_date=${startStr}&duration=${duration}&exclude_weekends=${excludeWeekends ? 1 : 0}`;
         const res = await fetch(url);
         const data = await res.json();
@@ -950,7 +950,7 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
     }, 400);
 
     return () => clearTimeout(holidayCheckTimer.current);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, duration, excludeWeekends]);
 
   if (!isOpen) return null;
@@ -1089,10 +1089,10 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
     const pmId = getUserId(pm);
     if (pmId) formData.append("pm_id", pmId);
     formData.append("project_manager", getCleanName(pm) || null);
-    
+
     const tlId = getUserId(techLead);
     if (tlId) formData.append("technical_lead", tlId);
-    
+
     formData.append("technology", technology || null);
     formData.append("project_type", projectType || null);
     formData.append("priority", priority || null);
@@ -1140,7 +1140,7 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
               return uName === row.resourceName;
             });
             const userId = user ? (user.id || user.user_id || null) : null;
-            
+
             // Include row-level id and pm_id for API compatibility
             const rowId = row.id ?? userId;
             const rowPmId = row.pm_id ?? (row.role === "Project Manager" ? userId : pmId ?? null);

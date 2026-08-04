@@ -630,6 +630,16 @@ function isSubTask(task, projectId) {
   return true
 }
 
+// task.assignees is occasionally the literal string "undefined"/"null"
+// rather than a real empty value (e.g. a stringified value coming back from
+// an editor or API round-trip) — treat those the same as "no assignee"
+// everywhere the field is displayed, instead of printing them as text.
+function getAssigneeLabel(task) {
+  const value = task.assignees
+  if (!value || value === 'undefined' || value === 'null') return ''
+  return String(value)
+}
+
 function topologicalSchedule() {
   const allLinks = gantt.getLinks()
   if (!allLinks || allLinks.length === 0) return
@@ -712,8 +722,14 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   const [customWorkingDays, setCustomWorkingDays] = useState([1, 2, 3, 4, 5])
   const [includeHolidays, setIncludeHolidays] = useState(true)
   const [customDropdownOpen, setCustomDropdownOpen] = useState(false)
-  
-  const [gridWidth, setGridWidth] = useState(400)
+
+  const [gridWidth, setGridWidth] = useState(830)
+  // Live position of the resize handle while actively dragging — kept
+  // separate from gridWidth (the committed value gantt actually renders at)
+  // so the drag line can move smoothly without triggering a gantt relayout
+  // on every mousemove. Null when not dragging.
+  const [dragPreviewWidth, setDragPreviewWidth] = useState(null)
+  const dragPreviewWidthRef = useRef(null)
   const isResizing = useRef(false)
   const [holidaysData, setHolidaysData] = useState([])
   const [ganttError, setGanttError] = useState(null)
@@ -747,13 +763,13 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       gantt.setWorkTime({ day: 3, hours: true })
       gantt.setWorkTime({ day: 4, hours: true })
       gantt.setWorkTime({ day: 5, hours: true })
-      
+
       holidaysData.forEach(h => {
         if (h.holiday_date) {
           try {
             const d = new Date(h.holiday_date)
             gantt.setWorkTime({ date: d, hours: false })
-          } catch(e) {}
+          } catch (e) { }
         }
       })
     } else if (calendarType === 'custom') {
@@ -761,14 +777,14 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       for (let i = 0; i <= 6; i++) {
         gantt.setWorkTime({ day: i, hours: customWorkingDays.includes(i) })
       }
-      
+
       if (includeHolidays) {
         holidaysData.forEach(h => {
           if (h.holiday_date) {
             try {
               const d = new Date(h.holiday_date)
               gantt.setWorkTime({ date: d, hours: false })
-            } catch(e) {}
+            } catch (e) { }
           }
         })
       }
@@ -777,7 +793,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     try {
       topologicalSchedule()
       gantt.render()
-    } catch (e) {}
+    } catch (e) { }
   }, [calendarType, holidaysData, customWorkingDays, includeHolidays])
 
   useEffect(() => {
@@ -791,20 +807,32 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       if (!isResizing.current || !containerRef.current) return
       const rect = containerRef.current.getBoundingClientRect()
       let newWidth = e.clientX - rect.left
-      
+
       const SNAP_THRESHOLD = 150;
       if (newWidth < SNAP_THRESHOLD) {
         newWidth = 0; // Collapse table
       } else if (newWidth > rect.width - SNAP_THRESHOLD) {
         newWidth = rect.width; // Collapse chart
       }
-      
-      setGridWidth(newWidth)
+
+      // Only move the resizer's own visual line live — committing the
+      // width to gantt (below) rebuilds its internal grid/chart panes via
+      // resetLayout(), which is expensive. Doing that on every mousemove
+      // during a fast drag races with dhtmlx's row rendering and can leave
+      // the grid showing no rows at all, so the real width is only applied
+      // once, on mouse release (see handleMouseUp).
+      dragPreviewWidthRef.current = newWidth
+      setDragPreviewWidth(newWidth)
     }
     const handleMouseUp = () => {
       if (isResizing.current) {
         isResizing.current = false
         document.body.style.cursor = 'default'
+        if (dragPreviewWidthRef.current !== null) {
+          setGridWidth(dragPreviewWidthRef.current)
+        }
+        dragPreviewWidthRef.current = null
+        setDragPreviewWidth(null)
       }
     }
     document.addEventListener('mousemove', handleMouseMove)
@@ -818,7 +846,16 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   useEffect(() => {
     if (window.gantt && containerRef.current) {
       gantt.config.grid_width = gridWidth
-      try { gantt.render() } catch(e){}
+      if (gantt.config.layout?.cols?.[0]) {
+        gantt.config.layout.cols[0].width = gridWidth
+        // Changing layout.cols[*].width alone doesn't take effect until the
+        // layout is rebuilt — plain render() only repaints the existing
+        // (stale) pane sizes. This effect only fires once per completed
+        // resize (gridWidth is the committed value, updated on mouse
+        // release), so resetLayout() here is safe.
+        try { gantt.resetLayout() } catch (e) { }
+      }
+      try { gantt.render() } catch (e) { }
     }
   }, [gridWidth])
 
@@ -900,11 +937,11 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     } catch {
       try {
         gantt.plugins({ critical_path: true, tooltip: true, inline_editors: true, marker: true, drag_timeline: true })
-      } catch(e) {
+      } catch (e) {
         console.warn('Gantt plugins error', e)
       }
     }
-    
+
     gantt.config.drag_timeline = {
       ignore: ".gantt_task_line, .gantt_task_link",
       useKey: false
@@ -920,7 +957,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     gantt.config.start_on_monday = false
     gantt.config.inline_editors_date_format = '%Y-%m-%d'
     gantt.config.details_on_dblclick = false
-    
+
     // We handle resizing via custom React overlay instead of native dhtmlx resizer
     gantt.config.grid_width = gridWidth
     gantt.config.grid_resize = false
@@ -1236,7 +1273,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     // Columns
     gantt.config.columns = [
       {
-        name: 'wbs_code', label: '#', width: 50, align: 'center', resize: true,
+        name: 'wbs_code', label: '#', width: 50, min_width: 50, align: 'center', resize: true,
         header: [{ text: '#', align: 'center' }],
         template: (task) => {
           try {
@@ -1249,7 +1286,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         },
       },
       {
-        name: 'text', label: 'Task Name', tree: true, width: 220, resize: true,
+        name: 'text', label: 'Task Name', tree: true, width: 220, min_width: 180, resize: true,
         editor: textEditor,
         header: [{ text: 'Task Name', align: 'center' }],
         template: (task) => {
@@ -1258,19 +1295,19 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         },
       },
       {
-        name: 'start_date', label: 'Planned Start', width: 95, align: 'center', resize: true,
+        name: 'start_date', label: 'Planned Start', width: 95, min_width: 90, align: 'center', resize: true,
         editor: dateEditor,
         header: [{ text: 'Planned Start', align: 'center' }],
         template: (task) => formatDateShort(task.start_date),
       },
       {
-        name: 'end_date', label: 'Planned End', width: 95, align: 'center', resize: true,
+        name: 'end_date', label: 'Planned End', width: 95, min_width: 90, align: 'center', resize: true,
         editor: endEditor,
         header: [{ text: 'Planned End', align: 'center' }],
         template: (task) => formatDateShort(getInclusiveEndDate(task.end_date)),
       },
       {
-        name: 'duration', label: 'Duration', width: 70, align: 'center', resize: true,
+        name: 'duration', label: 'Duration', width: 70, min_width: 60, align: 'center', resize: true,
         editor: durationEditor,
         header: [{ text: 'Duration', align: 'center' }],
         template: (task) => {
@@ -1291,7 +1328,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         },
       },
       {
-        name: 'assignees', label: 'Resource', width: 120, align: 'center', resize: true,
+        name: 'assignees', label: 'Resource', width: 120, min_width: 90, align: 'center', resize: true,
         editor: resourceEditor,
         header: [{ text: 'Resource', align: 'center' }],
         template: (task) => {
@@ -1299,8 +1336,9 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
           if (!sub) {
             return '<span class="resource-disabled-cell">—</span>'
           }
-          return task.assignees
-            ? `<span style="color:#1e293b;font-weight:500;">${task.assignees}</span>`
+          const assignee = getAssigneeLabel(task)
+          return assignee
+            ? `<span style="color:#1e293b;font-weight:500;">${assignee}</span>`
             : '<span style="color:#94a3b8;">—</span>'
         },
         onrender: (task, node) => {
@@ -1310,7 +1348,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         },
       },
       {
-        name: 'predecessors', label: 'Predecessor', width: 90, align: 'center', resize: true,
+        name: 'predecessors', label: 'Predecessor', width: 90, min_width: 80, align: 'center', resize: true,
         editor: predecessorEditor,
         header: [{ text: 'Predecessor', align: 'center' }],
         template: (task) => {
@@ -1328,7 +1366,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         },
       },
       {
-        name: 'dependency_type', label: 'Dependency', width: 90, align: 'center', resize: true,
+        name: 'dependency_type', label: 'Dependency', width: 90, min_width: 80, align: 'center', resize: true,
         header: [{ text: 'Dependency', align: 'center' }],
         template: (task) => {
           try {
@@ -1400,10 +1438,12 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     gantt.templates.grid_cell_class = (col, task) =>
       col.name === 'wbs_code' ? (task.borderClass || 'border-left-none') : ''
 
-    gantt.templates.rightside_text = (s, e, task) =>
-      task.assignees && isSubTask(task, projectId)
-        ? `<span class="gantt-assignees-label">${task.assignees}</span>`
+    gantt.templates.rightside_text = (s, e, task) => {
+      const assignee = getAssigneeLabel(task)
+      return assignee && isSubTask(task, projectId)
+        ? `<span class="gantt-assignees-label">${assignee}</span>`
         : ''
+    }
 
     gantt.templates.timeline_cell_class = (item, date) =>
       (date.getDay() === 0 || date.getDay() === 6) ? 'weekend-cell' : ''
@@ -1420,8 +1460,9 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         return `${wbs} (${label})`
       }).filter(Boolean).join(', ')
 
-      const resourceLine = isSubTask(task, projectId) && task.assignees
-        ? `<br/><b>Resource:</b> ${task.assignees}`
+      const taskAssignee = getAssigneeLabel(task)
+      const resourceLine = isSubTask(task, projectId) && taskAssignee
+        ? `<br/><b>Resource:</b> ${taskAssignee}`
         : ''
 
       return `<b>${task.text}</b>
@@ -1430,6 +1471,32 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
               <br/><b>Duration:</b> ${task.duration || 0} days
               ${resourceLine}
               ${predStr ? `<br/><b>Predecessors:</b> ${predStr}` : ''}`
+    }
+
+    // Explicit two-pane layout: grid and timeline each get their own
+    // horizontal scrollbar (independent of one another), while sharing one
+    // vertical scrollbar so their rows stay aligned. Without this, dhtmlx's
+    // default layout only gives the timeline its own horizontal scroll —
+    // the grid has none, so its columns can only ever shrink-to-fit, never
+    // scroll to reveal what doesn't fit.
+    gantt.config.layout = {
+      css: 'gantt_container',
+      cols: [
+        {
+          width: gridWidth,
+          rows: [
+            { view: 'grid', scrollX: 'gridHorScroll', scrollY: 'gridVerScroll' },
+            { view: 'scrollbar', id: 'gridHorScroll', height: 15 },
+          ],
+        },
+        {
+          rows: [
+            { view: 'timeline', scrollX: 'timelineHorScroll', scrollY: 'gridVerScroll' },
+            { view: 'scrollbar', id: 'timelineHorScroll', height: 15 },
+          ],
+        },
+        { view: 'scrollbar', id: 'gridVerScroll', width: 15 },
+      ],
     }
 
     try {
@@ -1749,9 +1816,9 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
 
   const handleSubmitTaskModal = (e) => {
     e.preventDefault()
-    
+
     const { type, isSubTaskFlag, parentId, text, start_date, duration, assignees } = taskModalData
-    
+
     const newTask = {
       id: `task_${Date.now()}`,
       api_id: null,
@@ -1851,7 +1918,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column',
-      width: '100%', height: 700,
+      width: '100%', maxWidth: '100%', boxSizing: 'border-box', height: 700,
       background: '#ffffff',
       borderRadius: 20, border: '1px solid #e2e8f0',
       boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
@@ -1913,7 +1980,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
                 <option value="custom">Custom...</option>
               </select>
             </div>
-            
+
             {calendarType === 'custom' && (
               <div style={{ position: 'relative' }} onMouseDown={stopProp}>
                 <button
@@ -2051,14 +2118,14 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
             onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="7 8 3 12 7 16"/><line x1="21" y1="12" x2="3" y2="12"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="7 8 3 12 7 16" /><line x1="21" y1="12" x2="3" y2="12" /></svg>
           </button>
           <button onClick={handleIndent} title="Indent (make child of task above)"
             style={btnBase}
             onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
             onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 8 21 12 17 16"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 8 21 12 17 16" /><line x1="3" y1="12" x2="21" y2="12" /></svg>
           </button>
 
           {/* Baseline */}
@@ -2184,7 +2251,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       </div>
 
       {/* Gantt area */}
-      <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+      <div style={{ flex: 1, position: 'relative', minHeight: 0, minWidth: 0 }}>
         {ganttError ? (
           <div style={{ padding: 20, color: 'red', fontWeight: 'bold' }}>
             Failed to initialize Gantt: {ganttError}
@@ -2192,13 +2259,13 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         ) : (
           <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
         )}
-        
+
         {/* Custom React Resizer Overlay */}
-        <div 
+        <div
           onMouseDown={() => { isResizing.current = true; document.body.style.cursor = 'col-resize' }}
           style={{
             position: 'absolute',
-            left: `calc(max(0px, min(${gridWidth}px - 4px, 100% - 8px)))`,
+            left: `calc(max(0px, min(${dragPreviewWidth ?? gridWidth}px - 4px, 100% - 8px)))`,
             top: 0,
             bottom: 0,
             width: 8,
@@ -2211,7 +2278,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             transition: 'background-color 0.15s'
           }}
           onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(37,99,235,0.1)' }}
-          onMouseLeave={(e) => { if(!isResizing.current) e.currentTarget.style.backgroundColor = 'transparent' }}
+          onMouseLeave={(e) => { if (!isResizing.current) e.currentTarget.style.backgroundColor = 'transparent' }}
         >
           {/* Visual dots */}
           <div style={{
@@ -2308,7 +2375,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
                 Add {taskModalData.type === 'project' ? 'Work Stream' : taskModalData.type === 'task' && taskModalData.isSubTaskFlag ? 'Sub-task' : taskModalData.type}
               </h3>
             </div>
-            
+
             <form onSubmit={handleSubmitTaskModal} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Name</label>
@@ -2357,7 +2424,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
                   />
                 </div>
               )}
-              
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
                 <button
                   type="button"
@@ -2591,8 +2658,8 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
                 background: isActive ? lt.bg : 'transparent',
                 fontFamily: 'inherit', textAlign: 'left', outline: 'none',
               }}
-              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#f8fafc' }}
-              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#f8fafc' }}
+                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
               >
                 <span style={{
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -2617,8 +2684,8 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             background: 'transparent', color: '#ef4444',
             fontWeight: 600, fontFamily: 'inherit', textAlign: 'left', outline: 'none',
           }}
-          onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
-          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
             <Trash2 size={13} />
             Delete Link

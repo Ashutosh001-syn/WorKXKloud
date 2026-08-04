@@ -4,8 +4,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "../../utils/auth";
 import logo from '../../assets/Logo.png';
+import NotificationPanel from "../notifications/NotificationPanel";
+import { useNotifications } from "../../hooks/useNotification";
 
-const profileImage = "";
 const MotionDiv = motion.div;
 
 function HeaderIconButton({ children, label, onClick }) {
@@ -23,12 +24,28 @@ function HeaderIconButton({ children, label, onClick }) {
 
 function AppHeader() {
   const [open, setOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const notifRef = useRef(null);
   const navigate = useNavigate();
   const [userData, setUserData] = useState(() => {
     const saved = localStorage.getItem('user_profile');
     return saved ? JSON.parse(saved) : null;
   });
+  const {
+    notifications,
+    loading: notifLoading,
+    unreadCount,
+    totalCount,
+    page,
+    totalPages,
+    rangeStart,
+    rangeEnd,
+    goToPage,
+    markOneAsRead,
+    markAllAsRead,
+    clearAll,
+  } = useNotifications();
 
   useEffect(() => {
     const handleStorageChange = () => {
@@ -40,11 +57,14 @@ function AppHeader() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // Close dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     function handleClickOutside(e) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setOpen(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setNotifOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -59,10 +79,10 @@ function AppHeader() {
   return (
     <header className="sticky top-0 z-20 bg-[#0d2646] md:bg-[#0d2646]">
       <div className="px-5 py-3 md:py-2.5 text-white">
-        
+
         {/* Top Row: Navigation & Actions */}
         <div className="flex items-center justify-between relative">
-          
+
           {/* Mobile Hamburger */}
           <div className="md:hidden flex items-center z-10">
             <button
@@ -88,82 +108,114 @@ function AppHeader() {
           </div>
 
           {/* Right: Actions */}
-          <div className="flex items-center gap-1.5 relative z-10" ref={dropdownRef}>
-            <HeaderIconButton label="Notifications">
-              <Bell size={18} strokeWidth={2} />
-            </HeaderIconButton>
+          <div className="flex items-center gap-1.5 relative z-10">
+            <div className="relative" ref={notifRef}>
+              <HeaderIconButton
+                label="Notifications"
+                onClick={() => setNotifOpen((prev) => !prev)}
+              >
+                <span className="relative inline-flex">
+                  <Bell size={18} strokeWidth={2} />
+                  {unreadCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-rose-500 px-[3px] text-[9px] font-bold leading-none text-white ring-2 ring-[#0d2646]">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </span>
+              </HeaderIconButton>
 
-            <HeaderIconButton
-              label="Profile"
-              onClick={() => setOpen((prev) => !prev)}
-            >
-              {userData?.image ? (
-                <img src={userData.image} alt="Profile" className="h-[28px] w-[28px] rounded-full object-cover ring-2 ring-white/10" />
-              ) : (
-                <UserCircle2 size={20} strokeWidth={2} />
-              )}
-            </HeaderIconButton>
+              <AnimatePresence>
+                {notifOpen && (
+                  <NotificationPanel
+                    notifications={notifications}
+                    loading={notifLoading}
+                    totalCount={totalCount}
+                    page={page}
+                    totalPages={totalPages}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    goToPage={goToPage}
+                    markOneAsRead={markOneAsRead}
+                    markAllAsRead={markAllAsRead}
+                    clearAll={clearAll}
+                  />
+                )}
+              </AnimatePresence>
+            </div>
 
-            <AnimatePresence>
-              {open && (
-                <MotionDiv
-                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                  transition={{ duration: 0.2, ease: "easeOut" }}
-                  className="absolute right-0 top-12 w-64 rounded-2xl border border-slate-100 bg-white shadow-2xl overflow-hidden origin-top-right z-50"
-                >
-                  {/* USER INFO */}
-                  <div className="flex flex-col items-center justify-center px-6 py-6 bg-slate-50/50 border-b border-slate-100">
-                    {userData?.image ? (
-                      <img
-                        src={userData.image}
-                        alt="profile"
-                        className="h-16 w-16 rounded-full object-cover border-2 border-white shadow-md"
-                      />
-                    ) : (
-                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 text-blue-600 shadow-sm border-2 border-white">
-                        <UserCircle2 size={32} />
-                      </div>
-                    )}
-                    <p className="mt-3 text-[15px] font-bold text-slate-800 tracking-tight">
-                      {userData ? `${userData.firstName} ${userData.lastName}` : 'Admin'}
-                    </p>
-                    <p className="text-[13px] text-slate-500 font-medium mt-0.5">
-                      {userData?.email || 'admin@email.com'}
-                    </p>
-                    {userData?.role && (
-                      <span className="mt-2 inline-flex items-center rounded-full bg-blue-50 px-3 py-0.5 text-[11px] font-bold text-blue-600 tracking-wide uppercase">
-                        {userData.role}
-                      </span>
-                    )}
-                  </div>
+            <div className="relative" ref={dropdownRef}>
+              <HeaderIconButton
+                label="Profile"
+                onClick={() => setOpen((prev) => !prev)}
+              >
+                {userData?.image ? (
+                  <img src={userData.image} alt="Profile" className="h-[28px] w-[28px] rounded-full object-cover ring-2 ring-white/10" />
+                ) : (
+                  <UserCircle2 size={20} strokeWidth={2} />
+                )}
+              </HeaderIconButton>
 
-                  {/* PROFILE */}
-                  <div className="p-2">
-                    <button
-                      onClick={() => {
-                        navigate('/profile');
-                        setOpen(false);
-                      }}
-                      className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-[14px] font-semibold text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors"
-                    >
-                      <User size={16} strokeWidth={2.5} />
-                      My Profile
-                    </button>
+              <AnimatePresence>
+                {open && (
+                  <MotionDiv
+                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="absolute right-0 top-12 w-64 rounded-2xl border border-slate-100 bg-white shadow-2xl overflow-hidden origin-top-right z-50"
+                  >
+                    {/* USER INFO */}
+                    <div className="flex flex-col items-center justify-center px-6 py-6 bg-slate-50/50 border-b border-slate-100">
+                      {userData?.image ? (
+                        <img
+                          src={userData.image}
+                          alt="profile"
+                          className="h-16 w-16 rounded-full object-cover border-2 border-white shadow-md"
+                        />
+                      ) : (
+                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 text-blue-600 shadow-sm border-2 border-white">
+                          <UserCircle2 size={32} />
+                        </div>
+                      )}
+                      <p className="mt-3 text-[15px] font-bold text-slate-800 tracking-tight">
+                        {userData ? `${userData.firstName} ${userData.lastName}` : 'Admin'}
+                      </p>
+                      <p className="text-[13px] text-slate-500 font-medium mt-0.5">
+                        {userData?.email || 'admin@email.com'}
+                      </p>
+                      {userData?.role && (
+                        <span className="mt-2 inline-flex items-center rounded-full bg-blue-50 px-3 py-0.5 text-[11px] font-bold text-blue-600 tracking-wide uppercase">
+                          {userData.role}
+                        </span>
+                      )}
+                    </div>
 
-                    {/* LOGOUT */}
-                    <button
-                      onClick={handleLogout}
-                      className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-[14px] font-semibold text-rose-600 hover:bg-rose-50 transition-colors mt-1"
-                    >
-                      <LogOut size={16} strokeWidth={2.5} />
-                      Logout
-                    </button>
-                  </div>
-                </MotionDiv>
-              )}
-            </AnimatePresence>
+                    {/* PROFILE */}
+                    <div className="p-2">
+                      <button
+                        onClick={() => {
+                          navigate('/profile');
+                          setOpen(false);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-[14px] font-semibold text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors"
+                      >
+                        <User size={16} strokeWidth={2.5} />
+                        My Profile
+                      </button>
+
+                      {/* LOGOUT */}
+                      <button
+                        onClick={handleLogout}
+                        className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-[14px] font-semibold text-rose-600 hover:bg-rose-50 transition-colors mt-1"
+                      >
+                        <LogOut size={16} strokeWidth={2.5} />
+                        Logout
+                      </button>
+                    </div>
+                  </MotionDiv>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
 

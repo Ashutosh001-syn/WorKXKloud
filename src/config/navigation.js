@@ -55,6 +55,18 @@ export const sidebarMenu = [
     highlights: ['3 active projects', 'PM role assigned'],
   },
   {
+    type: 'link',
+    key: 'workload',
+    icon: 'workload',
+    label: 'Workload',
+    to: '/workload',
+    eyebrow: 'Workload',
+    title: 'Workload',
+    description:
+      'View resource utilization against project plans — month over month or day by day.',
+    highlights: ['5 resources tracked', '9 active assignments', 'Monthly & Daily views'],
+  },
+  {
     type: 'group',
     key: 'resource',
     icon: 'resource',

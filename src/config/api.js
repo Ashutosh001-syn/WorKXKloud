@@ -1,7 +1,7 @@
-export const API_ROOT_URL = import.meta.env.VITE_API_ROOT_URL || 
-'http://103.185.75.124:8021/api'
-// 'http://localhost:8021/api'
-;
+export const API_ROOT_URL = import.meta.env.VITE_API_ROOT_URL ||
+  'http://103.185.75.124:8021/api'
+  // 'http://localhost:8021/api'
+  ;
 export const API_BASE_URL = `${API_ROOT_URL}/admin`;
 
 export const API_ENDPOINTS = {
@@ -19,7 +19,7 @@ export const API_ENDPOINTS = {
   GET_PROJECT_LIST: `${API_BASE_URL}/get_projectList`,
   UPDATE_PROJECT: `${API_BASE_URL}/update_project`,
   REALLOCATE_PROJECT: `${API_BASE_URL}/re-allocated`,
-    RESOURCE_LIST: `${API_BASE_URL}/resource_list`,
+  RESOURCE_LIST: `${API_BASE_URL}/resource_list`,
   CREATE_RESOURCE: `${API_BASE_URL}/create_resource`,
   UPDATE_RESOURCE: `${API_BASE_URL}/update_resource`,
   ASSIGN_PROJECT: `${API_ROOT_URL}/projectManager/assign_project`,
@@ -37,6 +37,15 @@ export const API_ENDPOINTS = {
   GET_PM_BACKLOG: `${API_ROOT_URL}/projectManager/get_pmBacklog`,
   GET_BOARDS_BY_RESOURCE: `${API_ROOT_URL}/users/get_BoardsByResource`,
   CREATE_BOARD: `${API_ROOT_URL}/users/create_board`,
+  UPDATE_BOARD_STATUS: `${API_ROOT_URL}/users/update_boardStatus`,
+  UPDATE_BOARD: `${API_ROOT_URL}/users/update_board`,
+  DELETE_BOARD: `${API_ROOT_URL}/users/delete_board`,
   GET_USER_DISCUSSION: `${API_ROOT_URL}/users/get_userDiscussion`,
   UPDATE_PROJECT_MILESTONE: `${API_ROOT_URL}/projectManager/update_project_milestone`,
+  // Notifications
+  GET_NOTIFICATIONS: `${API_ROOT_URL}/users/get_notifications`,
+  MARK_NOTIFICATION_READ: `${API_ROOT_URL}/users/mark_notification_read`,
+  MARK_ALL_NOTIFICATIONS_READ: `${API_ROOT_URL}/users/mark_all_notifications_read`,
+  CLEAR_ALL_NOTIFICATIONS: `${API_ROOT_URL}/users/clear_all_notifications`,
+  DELETE_NOTIFICATION: `${API_ROOT_URL}/users/delete_notification`,
 };

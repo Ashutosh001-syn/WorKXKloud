@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node test_layout2.mjs)",
+      "Bash(node test_layout3.mjs)",
+      "Bash(node test_dragfinal.mjs)",
+      "Bash(node test_gridscroll.mjs)",
+      "Bash(node test_diag.mjs)",
+      "Bash(nohup npm run dev)",
+      "Read(//tmp/**)",
+      "Bash(sleep 4 && cat /tmp/vite-overlap.log)"
+    ]
+  }
+}

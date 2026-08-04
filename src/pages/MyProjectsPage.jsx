@@ -221,15 +221,15 @@ const EmptyBoxIcon = () => (
 
 
 
-  // Calculate overall milestone progress
-  const getOverallProgress = (project) => {
-    if (!project.milestones || project.milestones.length === 0) return 0
-    const today = new Date()
-    const completed = project.milestones.filter(m => new Date(m.milestone_date) <= today)
-    if (completed.length === 0) return 0
-    return completed[completed.length - 1]?.percentage || 0
-  }
-  const getGanttDataForProject = (project) => {
+// Calculate overall milestone progress
+const getOverallProgress = (project) => {
+  if (!project.milestones || project.milestones.length === 0) return 0
+  const today = new Date()
+  const completed = project.milestones.filter(m => new Date(m.milestone_date) <= today)
+  if (completed.length === 0) return 0
+  return completed[completed.length - 1]?.percentage || 0
+}
+const getGanttDataForProject = (project) => {
   if (!project) {
     return { data: [], links: [] }
   }
@@ -802,7 +802,7 @@ function MyProjectsPage() {
                 </div>
 
               ) : activeTab === 'Board' ? (
-                <ProjectBoardSection />
+                <ProjectBoardSection projectId={selectedProject.id} pmId={getPmId()} />
               ) : activeTab === 'Schedule' ? (
                 <GanttChart
                   tasks={getGanttDataForProject(selectedProject)}

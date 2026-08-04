@@ -15,7 +15,11 @@ import ProfilePage from './pages/ProfilePage'
 import CalendarPage from './pages/CalendarPage'
 import NewAssignedProjectPage from './pages/NewAssignedProjectPage'
 import MyProjectsPage from './pages/MyProjectsPage'
+import WorkloadPage from './pages/Workload/WorkloadPage'
 import { hasPermission } from './utils/permissions'
+import GanttChart from './components/projects/GanttChart'
+import Sidebar from './components/layout/Sidebar'
+import AppHeader from './components/layout/AppHeader'
 
 function ProtectedLayout() {
   if (!isAuthenticated()) {
@@ -35,7 +39,7 @@ function RoleProtectedRoute({ element, allowedRoles }) {
       const profile = JSON.parse(userProfileStr)
       role = profile.role?.toLowerCase() || ''
     }
-  } catch (e) {}
+  } catch (e) { }
 
   if (!hasPermission(role, allowedRoles)) {
     return <Navigate to="/" replace />
@@ -54,7 +58,7 @@ function RoleBasedHome() {
       const profile = JSON.parse(userProfileStr)
       role = profile.role?.toLowerCase() || ''
     }
-  } catch (e) {}
+  } catch (e) { }
 
   if (role === 'pm' || role === 'project manager') {
     return <Navigate to="/new-assigned-project" replace />
@@ -129,6 +133,8 @@ function App() {
                         <ResourceAllocationPage />
                       ) : route.to === '/calendar' ? (
                         <CalendarPage />
+                      ) : route.to === '/workload' ? (
+                        <WorkloadPage />
                       ) : (
                         <WorkspacePage
                           eyebrow={route.eyebrow}
@@ -144,6 +150,29 @@ function App() {
             )
           })}
         </Route>
+
+        <Route
+          path="/__preview-gantt"
+          element={
+            <div className="h-screen overflow-hidden bg-[#f8fafc] text-slate-900">
+              <div className="flex h-full flex-col md:flex-row">
+                <Sidebar />
+                <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#f8fafc]">
+                  <AppHeader />
+                  <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
+                    <div className="min-h-screen bg-[#0d2646] p-4 sm:p-6 lg:p-8">
+                      <div className="mx-auto max-w-[1280px]">
+                        <div className="rounded-[28px] bg-white p-4 sm:p-6 md:p-8 shadow-[0_24px_60px_rgba(3,10,24,0.14)]">
+                          <GanttChart tasks={{ data: [], links: [] }} projectName="Preview" onClose={() => {}} pmId="preview" projectId="preview" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </main>
+              </div>
+            </div>
+          }
+        />
 
         <Route
           path="*"

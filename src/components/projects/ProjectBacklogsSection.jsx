@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Inbox, 
-  Search, 
-  Filter, 
-  MoreHorizontal, 
-  ArrowUp, 
-  Minus 
+import {
+  Inbox,
+  Search,
+  Filter,
+  MoreHorizontal,
+  ArrowUp,
+  Minus
 } from 'lucide-react';
 import { API_ENDPOINTS } from '../../config/api';
 
@@ -44,7 +44,7 @@ function ProjectBacklogsSection() {
           body: JSON.stringify({ pm_id: pmId })
         });
         const result = await response.json();
-        
+
         if (result.success && result.data) {
           setTasks(result.data);
         }
@@ -131,7 +131,7 @@ function ProjectBacklogsSection() {
       {/* Top Header & Filters */}
       <div className="mb-6 flex flex-col gap-4">
         <h2 className="text-xl font-bold text-slate-900">Team Member Tasks</h2>
-        
+
         <div className="flex flex-wrap items-center justify-between gap-4 text-sm">
           <div className="flex flex-wrap items-center gap-3">
             <select className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600 outline-none hover:border-slate-300 focus:border-blue-500">
@@ -140,12 +140,12 @@ function ProjectBacklogsSection() {
             <select className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600 outline-none hover:border-slate-300 focus:border-blue-500">
               <option>All Roles</option>
             </select>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input 
-                type="text" 
-                placeholder="Search task" 
-                className="w-64 rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-4 outline-none placeholder:text-slate-400 focus:border-blue-500"
+            <div className="flex w-64 items-center rounded-lg border border-slate-200 bg-white px-3 focus-within:border-blue-500">
+              <Search className="h-4 w-4 flex-shrink-0 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search task"
+                className="w-full border-none bg-transparent py-2 pl-2 pr-1 text-sm outline-none placeholder:text-slate-400 focus:ring-0"
               />
             </div>
           </div>
@@ -174,7 +174,7 @@ function ProjectBacklogsSection() {
       <div className="flex flex-col gap-6">
         {Object.values(groupedTasks).map((member, index) => (
           <div key={index} className="flex flex-col rounded-xl border border-slate-200 bg-white md:flex-row">
-            
+
             {/* Left Column: Member Info */}
             <div className="flex w-full min-w-[240px] flex-col items-start border-b border-slate-200 p-6 md:w-auto md:border-b-0 md:border-r">
               <div className="flex items-center gap-3">
@@ -225,7 +225,7 @@ function ProjectBacklogsSection() {
                 </tbody>
               </table>
             </div>
-            
+
           </div>
         ))}
       </div>

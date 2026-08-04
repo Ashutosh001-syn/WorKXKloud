@@ -4,12 +4,12 @@ import Sidebar from '../components/layout/Sidebar'
 
 function DashboardLayout() {
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900">
-      <div className="md:flex">
+    <div className="h-screen overflow-hidden bg-[#f8fafc] text-slate-900">
+      <div className="flex h-full flex-col md:flex-row">
         <Sidebar />
-        <main className="flex min-w-0 flex-1 flex-col bg-[#f8fafc]">
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#f8fafc]">
           <AppHeader />
-          <div className="min-h-0 flex-1">
+          <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
             <Outlet />
           </div>
         </main>

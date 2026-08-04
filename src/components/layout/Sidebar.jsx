@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   ChevronDown,
+  Gauge,
   Grid2x2,
   LayoutDashboard,
   Menu,
@@ -23,6 +24,7 @@ const iconMap = {
   resource: Grid2x2,
   users: UserRoundPlus,
   calendar: Calendar,
+  workload: Gauge,
 }
 
 function matchesPath(pathname, to) {
@@ -71,19 +73,19 @@ function Sidebar() {
     }
   }, [])
 
- const filteredMenu = sidebarMenu.filter((item) => {
-  if (item.key === 'calendar') return true;
+  const filteredMenu = sidebarMenu.filter((item) => {
+    if (item.key === 'calendar') return true;
 
-  const isPmMenu =
-    item.key === 'new-assigned-project' ||
-    item.key === 'my-projects';
+    const isPmMenu =
+      item.key === 'new-assigned-project' ||
+      item.key === 'my-projects';
 
-  if (userRole === 'pm' || userRole === 'project manager') {
-    return isPmMenu;
-  }
+    if (userRole === 'pm' || userRole === 'project manager') {
+      return isPmMenu;
+    }
 
-  return !isPmMenu;
-});
+    return !isPmMenu;
+  });
 
   return (
     <>

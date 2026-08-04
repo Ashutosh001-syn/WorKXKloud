@@ -120,14 +120,14 @@ function ProjectDiscussionSection() {
     <div className="mt-8 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden font-sans">
       {/* Toolbar / Search Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 border-b border-slate-100">
-        <div className="relative w-full sm:w-72">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <div className="flex w-full sm:w-72 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 transition-all focus-within:border-blue-500 focus-within:bg-white">
+          <Search className="h-4 w-4 flex-shrink-0 text-slate-400" />
           <input
             type="text"
             placeholder="Search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:outline-none transition-all placeholder:text-slate-400"
+            className="w-full border-none bg-transparent py-2 pl-2 pr-1 text-sm outline-none placeholder:text-slate-400 focus:ring-0"
           />
         </div>
 
