@@ -398,6 +398,33 @@ const LINK_SS = 1
 const LINK_FF = 2
 const LINK_SF = 3
 
+// Every grid column's width, fixed — not screen-size dependent. Previous
+// versions recomputed the grid pane's target width on every window/
+// container resize and asked dhtmlx to reconcile that against each
+// column's min_width on the fly; that recalculation raced with dhtmlx's
+// own layout pass and would intermittently leave columns rendered blank
+// or clipped. A single fixed width removes the race entirely: the grid
+// always has exactly enough room for all 8 columns, every time, and never
+// silently drops or blanks any of them. On screens too narrow for
+// GRID_WIDTH + CHART_MIN_WIDTH, the whole widget scrolls horizontally
+// instead (see containerRef's overflow-x: auto) — one predictable
+// mechanism instead of several competing ones.
+const COLUMN_WIDTHS = {
+  wbs_code: 46,
+  text: 200,
+  start_date: 90,
+  end_date: 90,
+  duration: 64,
+  assignees: 110,
+  predecessors: 90,
+  dependency_type: 90,
+}
+const GRID_WIDTH = Object.values(COLUMN_WIDTHS).reduce((sum, w) => sum + w, 0)
+
+// Smallest the timeline pane can be while still showing a usable slice of
+// dates + task bars, once the grid has already claimed GRID_WIDTH.
+const CHART_MIN_WIDTH = 320
+
 function calculateStartDateFromEnd(endDate, duration) {
   if (!duration || duration <= 0) return new Date(endDate)
   let current = new Date(endDate)
@@ -630,14 +657,101 @@ function isSubTask(task, projectId) {
   return true
 }
 
-// task.assignees is occasionally the literal string "undefined"/"null"
-// rather than a real empty value (e.g. a stringified value coming back from
-// an editor or API round-trip) — treat those the same as "no assignee"
-// everywhere the field is displayed, instead of printing them as text.
 function getAssigneeLabel(task) {
   const value = task.assignees
   if (!value || value === 'undefined' || value === 'null') return ''
   return String(value)
+}
+
+function toGanttDateOnly(value) {
+  if (!value) return null
+  return String(value).slice(0, 10)
+}
+
+function cleanResourceValue(value) {
+  if (value === null || value === undefined) return ''
+  return String(value).trim()
+}
+
+const SCHEDULE_BAR_CLASSES = [
+  'gantt-bar-blue', 'gantt-bar-purple', 'gantt-bar-green', 'gantt-bar-pink',
+  'gantt-bar-dark-blue', 'gantt-bar-dark-purple', 'gantt-bar-dark-green', 'gantt-bar-dark-pink',
+]
+const SCHEDULE_BORDER_CLASSES = [
+  'border-left-blue', 'border-left-purple', 'border-left-green', 'border-left-pink',
+  'border-left-blue', 'border-left-purple', 'border-left-green', 'border-left-pink',
+]
+
+function transformScheduleToGanttData(scheduleItems) {
+  const data = []
+  const nameToGanttId = new Map()
+
+  scheduleItems.forEach((task, index) => {
+    const ganttId = `task_${task.id}`
+    const colorIndex = index % SCHEDULE_BAR_CLASSES.length
+    data.push({
+      id: ganttId,
+      text: task.task_name || 'Untitled Task',
+      start_date: toGanttDateOnly(task.planned_start),
+      duration: Number(task.duration) || 1,
+      progress: 0,
+      open: true,
+      assignees: cleanResourceValue(task.resource),
+      barClass: SCHEDULE_BAR_CLASSES[colorIndex],
+      borderClass: SCHEDULE_BORDER_CLASSES[colorIndex],
+      apiId: task.id,
+      isApiTask: true,
+      apiPredecessorRaw: task.predecessor,
+    })
+    if (task.task_name) nameToGanttId.set(task.task_name, ganttId)
+
+    const subTasks = task.sub_tasks || []
+    subTasks.forEach((sub, subIndex) => {
+      const subGanttId = `subtask_${sub.id}`
+      const subColorIndex = (index + subIndex + 1) % SCHEDULE_BAR_CLASSES.length
+      data.push({
+        id: subGanttId,
+        text: sub.sub_task_name || 'Untitled Sub-task',
+        start_date: toGanttDateOnly(sub.planned_start),
+        duration: Number(sub.duration) || 1,
+        progress: 0,
+        parent: ganttId,
+        assignees: cleanResourceValue(sub.resource),
+        barClass: SCHEDULE_BAR_CLASSES[subColorIndex],
+        borderClass: SCHEDULE_BORDER_CLASSES[subColorIndex],
+        apiId: sub.id,
+        isApiTask: true,
+        apiPredecessorRaw: sub.predecessor,
+      })
+      if (sub.sub_task_name) nameToGanttId.set(sub.sub_task_name, subGanttId)
+    })
+  })
+
+  const links = []
+  let linkCounter = 1
+  data.forEach((item) => {
+    const raw = item.apiPredecessorRaw
+    if (!raw) return
+    const trimmed = String(raw).trim()
+    if (!trimmed) return
+
+    let sourceId = nameToGanttId.get(trimmed)
+    if (!sourceId && /^\d+$/.test(trimmed)) {
+      const candidate = scheduleItems[Number(trimmed) - 1]
+      if (candidate) sourceId = `task_${candidate.id}`
+    }
+    if (sourceId && sourceId !== item.id) {
+      links.push({ id: `link_${linkCounter++}`, source: sourceId, target: item.id, type: '0' })
+    }
+  })
+
+  return { data, links }
+}
+
+function getApiTaskId(ganttId) {
+  if (!ganttId || !gantt.isTaskExists(ganttId)) return null
+  const task = gantt.getTask(ganttId)
+  return task?.isApiTask ? task.apiId : null
 }
 
 function topologicalSchedule() {
@@ -694,6 +808,7 @@ function topologicalSchedule() {
 // Component
 function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   const containerRef = useRef(null)
+  const wrapperRef = useRef(null)
   const syncingTasksRef = useRef(new Set())
   const schedulingRef = useRef(false)
 
@@ -723,16 +838,83 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   const [includeHolidays, setIncludeHolidays] = useState(true)
   const [customDropdownOpen, setCustomDropdownOpen] = useState(false)
 
-  const [gridWidth, setGridWidth] = useState(830)
-  // Live position of the resize handle while actively dragging — kept
-  // separate from gridWidth (the committed value gantt actually renders at)
-  // so the drag line can move smoothly without triggering a gantt relayout
-  // on every mousemove. Null when not dragging.
+  // containerWidth only drives cosmetic breakpoints (compact toolbar, row
+  // height, etc.) — it no longer feeds into the grid's width. See
+  // GRID_WIDTH's comment above for why that split matters.
+  const [containerWidth, setContainerWidth] = useState(
+    typeof window !== 'undefined' ? window.innerWidth : 1024
+  )
+  const isMobile = containerWidth < 640
+  const isTablet = containerWidth >= 640 && containerWidth < 900
+
+  const [gridWidth, setGridWidth] = useState(GRID_WIDTH)
+  const userResizedGridRef = useRef(false)
+
   const [dragPreviewWidth, setDragPreviewWidth] = useState(null)
   const dragPreviewWidthRef = useRef(null)
   const isResizing = useRef(false)
   const [holidaysData, setHolidaysData] = useState([])
   const [ganttError, setGanttError] = useState(null)
+
+  const [scheduleTasks, setScheduleTasks] = useState(null)
+  const [scheduleLoadError, setScheduleLoadError] = useState(null)
+  const [scheduleReloadKey, setScheduleReloadKey] = useState(0)
+  const [isSavingTask, setIsSavingTask] = useState(false)
+
+  useEffect(() => {
+    const el = wrapperRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) return
+      setContainerWidth(entry.contentRect.width)
+    })
+    ro.observe(el)
+    setContainerWidth(el.getBoundingClientRect().width)
+
+    return () => ro.disconnect()
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadSchedule() {
+      if (!projectId || !pmId) {
+        setScheduleTasks({ data: [], links: [] })
+        setScheduleLoadError(null)
+        return
+      }
+      setScheduleTasks(null)
+      setScheduleLoadError(null)
+      try {
+
+        const response = await fetch(API_ENDPOINTS.GET_PROJECT_SCHEDULE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ project_id: projectId, pm_id: pmId }),
+
+        })
+
+        const result = await response.json()
+        if (!result.success) throw new Error(result.message || 'Failed to fetch project schedule')
+        if (cancelled) return
+        setScheduleTasks(transformScheduleToGanttData(result.data || []))
+      } catch (err) {
+        console.error('Failed to load project schedule:', err)
+        if (cancelled) return
+        setScheduleLoadError(err.message || 'Failed to load project schedule.')
+        setScheduleTasks({ data: [], links: [] })
+      }
+    }
+
+    loadSchedule()
+    return () => { cancelled = true }
+  }, [projectId, pmId, scheduleReloadKey])
+
+  const reloadSchedule = useCallback(() => {
+    setScheduleReloadKey((k) => k + 1)
+  }, [])
 
   useEffect(() => {
     const fetchHolidays = async () => {
@@ -803,32 +985,34 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   }, [])
 
   useEffect(() => {
+    const MIN_GRID_WIDTH = 220
+    const MIN_TIMELINE_WIDTH = 220
+
+    const clampGridWidth = (raw, totalWidth) => {
+      const maxWidth = Math.max(MIN_GRID_WIDTH, totalWidth - MIN_TIMELINE_WIDTH)
+      return Math.min(maxWidth, Math.max(MIN_GRID_WIDTH, raw))
+    }
+
     const handleMouseMove = (e) => {
       if (!isResizing.current || !containerRef.current) return
       const rect = containerRef.current.getBoundingClientRect()
-      let newWidth = e.clientX - rect.left
-
-      const SNAP_THRESHOLD = 150;
-      if (newWidth < SNAP_THRESHOLD) {
-        newWidth = 0; // Collapse table
-      } else if (newWidth > rect.width - SNAP_THRESHOLD) {
-        newWidth = rect.width; // Collapse chart
-      }
-
-      // Only move the resizer's own visual line live — committing the
-      // width to gantt (below) rebuilds its internal grid/chart panes via
-      // resetLayout(), which is expensive. Doing that on every mousemove
-      // during a fast drag races with dhtmlx's row rendering and can leave
-      // the grid showing no rows at all, so the real width is only applied
-      // once, on mouse release (see handleMouseUp).
+      const newWidth = clampGridWidth(e.clientX - rect.left, rect.width)
       dragPreviewWidthRef.current = newWidth
       setDragPreviewWidth(newWidth)
     }
-    const handleMouseUp = () => {
+    const handleTouchMove = (e) => {
+      if (!isResizing.current || !containerRef.current || !e.touches?.[0]) return
+      const rect = containerRef.current.getBoundingClientRect()
+      const newWidth = clampGridWidth(e.touches[0].clientX - rect.left, rect.width)
+      dragPreviewWidthRef.current = newWidth
+      setDragPreviewWidth(newWidth)
+    }
+    const commitResize = () => {
       if (isResizing.current) {
         isResizing.current = false
         document.body.style.cursor = 'default'
         if (dragPreviewWidthRef.current !== null) {
+          userResizedGridRef.current = true
           setGridWidth(dragPreviewWidthRef.current)
         }
         dragPreviewWidthRef.current = null
@@ -836,26 +1020,38 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       }
     }
     document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
+    document.addEventListener('mouseup', commitResize)
+    document.addEventListener('touchmove', handleTouchMove, { passive: true })
+    document.addEventListener('touchend', commitResize)
     return () => {
       document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
+      document.removeEventListener('mouseup', commitResize)
+      document.removeEventListener('touchmove', handleTouchMove)
+      document.removeEventListener('touchend', commitResize)
     }
   }, [])
 
+  // Fires on mount (before gantt.init() has run — the guard below makes
+  // that a no-op) and again whenever the user commits a drag-resize. When
+  // the committed width is narrower than the columns' own total (dragging
+  // the grid smaller than its natural size), dhtmlx needs a second
+  // resetLayout() one frame later to actually enforce each column's
+  // min_width — a single call left columns rendered with no content
+  // instead of the grid picking up its own horizontal scrollbar. This only
+  // fires once per completed drag (gridWidth is the committed value, not
+  // updated live while dragging), so it's cheap and doesn't reintroduce
+  // the "many resetLayout calls during a fast drag" issue.
   useEffect(() => {
-    if (window.gantt && containerRef.current) {
+    if (window.gantt && containerRef.current && gantt.config.layout?.cols?.[0]) {
       gantt.config.grid_width = gridWidth
-      if (gantt.config.layout?.cols?.[0]) {
-        gantt.config.layout.cols[0].width = gridWidth
-        // Changing layout.cols[*].width alone doesn't take effect until the
-        // layout is rebuilt — plain render() only repaints the existing
-        // (stale) pane sizes. This effect only fires once per completed
-        // resize (gridWidth is the committed value, updated on mouse
-        // release), so resetLayout() here is safe.
-        try { gantt.resetLayout() } catch (e) { }
-      }
+      gantt.config.layout.cols[0].width = gridWidth
+      try { gantt.resetLayout() } catch (e) { }
       try { gantt.render() } catch (e) { }
+      const raf = requestAnimationFrame(() => {
+        try { gantt.resetLayout() } catch (e) { }
+        try { gantt.render() } catch (e) { }
+      })
+      return () => cancelAnimationFrame(raf)
     }
   }, [gridWidth])
 
@@ -923,14 +1119,23 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
   }
 
-  const syncTaskWithAPI = async (task, isSubTaskOverride = null) => {
-    // API logic removed to use dummy data locally
-    console.log("Mock syncTaskWithAPI called for task:", task.id);
+
+  const parseDateOnlyLocal = (dateOnlyStr) => {
+    if (!dateOnlyStr) return null
+    const [y, m, d] = dateOnlyStr.split('-').map(Number)
+    if (!y || !m || !d) return null
+    return new Date(y, m - 1, d)
   }
+
+  // TODO(backend): no update endpoint exists yet (only create — see
+  // schedule_project / subTask_schedule) so edits/reschedules stay local
+  // for now. Wire the real PUT/POST call here once it's available.
+  const syncTaskWithAPI = async (_task, _isSubTaskOverride = null) => { }
 
   // Main gantt setup
   useEffect(() => {
     if (!containerRef.current) return
+    if (scheduleTasks === null) return
 
     try {
       gantt.plugins({ critical_path: true, tooltip: true, auto_scheduling: true, inline_editors: true, marker: true, drag_timeline: true })
@@ -948,22 +1153,19 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     }
 
     gantt.config.date_format = '%Y-%m-%d'
-    gantt.config.row_height = 42
-    gantt.config.task_height = 22
+    gantt.config.row_height = isMobile ? 38 : 42
+    gantt.config.task_height = isMobile ? 20 : 22
     gantt.config.link_line_width = 1.5
     gantt.config.show_chart = showGantt
     gantt.config.highlight_critical_path = criticalPath
-    // work_time is managed by the calendarType effect
     gantt.config.start_on_monday = false
     gantt.config.inline_editors_date_format = '%Y-%m-%d'
     gantt.config.details_on_dblclick = false
 
-    // We handle resizing via custom React overlay instead of native dhtmlx resizer
     gantt.config.grid_width = gridWidth
     gantt.config.grid_resize = false
     gantt.config.keep_grid_width = true
 
-    // Today Marker
     if (gantt.addMarker) {
       const today = new Date()
       try {
@@ -986,15 +1188,10 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     const durationEditor = { type: 'number', map_to: 'duration', min: 0, max: 1000 }
     const resourceEditor = { type: 'text', map_to: 'assignees' }
 
-    // ── Predecessor inline editor: single predecessor per task, laid out as
-    //    [WBS "node" input] [Type dropdown: FS/SS/FF/SF] | (drag) | [Lag number input]
-    //    The divider between the type dropdown and the lag input is user-draggable,
-    //    so the two sections can be resized relative to each other.
     gantt.config.editor_types.custom_predecessor = {
       show: function (id, column, config, placeholder) {
         const task = gantt.getTask(id)
         const links = gantt.getLinks() || []
-        // Single predecessor only: take the first (and only) incoming link, if any
         const existingLink = links.find(l => String(l.target) === String(id))
 
         let currentWbs = ''
@@ -1017,11 +1214,9 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         const getTypeColor = (v) => TYPE_COLORS[v] || TYPE_COLORS[LINK_FS]
         const typeLabels = { [LINK_FS]: 'FS', [LINK_SS]: 'SS', [LINK_FF]: 'FF', [LINK_SF]: 'SF' }
 
-        // Container: node input | type dropdown | draggable divider | lag input
         const container = document.createElement('div')
         container.style.cssText = 'display:flex;align-items:stretch;gap:3px;width:100%;height:100%;padding:2px 4px;box-sizing:border-box;'
 
-        // Node (WBS) input — the predecessor task's number
         const nodeInput = document.createElement('input')
         nodeInput.className = 'pred-editor-wbs-input'
         nodeInput.type = 'text'
@@ -1030,7 +1225,6 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         nodeInput.title = 'Predecessor task number (WBS)'
         nodeInput.style.cssText = 'width:34px;flex:0 0 34px;height:28px;border:1.5px solid #e2e8f0;border-radius:6px;padding:0 4px;font-size:11px;text-align:center;outline:none;background:#fff;color:#0f172a;font-weight:700;font-family:inherit;transition:border-color 0.15s,box-shadow 0.15s;align-self:center;'
 
-        // Type dropdown wrapper (this section will flex/shrink as the divider moves)
         const typeWrapper = document.createElement('div')
         typeWrapper.style.cssText = 'position:relative;flex:1 1 0;min-width:44px;align-self:center;'
 
@@ -1132,11 +1326,9 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         typeWrapper.appendChild(typeBtn)
         document.body.appendChild(dropdown)
 
-        // Draggable divider between the Type dropdown and the Lag number input
         const divider = document.createElement('div')
         divider.className = 'pred-editor-divider'
 
-        // Lag (day offset) input — accepts +/- directly, e.g. "-2" or "3"
         const lagWrapper = document.createElement('div')
         lagWrapper.style.cssText = 'flex:1 1 0;min-width:34px;align-self:center;'
         const lagInput = document.createElement('input')
@@ -1147,12 +1339,10 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         lagInput.title = 'Lag in days, e.g. -2 or 3'
         lagInput.style.cssText = 'width:100%;height:28px;border:1.5px solid #e2e8f0;border-radius:6px;padding:0 4px;font-size:11px;text-align:center;outline:none;background:#fff;color:#0f172a;font-weight:700;font-family:inherit;transition:border-color 0.15s,box-shadow 0.15s;box-sizing:border-box;'
         lagInput.addEventListener('input', () => {
-          // Allow only an optional leading +/- followed by digits while typing
           lagInput.value = lagInput.value.replace(/[^\d+-]/g, '').replace(/(?!^)[+-]/g, '')
         })
         lagWrapper.appendChild(lagInput)
 
-        // Divider drag logic: resizes typeWrapper vs lagWrapper flex-basis
         let dragging = false
         let startX = 0
         let startTypeWidth = 0
@@ -1233,7 +1423,6 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       save: function (id) {
         const val = this.get_value()
 
-        // Single predecessor: always clear any existing incoming link(s) first
         const links = gantt.getLinks() || []
         links.filter(l => String(l.target) === String(id)).forEach(l => gantt.deleteLink(l.id))
 
@@ -1270,10 +1459,9 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
 
     const predecessorEditor = { type: 'custom_predecessor', map_to: 'auto' }
 
-    // Columns
-    gantt.config.columns = [
+    const allColumns = [
       {
-        name: 'wbs_code', label: '#', width: 50, min_width: 50, align: 'center', resize: true,
+        name: 'wbs_code', label: '#', width: COLUMN_WIDTHS.wbs_code, min_width: COLUMN_WIDTHS.wbs_code, align: 'center', resize: true,
         header: [{ text: '#', align: 'center' }],
         template: (task) => {
           try {
@@ -1286,7 +1474,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         },
       },
       {
-        name: 'text', label: 'Task Name', tree: true, width: 220, min_width: 180, resize: true,
+        name: 'text', label: 'Task Name', tree: true, width: COLUMN_WIDTHS.text, min_width: COLUMN_WIDTHS.text, resize: true,
         editor: textEditor,
         header: [{ text: 'Task Name', align: 'center' }],
         template: (task) => {
@@ -1295,21 +1483,21 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         },
       },
       {
-        name: 'start_date', label: 'Planned Start', width: 95, min_width: 90, align: 'center', resize: true,
+        name: 'start_date', label: 'Start', width: COLUMN_WIDTHS.start_date, min_width: COLUMN_WIDTHS.start_date, align: 'center', resize: true,
         editor: dateEditor,
-        header: [{ text: 'Planned Start', align: 'center' }],
+        header: [{ text: isMobile ? 'Start' : 'Planned Start', align: 'center' }],
         template: (task) => formatDateShort(task.start_date),
       },
       {
-        name: 'end_date', label: 'Planned End', width: 95, min_width: 90, align: 'center', resize: true,
+        name: 'end_date', label: 'End', width: COLUMN_WIDTHS.end_date, min_width: COLUMN_WIDTHS.end_date, align: 'center', resize: true,
         editor: endEditor,
-        header: [{ text: 'Planned End', align: 'center' }],
+        header: [{ text: isMobile ? 'End' : 'Planned End', align: 'center' }],
         template: (task) => formatDateShort(getInclusiveEndDate(task.end_date)),
       },
       {
-        name: 'duration', label: 'Duration', width: 70, min_width: 60, align: 'center', resize: true,
+        name: 'duration', label: 'Dur', width: COLUMN_WIDTHS.duration, min_width: COLUMN_WIDTHS.duration, align: 'center', resize: true,
         editor: durationEditor,
-        header: [{ text: 'Duration', align: 'center' }],
+        header: [{ text: isMobile ? 'Dur' : 'Duration', align: 'center' }],
         template: (task) => {
           const dur = task.duration || 0
           const hasChildren = (gantt.getChildren(task.id) || []).length > 0
@@ -1328,14 +1516,10 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         },
       },
       {
-        name: 'assignees', label: 'Resource', width: 120, min_width: 90, align: 'center', resize: true,
+        name: 'assignees', label: 'Resource', width: COLUMN_WIDTHS.assignees, min_width: COLUMN_WIDTHS.assignees, align: 'center', resize: true,
         editor: resourceEditor,
         header: [{ text: 'Resource', align: 'center' }],
         template: (task) => {
-          const sub = isSubTask(task, projectId)
-          if (!sub) {
-            return '<span class="resource-disabled-cell">—</span>'
-          }
           const assignee = getAssigneeLabel(task)
           return assignee
             ? `<span style="color:#1e293b;font-weight:500;">${assignee}</span>`
@@ -1348,7 +1532,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         },
       },
       {
-        name: 'predecessors', label: 'Predecessor', width: 90, min_width: 80, align: 'center', resize: true,
+        name: 'predecessors', label: 'Pred', width: COLUMN_WIDTHS.predecessors, min_width: COLUMN_WIDTHS.predecessors, align: 'center', resize: true,
         editor: predecessorEditor,
         header: [{ text: 'Predecessor', align: 'center' }],
         template: (task) => {
@@ -1366,7 +1550,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         },
       },
       {
-        name: 'dependency_type', label: 'Dependency', width: 90, min_width: 80, align: 'center', resize: true,
+        name: 'dependency_type', label: 'Dep', width: COLUMN_WIDTHS.dependency_type, min_width: COLUMN_WIDTHS.dependency_type, align: 'center', resize: true,
         header: [{ text: 'Dependency', align: 'center' }],
         template: (task) => {
           try {
@@ -1387,33 +1571,35 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       },
     ]
 
-    gantt.config.scale_height = 50
+    gantt.config.columns = allColumns
+
+    gantt.config.scale_height = isMobile ? 40 : 50
 
     const zoomConfig = {
       levels: [
         {
-          name: 'day', scale_height: 50, min_column_width: 30,
+          name: 'day', scale_height: isMobile ? 40 : 50, min_column_width: isMobile ? 24 : 30,
           scales: [
             { unit: 'week', step: 1, format: (d) => d.getDate() <= 7 ? gantt.date.date_to_str('%M %Y')(d) : gantt.date.date_to_str('%D %d %M %Y')(d) },
             { unit: 'day', step: 1, format: (d) => ['S', 'M', 'T', 'W', 'T', 'F', 'S'][d.getDay()] },
           ],
         },
         {
-          name: 'week', scale_height: 50, min_column_width: 70,
+          name: 'week', scale_height: isMobile ? 40 : 50, min_column_width: isMobile ? 54 : 70,
           scales: [
             { unit: 'month', step: 1, format: '%F, %Y' },
             { unit: 'week', step: 1, format: 'Week #%W' },
           ],
         },
         {
-          name: 'month', scale_height: 50, min_column_width: 120,
+          name: 'month', scale_height: isMobile ? 40 : 50, min_column_width: isMobile ? 90 : 120,
           scales: [
             { unit: 'year', step: 1, format: '%Y' },
             { unit: 'month', step: 1, format: '%F' },
           ],
         },
         {
-          name: 'year', scale_height: 50, min_column_width: 150,
+          name: 'year', scale_height: isMobile ? 40 : 50, min_column_width: isMobile ? 110 : 150,
           scales: [
             { unit: 'year', step: 1, format: '%Y' },
             { unit: 'quarter', step: 1, format: 'Q%q' },
@@ -1439,8 +1625,9 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       col.name === 'wbs_code' ? (task.borderClass || 'border-left-none') : ''
 
     gantt.templates.rightside_text = (s, e, task) => {
+      if (isMobile) return ''
       const assignee = getAssigneeLabel(task)
-      return assignee && isSubTask(task, projectId)
+      return assignee
         ? `<span class="gantt-assignees-label">${assignee}</span>`
         : ''
     }
@@ -1448,7 +1635,9 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     gantt.templates.timeline_cell_class = (item, date) =>
       (date.getDay() === 0 || date.getDay() === 6) ? 'weekend-cell' : ''
 
-    // Tooltip
+    // Tooltip — also surfaces Resource/Predecessor info that's hidden
+    // from the grid columns on mobile, so nothing is actually lost, just
+    // moved off the always-visible grid.
     gantt.templates.tooltip_text = (start, end, task) => {
       const links = gantt.getLinks() || []
       const taskLinks = links.filter(l => String(l.target) === String(task.id))
@@ -1461,7 +1650,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       }).filter(Boolean).join(', ')
 
       const taskAssignee = getAssigneeLabel(task)
-      const resourceLine = isSubTask(task, projectId) && taskAssignee
+      const resourceLine = taskAssignee
         ? `<br/><b>Resource:</b> ${taskAssignee}`
         : ''
 
@@ -1474,15 +1663,18 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     }
 
     // Explicit two-pane layout: grid and timeline each get their own
-    // horizontal scrollbar (independent of one another), while sharing one
-    // vertical scrollbar so their rows stay aligned. Without this, dhtmlx's
-    // default layout only gives the timeline its own horizontal scroll —
-    // the grid has none, so its columns can only ever shrink-to-fit, never
-    // scroll to reveal what doesn't fit.
+    // horizontal scrollbar, sharing one vertical scrollbar so rows stay
+    // aligned. This is what lets long task names / many columns scroll
+    // horizontally *inside* the grid pane instead of being clipped.
     gantt.config.layout = {
       css: 'gantt_container',
       cols: [
         {
+          // Kept at the small, screen-responsive value (not floored to
+          // GRID_COLUMNS_MIN_WIDTH) so the timeline stays visible on phone
+          // widths too — each column's own min_width (below) still stops
+          // them from being squeezed unreadable; the grid just gets its own
+          // horizontal scrollbar to reach whichever ones don't fit yet.
           width: gridWidth,
           rows: [
             { view: 'grid', scrollX: 'gridHorScroll', scrollY: 'gridVerScroll' },
@@ -1502,27 +1694,16 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     try {
       gantt.init(containerRef.current)
       gantt.clearAll()
-
-      const dummyTasks = {
-        data: [
-          { id: '1', text: 'Project Kickoff', start_date: '2026-07-01', duration: 3, progress: 1, open: true, type: 'project' },
-          { id: '2', text: 'Requirement Analysis', start_date: '2026-07-04', duration: 5, progress: 0.8, parent: '1', barClass: 'gantt-bar-blue', borderClass: 'border-left-blue' },
-          { id: '3', text: 'Design Phase', start_date: '2026-07-09', duration: 7, progress: 0.5, parent: '1', barClass: 'gantt-bar-purple', borderClass: 'border-left-purple' },
-          { id: '4', text: 'Development', start_date: '2026-07-16', duration: 14, progress: 0.2, parent: '1', barClass: 'gantt-bar-green', borderClass: 'border-left-green' },
-          { id: '5', text: 'Testing', start_date: '2026-07-30', duration: 7, progress: 0, parent: '1', barClass: 'gantt-bar-pink', borderClass: 'border-left-pink' },
-          { id: '6', text: 'Deployment', start_date: '2026-08-06', duration: 2, progress: 0, parent: '1', barClass: 'gantt-bar-dark-green', borderClass: 'border-left-green' }
-        ],
-        links: [
-          { id: '1', source: '1', target: '2', type: '0' },
-          { id: '2', source: '2', target: '3', type: '0' },
-          { id: '3', source: '3', target: '4', type: '0' },
-          { id: '4', source: '4', target: '5', type: '0' },
-          { id: '5', source: '5', target: '6', type: '0' }
-        ]
-      };
-
-      gantt.parse(dummyTasks)
-      topologicalSchedule()
+      gantt.parse(scheduleTasks)
+      // dhtmlx's own root element clips its panes down to whatever box its
+      // parent gives it instead of growing to fit content — forcing its
+      // true minimum here makes it genuinely overflow containerRef (which
+      // has its own overflow-x: auto), so the timeline always keeps at
+      // least a usable sliver of visible width, even on a phone, and the
+      // grid never has less room than GRID_WIDTH.
+      if (gantt.$container) {
+        gantt.$container.style.minWidth = `${gridWidth + CHART_MIN_WIDTH}px`
+      }
       setGanttError(null)
     } catch (e) {
       console.error('Gantt Init Error:', e)
@@ -1584,12 +1765,6 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       try {
         const task = gantt.getTask(id)
 
-        if (!isSubTask(task, projectId)) {
-          if (task.assignees !== originalTask.assignees) {
-            task.assignees = originalTask.assignees
-          }
-        }
-
         if (mode === 'update' && (task.progress || 0) >= 1 && (originalTask.progress || 0) < 1) {
           const ffLinks = gantt.getLinks().filter(
             l => String(l.target) === String(id) && parseInt(l.type, 10) === LINK_FF
@@ -1612,9 +1787,6 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     events.push(gantt.attachEvent('onBeforeEditorOpen', (taskId, columnName) => {
       try {
         const task = gantt.getTask(taskId)
-        if (columnName === 'assignees' && !isSubTask(task, projectId)) {
-          return false
-        }
         const hasChildren = (gantt.getChildren(taskId) || []).length > 0
         if ((task.type === 'project' || hasChildren) && (columnName === 'duration' || columnName === 'start_date' || columnName === 'end_date')) {
           return false
@@ -1786,7 +1958,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       document.body.style.overflow = ''
       document.documentElement.style.overflow = ''
     }
-  }, [tasks, zoomLevel, criticalPath, showGantt])
+  }, [tasks, zoomLevel, criticalPath, showGantt, scheduleTasks, isMobile])
 
   // Add task handler
   const handleOpenAddTaskModal = (type, isSubTaskFlag = false) => {
@@ -1802,6 +1974,13 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       return
     }
 
+    // subTask_schedule needs a real, backend-saved task_id to attach to —
+    // a sub-task can't itself be a parent (the API only nests one level).
+    if (isSubTaskFlag && type === 'task' && getApiTaskId(parentId) === null) {
+      setAlertMessage('Sub-tasks can only be added to a top-level task, not to another sub-task or a local Work Stream/Milestone.')
+      return
+    }
+
     setTaskModalData({
       type,
       isSubTaskFlag,
@@ -1810,33 +1989,89 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       start_date: formatToAPIDateOnly(new Date()),
       duration: type === 'milestone' ? 0 : 5,
       assignees: '',
+      predecessor: '',
     })
     setTaskModalOpen(true)
   }
 
-  const handleSubmitTaskModal = (e) => {
+  const handleSubmitTaskModal = async (e) => {
     e.preventDefault()
 
-    const { type, isSubTaskFlag, parentId, text, start_date, duration, assignees } = taskModalData
+    const { type, isSubTaskFlag, parentId, text, start_date, duration, assignees, predecessor } = taskModalData
 
-    const newTask = {
-      id: `task_${Date.now()}`,
-      api_id: null,
-      text: text || (type === 'project' ? 'New Category' : type === 'milestone' ? 'Milestone' : 'New Task'),
-      start_date: new Date(start_date || new Date()),
-      duration: type === 'milestone' ? 0 : Number(duration),
-      progress: 0,
-      parent: parentId,
-      type,
-      barClass: type === 'project' ? 'gantt-bar-dark-blue' : type === 'milestone' ? 'gantt-bar-green' : 'gantt-bar-blue',
-      borderClass: type === 'project' ? 'border-left-none' : 'border-left-blue',
-      assignees: isSubTaskFlag ? assignees : null,
+    // Only "Add Task" and "Add Sub-task" have a matching backend endpoint
+    // (schedule_project / subTask_schedule). Work Streams and Milestones
+    // stay local-only, same as before — nothing to save them to yet.
+    if (type !== 'task') {
+      const newTask = {
+        id: `local_${Date.now()}`,
+        text: text || (type === 'project' ? 'New Category' : 'Milestone'),
+        start_date: parseDateOnlyLocal(start_date) || new Date(),
+        duration: type === 'milestone' ? 0 : Number(duration),
+        progress: 0,
+        parent: parentId,
+        type,
+        barClass: type === 'project' ? 'gantt-bar-dark-blue' : 'gantt-bar-green',
+        borderClass: type === 'project' ? 'border-left-none' : 'border-left-blue',
+        assignees: null,
+      }
+      gantt.addTask(newTask)
+      gantt.selectTask(newTask.id)
+      setTaskModalOpen(false)
+      setTaskModalData(null)
+      setAlertMessage(`"${newTask.text}" was added, but Work Streams/Milestones aren't saved to the server yet — it will disappear on reload.`)
+      return
     }
 
-    gantt.addTask(newTask)
-    gantt.selectTask(newTask.id)
-    setTaskModalOpen(false)
-    setTaskModalData(null)
+    setIsSavingTask(true)
+    try {
+      const startDateObj = parseDateOnlyLocal(start_date) || new Date()
+      const durationNum = Math.max(1, Number(duration) || 1)
+      const endDateObj = gantt.calculateEndDate({ start_date: startDateObj, duration: durationNum })
+
+      const payload = {
+        pm_id: pmId,
+        project_id: projectId,
+        planned_start: formatToAPI(startDateObj, false),
+        planned_end: formatToAPI(endDateObj, true),
+        duration: durationNum,
+        resource: assignees || '',
+        predecessor: predecessor || '',
+      }
+
+      let response
+      if (isSubTaskFlag) {
+        const taskId = getApiTaskId(parentId)
+        if (!taskId) {
+          setAlertMessage('Could not find the parent task to attach this sub-task to.')
+          setIsSavingTask(false)
+          return
+        }
+        response = await fetch(API_ENDPOINTS.CREATE_SUBTASK_SCHEDULE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...payload, task_id: taskId, sub_task_name: text }),
+        })
+      } else {
+        response = await fetch(API_ENDPOINTS.SCHEDULE_PROJECT_TASK, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...payload, task_name: text }),
+        })
+      }
+
+      const result = await response.json()
+      if (!result.success) throw new Error(result.message || 'Failed to save task')
+
+      setTaskModalOpen(false)
+      setTaskModalData(null)
+      reloadSchedule()
+    } catch (err) {
+      console.error('Error creating task:', err)
+      setAlertMessage(err.message || 'Could not save the task. Please try again.')
+    } finally {
+      setIsSavingTask(false)
+    }
   }
 
   const handleDeleteClick = () => {
@@ -1916,32 +2151,39 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   const totalMilestones = tasks?.data?.filter(t => t.duration === 0).length || 0
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column',
-      width: '100%', maxWidth: '100%', boxSizing: 'border-box', height: 700,
-      background: '#ffffff',
-      borderRadius: 20, border: '1px solid #e2e8f0',
-      boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
-      overflow: 'hidden', marginTop: 24,
-      userSelect: 'none', position: 'relative',
-      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-      resize: 'vertical', minHeight: 400, maxHeight: 1200,
-    }}>
+    <div
+      ref={wrapperRef}
+      style={{
+        display: 'flex', flexDirection: 'column',
+        width: '100%', maxWidth: '100%', boxSizing: 'border-box',
+        // Height now scales with viewport instead of a hard 700px, so it
+        // never grows taller than the visible area on short/mobile
+        // screens (which was contributing to the "cut off" feeling since
+        // the toolbar rows would get pushed out of view).
+        height: 'clamp(420px, 82vh, 760px)',
+        background: '#ffffff',
+        borderRadius: isMobile ? 12 : 20, border: '1px solid #e2e8f0',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
+        overflow: 'hidden', marginTop: 24,
+        userSelect: 'none', position: 'relative',
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        resize: 'vertical', minHeight: 360, maxHeight: '92vh',
+      }}>
 
       {/* ROW 1 — Title + Zoom */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        flexWrap: 'wrap', gap: 12, padding: '14px 24px',
+        flexWrap: 'wrap', gap: isMobile ? 8 : 12, padding: isMobile ? '10px 12px' : '14px 24px',
         background: '#ffffff', borderBottom: '1px solid #e2e8f0', flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 12, minWidth: 0 }}>
           <div style={{
-            width: 40, height: 40, borderRadius: 10,
+            width: isMobile ? 32 : 40, height: isMobile ? 32 : 40, borderRadius: 10,
             background: '#eff6ff', border: '1px solid #bfdbfe',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: '0 1px 3px rgba(0,0,0,0.07)', flexShrink: 0,
           }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+            <svg width={isMobile ? 16 : 20} height={isMobile ? 16 : 20} viewBox="0 0 24 24" fill="none"
               stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
               <line x1="16" y1="2" x2="16" y2="6" />
@@ -1950,11 +2192,14 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
               <polyline points="9 16 11 18 15 14" />
             </svg>
           </div>
-          <div>
-            <span style={{ fontSize: 17, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.3px' }}>
+          <div style={{ minWidth: 0 }}>
+            <span style={{
+              fontSize: isMobile ? 14 : 17, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.3px',
+              display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
               {projectName ? `${projectName} Timeline` : 'Project Management Workplan'}
             </span>
-            {projectName && (
+            {projectName && !isMobile && (
               <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
                 Schedule overview for {projectName}
               </div>
@@ -1962,66 +2207,68 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Calendar:</span>
-              <select
-                value={calendarType}
-                onChange={(e) => setCalendarType(e.target.value)}
-                style={{
-                  padding: '4px 8px', borderRadius: 6, border: '1px solid #e2e8f0',
-                  fontSize: 12, fontWeight: 500, color: '#1e293b', outline: 'none',
-                  background: '#f8fafc', cursor: 'pointer'
-                }}
-              >
-                <option value="alldays">All Days (24/7)</option>
-                <option value="standard">Standard (Mon-Fri + Holidays)</option>
-                <option value="custom">Custom...</option>
-              </select>
-            </div>
-
-            {calendarType === 'custom' && (
-              <div style={{ position: 'relative' }} onMouseDown={stopProp}>
-                <button
-                  onClick={() => { setCustomDropdownOpen(!customDropdownOpen); setMoreOpen(false); setAddOpen(false); setBaselineOpen(false) }}
-                  style={{ ...btnBase, padding: '4px 10px', height: 28, fontSize: 12, background: '#f8fafc' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 16, flexWrap: 'wrap' }}>
+          {!isMobile && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Calendar:</span>
+                <select
+                  value={calendarType}
+                  onChange={(e) => setCalendarType(e.target.value)}
+                  style={{
+                    padding: '4px 8px', borderRadius: 6, border: '1px solid #e2e8f0',
+                    fontSize: 12, fontWeight: 500, color: '#1e293b', outline: 'none',
+                    background: '#f8fafc', cursor: 'pointer'
+                  }}
                 >
-                  Select Days <ChevronDown size={12} color="#94a3b8" />
-                </button>
-                {customDropdownOpen && (
-                  <div style={{ ...dropdownMenu, padding: '8px', minWidth: 160, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', paddingBottom: 4, borderBottom: '1px solid #f1f5f9' }}>
-                      WORKING DAYS
-                    </div>
-                    {[
-                      { label: 'Monday', val: 1 }, { label: 'Tuesday', val: 2 }, { label: 'Wednesday', val: 3 },
-                      { label: 'Thursday', val: 4 }, { label: 'Friday', val: 5 }, { label: 'Saturday', val: 6 }, { label: 'Sunday', val: 0 }
-                    ].map(day => {
-                      const isChecked = customWorkingDays.includes(day.val)
-                      return (
-                        <label key={day.val} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 500, color: '#334155', cursor: 'pointer' }}>
-                          <input type="checkbox" checked={isChecked} onChange={(e) => {
-                            if (e.target.checked) setCustomWorkingDays([...customWorkingDays, day.val])
-                            else setCustomWorkingDays(customWorkingDays.filter(d => d !== day.val))
-                          }} style={{ width: 14, height: 14, accentColor: '#3b82f6' }} />
-                          {day.label}
-                        </label>
-                      )
-                    })}
-                    <div style={{ borderTop: '1px solid #f1f5f9', marginTop: 4, paddingTop: 8 }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: '#1e293b', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={includeHolidays} onChange={e => setIncludeHolidays(e.target.checked)} style={{ width: 14, height: 14, accentColor: '#3b82f6' }} />
-                        Include Holidays
-                      </label>
-                    </div>
-                  </div>
-                )}
+                  <option value="alldays">All Days (24/7)</option>
+                  <option value="standard">Standard (Mon-Fri + Holidays)</option>
+                  <option value="custom">Custom...</option>
+                </select>
               </div>
-            )}
-          </div>
+
+              {calendarType === 'custom' && (
+                <div style={{ position: 'relative' }} onMouseDown={stopProp}>
+                  <button
+                    onClick={() => { setCustomDropdownOpen(!customDropdownOpen); setMoreOpen(false); setAddOpen(false); setBaselineOpen(false) }}
+                    style={{ ...btnBase, padding: '4px 10px', height: 28, fontSize: 12, background: '#f8fafc' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}
+                  >
+                    Select Days <ChevronDown size={12} color="#94a3b8" />
+                  </button>
+                  {customDropdownOpen && (
+                    <div style={{ ...dropdownMenu, padding: '8px', minWidth: 160, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', paddingBottom: 4, borderBottom: '1px solid #f1f5f9' }}>
+                        WORKING DAYS
+                      </div>
+                      {[
+                        { label: 'Monday', val: 1 }, { label: 'Tuesday', val: 2 }, { label: 'Wednesday', val: 3 },
+                        { label: 'Thursday', val: 4 }, { label: 'Friday', val: 5 }, { label: 'Saturday', val: 6 }, { label: 'Sunday', val: 0 }
+                      ].map(day => {
+                        const isChecked = customWorkingDays.includes(day.val)
+                        return (
+                          <label key={day.val} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 500, color: '#334155', cursor: 'pointer' }}>
+                            <input type="checkbox" checked={isChecked} onChange={(e) => {
+                              if (e.target.checked) setCustomWorkingDays([...customWorkingDays, day.val])
+                              else setCustomWorkingDays(customWorkingDays.filter(d => d !== day.val))
+                            }} style={{ width: 14, height: 14, accentColor: '#3b82f6' }} />
+                            {day.label}
+                          </label>
+                        )
+                      })}
+                      <div style={{ borderTop: '1px solid #f1f5f9', marginTop: 4, paddingTop: 8 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: '#1e293b', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={includeHolidays} onChange={e => setIncludeHolidays(e.target.checked)} style={{ width: 14, height: 14, accentColor: '#3b82f6' }} />
+                          Include Holidays
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div style={{
             display: 'flex', alignItems: 'center',
@@ -2033,7 +2280,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
               const active = zoomLevel === val
               return (
                 <button key={val} onClick={() => setZoomLevel(val)} style={{
-                  padding: '6px 18px', fontSize: 12, fontWeight: active ? 700 : 500,
+                  padding: isMobile ? '6px 10px' : '6px 18px', fontSize: 12, fontWeight: active ? 700 : 500,
                   cursor: 'pointer', color: active ? '#2563eb' : '#64748b',
                   background: active ? '#ffffff' : 'transparent',
                   border: 'none',
@@ -2053,13 +2300,20 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       </div>
 
       {/* ROW 2 — Actions + Nav + Toggles */}
+      {/* On mobile this row scrolls horizontally as one strip instead of
+          wrapping into 3-4 lines and pushing the gantt area down/out of
+          view — that vertical squeeze was the other big contributor to
+          the "everything gets cut off" complaint. */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        flexWrap: 'wrap', gap: 12, padding: '10px 24px',
+        display: 'flex', alignItems: 'center', justifyContent: isMobile ? 'flex-start' : 'space-between',
+        flexWrap: isMobile ? 'nowrap' : 'wrap', gap: isMobile ? 8 : 12,
+        padding: isMobile ? '8px 12px' : '10px 24px',
         background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexShrink: 0,
+        overflowX: isMobile ? 'auto' : 'visible',
+        WebkitOverflowScrolling: 'touch',
       }}>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
 
           {/* Add */}
           <div style={{ position: 'relative' }} onMouseDown={stopProp}>
@@ -2074,7 +2328,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
               onMouseLeave={e => e.currentTarget.style.background = '#2563eb'}
             >
               <Plus size={14} strokeWidth={2.5} />
-              Add
+              {!isMobile && 'Add'}
               <ChevronDown size={12} strokeWidth={2.5} />
             </button>
             {addOpen && (
@@ -2109,7 +2363,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             onMouseLeave={e => e.currentTarget.style.background = '#ef4444'}
           >
             <Trash2 size={14} strokeWidth={2.5} />
-            Delete
+            {!isMobile && 'Delete'}
           </button>
 
           {/* Indent / Outdent */}
@@ -2129,32 +2383,34 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
           </button>
 
           {/* Baseline */}
-          <div style={{ position: 'relative' }} onMouseDown={stopProp}>
-            <button onClick={() => { setBaselineOpen(o => !o); setAddOpen(false); setMoreOpen(false) }}
-              style={btnBase}
-              onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
-              onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
-            >
-              <FileText size={14} color="#94a3b8" />
-              <span>Baseline:&nbsp;<span style={{ color: '#2563eb', fontWeight: 700 }}>{activeBaseline}</span></span>
-              <ChevronDown size={12} color="#94a3b8" />
-            </button>
-            {baselineOpen && (
-              <div style={{ ...dropdownMenu, minWidth: 180 }}>
-                {['Baseline 1', 'Baseline 2 (Proposed)', 'Baseline 3'].map(item => (
-                  <button key={item}
-                    onClick={() => { setActiveBaseline(item); setBaselineOpen(false) }}
-                    style={{ ...dropdownItem, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#eff6ff'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                  >
-                    {item}
-                    {activeBaseline === item && <Check size={12} color="#2563eb" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {!isMobile && (
+            <div style={{ position: 'relative' }} onMouseDown={stopProp}>
+              <button onClick={() => { setBaselineOpen(o => !o); setAddOpen(false); setMoreOpen(false) }}
+                style={btnBase}
+                onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
+              >
+                <FileText size={14} color="#94a3b8" />
+                <span>Baseline:&nbsp;<span style={{ color: '#2563eb', fontWeight: 700 }}>{activeBaseline}</span></span>
+                <ChevronDown size={12} color="#94a3b8" />
+              </button>
+              {baselineOpen && (
+                <div style={{ ...dropdownMenu, minWidth: 180 }}>
+                  {['Baseline 1', 'Baseline 2 (Proposed)', 'Baseline 3'].map(item => (
+                    <button key={item}
+                      onClick={() => { setActiveBaseline(item); setBaselineOpen(false) }}
+                      style={{ ...dropdownItem, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#eff6ff'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                    >
+                      {item}
+                      {activeBaseline === item && <Check size={12} color="#2563eb" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* More */}
           <div style={{ position: 'relative' }} onMouseDown={stopProp}>
@@ -2164,11 +2420,28 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
               onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
             >
               <MoreHorizontal size={14} color="#94a3b8" />
-              More
+              {!isMobile && 'More'}
               <ChevronDown size={12} color="#94a3b8" />
             </button>
             {moreOpen && (
               <div style={dropdownMenu}>
+                {isMobile && (
+                  <>
+                    <div style={{ padding: '6px 16px 4px', fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Calendar</div>
+                    <div style={{ padding: '2px 16px 8px' }}>
+                      <select
+                        value={calendarType}
+                        onChange={(e) => setCalendarType(e.target.value)}
+                        style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: 12, fontWeight: 500, color: '#1e293b', outline: 'none', background: '#f8fafc' }}
+                      >
+                        <option value="alldays">All Days (24/7)</option>
+                        <option value="standard">Standard (Mon-Fri + Holidays)</option>
+                        <option value="custom">Custom...</option>
+                      </select>
+                    </div>
+                    <div style={{ borderTop: '1px solid #f1f5f9', margin: '4px 0' }} />
+                  </>
+                )}
                 {[['Export to PDF', () => handleExport('pdf')], ['Export to PNG', () => handleExport('png')]].map(([label, fn]) => (
                   <button key={label} onClick={fn} style={dropdownItem}
                     onMouseEnter={e => e.currentTarget.style.background = '#eff6ff'}
@@ -2183,16 +2456,13 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
               </div>
             )}
           </div>
-        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-
-          {/* Nav */}
+          {/* Nav (moved into the scrollable strip on mobile so it's never dropped) */}
           <div style={{
             display: 'flex', alignItems: 'center',
             border: '1px solid #e2e8f0', borderRadius: 8,
             overflow: 'hidden', background: '#ffffff',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)', flexShrink: 0,
           }}>
             <button onClick={handleScrollLeft} style={{ ...iconBtnBase, borderRadius: 0, border: 'none', borderRight: '1px solid #e2e8f0' }}
               onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
@@ -2204,6 +2474,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
               display: 'flex', alignItems: 'center', gap: 6,
               background: '#ffffff', border: 'none', borderRight: '1px solid #e2e8f0',
               cursor: 'pointer', color: '#374151', fontSize: 12, fontWeight: 700,
+              whiteSpace: 'nowrap',
             }}
               onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
               onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
@@ -2218,35 +2489,37 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             ><ChevronRight size={14} /></button>
           </div>
 
-          {/* Toggles */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: '#475569', cursor: 'pointer', userSelect: 'none' }}>
-              <input type="checkbox" checked={criticalPath}
-                onChange={e => setCriticalPath(e.target.checked)}
-                style={{ width: 15, height: 15, accentColor: '#2563eb', cursor: 'pointer' }}
-              />
-              Critical path
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#1e293b', cursor: 'pointer', userSelect: 'none' }}>
-              <input type="checkbox" checked={showGantt}
-                onChange={e => setShowGantt(e.target.checked)}
-                style={{ width: 15, height: 15, accentColor: '#2563eb', cursor: 'pointer' }}
-              />
-              Gantt
-            </label>
-          </div>
+          {!isMobile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: '#475569', cursor: 'pointer', userSelect: 'none' }}>
+                <input type="checkbox" checked={criticalPath}
+                  onChange={e => setCriticalPath(e.target.checked)}
+                  style={{ width: 15, height: 15, accentColor: '#2563eb', cursor: 'pointer' }}
+                />
+                Critical path
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#1e293b', cursor: 'pointer', userSelect: 'none' }}>
+                <input type="checkbox" checked={showGantt}
+                  onChange={e => setShowGantt(e.target.checked)}
+                  style={{ width: 15, height: 15, accentColor: '#2563eb', cursor: 'pointer' }}
+                />
+                Gantt
+              </label>
+            </div>
+          )}
 
-          {/* Settings + Print */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 16, borderLeft: '1px solid #e2e8f0', height: 34 }}>
-            <button onClick={() => setAlertMessage('Opening settings...')} title="Settings" style={iconBtnBase}
-              onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#1e293b' }}
-              onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#64748b' }}
-            ><Settings size={15} /></button>
-            <button onClick={() => window.print()} title="Print" style={iconBtnBase}
-              onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#1e293b' }}
-              onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#64748b' }}
-            ><Printer size={15} /></button>
-          </div>
+          {!isMobile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 16, borderLeft: '1px solid #e2e8f0', height: 34 }}>
+              <button onClick={() => setAlertMessage('Opening settings...')} title="Settings" style={iconBtnBase}
+                onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#1e293b' }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#64748b' }}
+              ><Settings size={15} /></button>
+              <button onClick={() => window.print()} title="Print" style={iconBtnBase}
+                onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#1e293b' }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#64748b' }}
+              ><Printer size={15} /></button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -2257,18 +2530,21 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             Failed to initialize Gantt: {ganttError}
           </div>
         ) : (
-          <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+          <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflowX: 'auto', overflowY: 'hidden' }} />
         )}
 
-        {/* Custom React Resizer Overlay */}
+        {/* Custom React Resizer Overlay — width is now clamped against the
+            live containerWidth so the handle (and the grid it drives) can
+            never be dragged past what's actually visible. */}
         <div
           onMouseDown={() => { isResizing.current = true; document.body.style.cursor = 'col-resize' }}
+          onTouchStart={() => { isResizing.current = true }}
           style={{
             position: 'absolute',
             left: `calc(max(0px, min(${dragPreviewWidth ?? gridWidth}px - 4px, 100% - 8px)))`,
             top: 0,
             bottom: 0,
-            width: 8,
+            width: isMobile ? 16 : 8,
             cursor: 'col-resize',
             zIndex: 10,
             backgroundColor: 'transparent',
@@ -2280,7 +2556,6 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
           onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(37,99,235,0.1)' }}
           onMouseLeave={(e) => { if (!isResizing.current) e.currentTarget.style.backgroundColor = 'transparent' }}
         >
-          {/* Visual dots */}
           <div style={{
             width: 14, height: 26, background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 4,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -2289,14 +2564,19 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         </div>
       </div>
 
-      {/* Footer */}
+      {/* Footer — legend items scroll horizontally as a strip on mobile
+          instead of wrapping into several lines and eating into the
+          gantt area's vertical space. */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '12px 24px', background: '#ffffff',
+        display: 'flex', alignItems: 'center', justifyContent: isMobile ? 'flex-start' : 'space-between',
+        padding: isMobile ? '8px 12px' : '12px 24px', background: '#ffffff',
         borderTop: '1px solid #e2e8f0',
         fontSize: 11, color: '#64748b', fontWeight: 600, flexShrink: 0,
+        overflowX: isMobile ? 'auto' : 'visible',
+        WebkitOverflowScrolling: 'touch',
+        gap: 12,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 12 : 20, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 2, background: '#3b82f6' }} />
             <span>Task</span>
@@ -2305,40 +2585,45 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             <span style={{ display: 'inline-block', width: 8, height: 8, transform: 'rotate(45deg)', background: '#10b981' }} />
             <span>Milestone</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ color: '#94a3b8', letterSpacing: '1px', fontSize: 13, fontWeight: 'bold' }}>- - -</span>
-            <span>Baseline</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ display: 'inline-block', width: 16, height: 2, background: '#ef4444' }} />
-            <span>Critical Path</span>
-          </div>
-          {/* Predecessor type legend */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, borderLeft: '1px solid #e2e8f0', paddingLeft: 16 }}>
-            {[
-              { label: 'FS', desc: 'Finish→Start', bg: '#dbeafe', color: '#1d4ed8' },
-              { label: 'SS', desc: 'Start→Start', bg: '#dcfce7', color: '#15803d' },
-              { label: 'FF', desc: 'Finish→Finish', bg: '#fef3c7', color: '#b45309' },
-              { label: 'SF', desc: 'Start→Finish', bg: '#f3e8ff', color: '#7c3aed' },
-            ].map(t => (
-              <span key={t.label} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                fontSize: 10, color: '#64748b',
-              }}>
-                <span style={{
-                  background: t.bg, color: t.color,
-                  fontWeight: 700, fontSize: 9, padding: '1px 5px',
-                  borderRadius: 4, letterSpacing: '0.3px', lineHeight: '16px',
-                }}>{t.label}</span>
-                <span>{t.desc}</span>
-              </span>
-            ))}
-          </div>
+          {!isMobile && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ color: '#94a3b8', letterSpacing: '1px', fontSize: 13, fontWeight: 'bold' }}>- - -</span>
+                <span>Baseline</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ display: 'inline-block', width: 16, height: 2, background: '#ef4444' }} />
+                <span>Critical Path</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, borderLeft: '1px solid #e2e8f0', paddingLeft: 16 }}>
+                {[
+                  { label: 'FS', desc: 'Finish→Start', bg: '#dbeafe', color: '#1d4ed8' },
+                  { label: 'SS', desc: 'Start→Start', bg: '#dcfce7', color: '#15803d' },
+                  { label: 'FF', desc: 'Finish→Finish', bg: '#fef3c7', color: '#b45309' },
+                  { label: 'SF', desc: 'Start→Finish', bg: '#f3e8ff', color: '#7c3aed' },
+                ].map(t => (
+                  <span key={t.label} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    fontSize: 10, color: '#64748b',
+                  }}>
+                    <span style={{
+                      background: t.bg, color: t.color,
+                      fontWeight: 700, fontSize: 9, padding: '1px 5px',
+                      borderRadius: 4, letterSpacing: '0.3px', lineHeight: '16px',
+                    }}>{t.label}</span>
+                    <span>{t.desc}</span>
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
-        <div>
+        <div style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
           {totalTasks > 0
-            ? `Showing 1 – ${totalTasks} of ${totalTasks} tasks (${totalMilestones} milestones)`
+            ? isMobile
+              ? `${totalTasks} tasks`
+              : `Showing 1 – ${totalTasks} of ${totalTasks} tasks (${totalMilestones} milestones)`
             : 'No schedule data available for this project.'}
         </div>
       </div>
@@ -2356,6 +2641,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 99999,
+          padding: 16,
         }}>
           <div style={{
             background: '#ffffff',
@@ -2364,6 +2650,8 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
             width: '100%',
             maxWidth: 400,
+            maxHeight: '90vh',
+            overflowY: 'auto',
             padding: 24,
             display: 'flex',
             flexDirection: 'column',
@@ -2413,9 +2701,9 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
                 </div>
               )}
 
-              {taskModalData.isSubTaskFlag && (
+              {taskModalData.type !== 'milestone' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Assignee</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Resource</label>
                   <input
                     type="text"
                     value={taskModalData.assignees}
@@ -2425,25 +2713,42 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
                 </div>
               )}
 
+              {taskModalData.type === 'task' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Predecessor (optional)</label>
+                  <input
+                    type="text"
+                    placeholder="Task # or name it depends on"
+                    value={taskModalData.predecessor}
+                    onChange={e => setTaskModalData({ ...taskModalData, predecessor: e.target.value })}
+                    style={{ height: 38, borderRadius: 8, border: '1px solid #cbd5e1', padding: '0 12px', fontSize: 14, outline: 'none' }}
+                  />
+                </div>
+              )}
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
                 <button
                   type="button"
                   onClick={() => setTaskModalOpen(false)}
+                  disabled={isSavingTask}
                   style={{
                     height: 36, borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff',
-                    color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '0 16px',
+                    color: '#475569', fontWeight: 600, fontSize: 13, cursor: isSavingTask ? 'not-allowed' : 'pointer',
+                    padding: '0 16px', opacity: isSavingTask ? 0.6 : 1,
                   }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
+                  disabled={isSavingTask}
                   style={{
                     height: 36, borderRadius: 8, border: 'none', background: '#2563eb',
-                    color: '#ffffff', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '0 16px',
+                    color: '#ffffff', fontWeight: 600, fontSize: 13, cursor: isSavingTask ? 'not-allowed' : 'pointer',
+                    padding: '0 16px', opacity: isSavingTask ? 0.7 : 1,
                   }}
                 >
-                  Add
+                  {isSavingTask ? 'Saving…' : 'Add'}
                 </button>
               </div>
             </form>
@@ -2464,6 +2769,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 99999,
+          padding: 16,
         }}>
           <div style={{
             background: '#ffffff',
@@ -2512,6 +2818,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 99999,
+          padding: 16,
         }}>
           <div style={{
             background: '#ffffff',

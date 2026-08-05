@@ -23,7 +23,7 @@ function NotificationPanel({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.97 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="absolute right-0 top-12 z-50 w-[92vw] max-w-[560px] origin-top-right overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl"
+            className="fixed inset-x-3 top-16 z-50 origin-top overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[92vw] sm:max-w-140 sm:origin-top-right"
         >
             {/* HEADER */}
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">

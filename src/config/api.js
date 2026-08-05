@@ -42,6 +42,10 @@ export const API_ENDPOINTS = {
   DELETE_BOARD: `${API_ROOT_URL}/users/delete_board`,
   GET_USER_DISCUSSION: `${API_ROOT_URL}/users/get_userDiscussion`,
   UPDATE_PROJECT_MILESTONE: `${API_ROOT_URL}/projectManager/update_project_milestone`,
+  // Project Schedule (Gantt chart)
+  GET_PROJECT_SCHEDULE: `${API_ROOT_URL}/projectManager/get_project_schedule`,
+  SCHEDULE_PROJECT_TASK: `${API_ROOT_URL}/projectManager/schedule_project`,
+  CREATE_SUBTASK_SCHEDULE: `${API_ROOT_URL}/projectManager/subTask_schedule`,
   // Notifications
   GET_NOTIFICATIONS: `${API_ROOT_URL}/users/get_notifications`,
   MARK_NOTIFICATION_READ: `${API_ROOT_URL}/users/mark_notification_read`,
