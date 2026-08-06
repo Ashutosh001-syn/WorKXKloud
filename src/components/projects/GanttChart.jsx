@@ -1130,8 +1130,80 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   // TODO(backend): no update endpoint exists yet (only create — see
   // schedule_project / subTask_schedule) so edits/reschedules stay local
   // for now. Wire the real PUT/POST call here once it's available.
-  const syncTaskWithAPI = async (_task, _isSubTaskOverride = null) => { }
+  const syncTaskWithAPI = async (task, isSubTaskOverride = null) => {
+    try {
+      const isSubTask =
+        isSubTaskOverride !== null
+          ? isSubTaskOverride
+          : String(task.id).startsWith("subtask_");
 
+      if (isSubTask) {
+        const parentTask = gantt.getTask(task.parent);
+
+        const payload = {
+          sub_task_id: task.apiId,
+          pm_id: pmId,
+          project_id: projectId,
+          task_id: parentTask.apiId,
+          sub_task_name: task.text,
+          planned_start: formatToAPIDateOnly(task.start_date),
+          planned_end: formatToAPIDateOnly(getInclusiveEndDate(task.end_date)),
+          duration: Number(task.duration),
+          resource: task.assignees || "",
+          predecessor: getPredecessorsText(task),
+        };
+
+        console.log("UPDATE SUBTASK:", payload);
+
+        const response = await fetch(API_ENDPOINTS.UPDATE_SUBTASK_SCHEDULE, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || "Failed to update sub task.");
+        }
+      } else {
+        const payload = {
+          task_id: task.apiId,
+          pm_id: pmId,
+          project_id: projectId,
+          task_name: task.text,
+          planned_start: formatToAPIDateOnly(task.start_date),
+          planned_end: formatToAPIDateOnly(getInclusiveEndDate(task.end_date)),
+          duration: Number(task.duration),
+          resource: task.assignees || "",
+          predecessor: getPredecessorsText(task),
+        };
+
+        console.log("UPDATE TASK:", payload);
+
+        const response = await fetch(API_ENDPOINTS.UPDATE_TASK_SCHEDULE, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || "Failed to update task.");
+        }
+      }
+
+      reloadSchedule();
+    } catch (err) {
+      console.error("Schedule Update Error:", err);
+      setAlertMessage(err.message || "Failed to update schedule.");
+    }
+  };
   // Main gantt setup
   useEffect(() => {
     if (!containerRef.current) return
@@ -2075,37 +2147,87 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   }
 
   const handleDeleteClick = () => {
-    const selectedId = gantt.getSelectedId() || selectedTaskId
-    if (!selectedId) {
-      setAlertMessage('Please select a task or sub-task to delete.')
-      return
-    }
-    if (selectedId === `project_${projectId}`) {
-      setAlertMessage('The project root task cannot be deleted.')
-      return
-    }
-    try {
-      const task = gantt.getTask(selectedId)
-      if (task) {
-        setTaskToDelete(task)
-        setDeleteText('')
-        setDeleteConfirmOpen(true)
-      }
-    } catch (err) {
-      setAlertMessage('Error finding the selected task.')
-    }
-  }
+    const selectedId = gantt.getSelectedId() || selectedTaskId;
 
-  const handleConfirmDeleteTask = () => {
-    if (!taskToDelete) return
-    if (deleteText.trim().toLowerCase() === 'delete') {
-      gantt.deleteTask(taskToDelete.id)
-      setDeleteConfirmOpen(false)
-      setTaskToDelete(null)
-      setSelectedTaskId(null)
-      setDeleteText('')
+    if (!selectedId) {
+      setAlertMessage("Please select a task or sub-task to delete.");
+      return;
     }
-  }
+
+    if (selectedId === `project_${projectId}`) {
+      setAlertMessage("The project root task cannot be deleted.");
+      return;
+    }
+
+    try {
+      const task = gantt.getTask(selectedId);
+
+      if (!task) {
+        setAlertMessage("Task not found.");
+        return;
+      }
+
+      setTaskToDelete(task);
+      setDeleteText("");
+      setDeleteConfirmOpen(true);
+    } catch (err) {
+      console.error(err);
+      setAlertMessage("Error finding the selected task.");
+    }
+  };
+
+  const handleConfirmDeleteTask = async () => {
+    if (!taskToDelete) return;
+
+    if (deleteText.trim().toLowerCase() !== "delete") return;
+
+    try {
+      const isSubTask = String(taskToDelete.id).startsWith("subtask_");
+
+      let payload;
+
+      if (isSubTask) {
+        const parentTask = gantt.getTask(taskToDelete.parent);
+
+        payload = {
+          task_id: parentTask.apiId,
+          sub_task_id: taskToDelete.apiId,
+        };
+      } else {
+        payload = {
+          task_id: taskToDelete.apiId,
+        };
+      }
+
+      console.log("Delete Payload:", payload);
+      console.log("Task To Delete:", taskToDelete);
+
+      const response = await fetch(API_ENDPOINTS.DELETE_TASK_SUBTASK, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        setAlertMessage(result.message || "Failed to delete.");
+        return;
+      }
+
+      gantt.deleteTask(taskToDelete.id);
+
+      setDeleteConfirmOpen(false);
+      setTaskToDelete(null);
+      setSelectedTaskId(null);
+      setDeleteText("");
+    } catch (err) {
+      console.error("Delete Error:", err);
+      setAlertMessage("Something went wrong while deleting.");
+    }
+  };
 
   const handleScrollToday = () => gantt.showDate(new Date())
   const handleScrollLeft = () => { const s = gantt.getScrollState(); gantt.scrollTo(s.x - 250, null) }
@@ -2533,9 +2655,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
           <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflowX: 'auto', overflowY: 'hidden' }} />
         )}
 
-        {/* Custom React Resizer Overlay — width is now clamped against the
-            live containerWidth so the handle (and the grid it drives) can
-            never be dragged past what's actually visible. */}
+
         <div
           onMouseDown={() => { isResizing.current = true; document.body.style.cursor = 'col-resize' }}
           onTouchStart={() => { isResizing.current = true }}

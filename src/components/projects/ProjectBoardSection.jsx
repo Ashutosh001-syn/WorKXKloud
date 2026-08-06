@@ -3,7 +3,7 @@ import {
   Search, Filter, MoreHorizontal, Calendar, GripVertical,
   ArrowUp, Minus, CheckCircle2, Plus, Loader2, X, Copy, Trash2,
   ArrowRightLeft, Pencil, Tag, CheckSquare, MessageSquare, Paperclip, Settings2,
-  ChevronDown, Check, ListFilter
+  ChevronDown, Check, ListFilter, User
 } from 'lucide-react';
 import { API_ENDPOINTS } from '../../config/api';
 import { useToast } from '../../hooks/useToast';
@@ -16,6 +16,15 @@ const PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 };
 
 let mockBoardIdSeq = 1000;
 const nextMockBoardId = () => (mockBoardIdSeq += 1);
+
+function safeParse(raw, fallback) {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
 
 // --- Small presentational helpers ---
 const PriorityBadge = ({ level }) => {
@@ -32,6 +41,162 @@ const PriorityBadge = ({ level }) => {
     </div>
   );
 };
+
+// --- Initials avatar (no external image dependency — reflects the actual
+// assigned resource, unlike a static placeholder photo) ---
+const AVATAR_PALETTE = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#dc2626', '#0891b2', '#db2777', '#4f46e5'];
+
+function avatarColor(name) {
+  if (!name) return '#94a3b8';
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+}
+
+function initialsFor(name) {
+  if (!name) return '';
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase();
+}
+
+function AssigneeAvatar({ name, size = 24 }) {
+  if (!name) {
+    return (
+      <div
+        className="flex shrink-0 items-center justify-center rounded-full border border-dashed border-slate-300 bg-slate-50 text-slate-300"
+        style={{ width: size, height: size }}
+        title="Unassigned"
+      >
+        <User size={Math.round(size * 0.55)} />
+      </div>
+    );
+  }
+  return (
+    <div
+      className="flex shrink-0 items-center justify-center rounded-full font-bold text-white"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.42), backgroundColor: avatarColor(name) }}
+      title={name}
+    >
+      {initialsFor(name)}
+    </div>
+  );
+}
+
+// --- Quick-assign popover, opened from the card's avatar. Doesn't open the
+// full task modal — just lets you pick a resource in place. ---
+function AssigneePicker({ resources, resourcesLoading, currentResourceId, currentResourceName, onRequestResources, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handleOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref} draggable={false}>
+      <button
+        type="button"
+        draggable={false}
+        onClick={(e) => {
+          e.stopPropagation();
+          const next = !open;
+          setOpen(next);
+          if (next) onRequestResources();
+        }}
+        title={currentResourceName ? `Assigned to ${currentResourceName}` : 'Assign resource'}
+        className="rounded-full transition hover:ring-2 hover:ring-blue-200"
+      >
+        <AssigneeAvatar name={currentResourceName} />
+      </button>
+
+      {open && (
+        <div
+          className="absolute bottom-8 left-0 z-30 w-44 max-h-56 overflow-y-auto rounded-xl border border-slate-100 bg-white shadow-lg py-1.5 text-[13px]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => { onSelect(''); setOpen(false); }}
+            className={`flex w-full items-center gap-2 px-3 py-1.5 hover:bg-slate-50 ${!currentResourceId ? 'text-blue-600 font-semibold' : 'text-slate-500'}`}
+          >
+            <AssigneeAvatar name={null} size={18} /> Unassigned
+          </button>
+          <div className="my-1 border-t border-slate-100" />
+          {resourcesLoading ? (
+            <div className="flex items-center gap-2 px-3 py-1.5 text-slate-400">
+              <Loader2 size={13} className="animate-spin" /> Loading…
+            </div>
+          ) : resources.length === 0 ? (
+            <p className="px-3 py-1.5 text-[12px] text-slate-400">No resources found.</p>
+          ) : (
+            resources.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => { onSelect(r.id); setOpen(false); }}
+                className={`flex w-full items-center gap-2 px-3 py-1.5 hover:bg-slate-50 ${String(currentResourceId) === String(r.id) ? 'text-blue-600 font-semibold' : 'text-slate-600'}`}
+              >
+                <AssigneeAvatar name={r.name} size={18} />
+                <span className="truncate">{r.name}</span>
+                {String(currentResourceId) === String(r.id) && <Check size={13} className="ml-auto shrink-0 text-blue-600" />}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Due-date quick edit: click opens the native date picker directly on
+// the card, no full modal needed. ---
+function DueDatePicker({ isoDate, displayDate, onChange }) {
+  const inputRef = useRef(null);
+
+  const openPicker = (e) => {
+    e.stopPropagation();
+    const el = inputRef.current;
+    if (!el) return;
+    if (typeof el.showPicker === 'function') {
+      try {
+        el.showPicker();
+        return;
+      } catch {
+        // unsupported in this context — fall back to focusing below
+      }
+    }
+    el.focus();
+  };
+
+  return (
+    <div className="relative flex items-center gap-1.5 text-slate-400 text-xs font-medium" draggable={false}>
+      <button
+        type="button"
+        draggable={false}
+        onClick={openPicker}
+        className="flex items-center gap-1.5 hover:text-blue-600 transition"
+        title="Change due date"
+      >
+        <Calendar className="w-3.5 h-3.5" />
+        {displayDate}
+      </button>
+      <input
+        ref={inputRef}
+        type="date"
+        defaultValue={isoDate || ''}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => { e.stopPropagation(); onChange(e.target.value); }}
+        className="pointer-events-none absolute h-px w-px overflow-hidden opacity-0"
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+    </div>
+  );
+}
 
 function LabelChips({ labels }) {
   if (!labels?.length) return null;
@@ -134,8 +299,10 @@ function CardMenu({ onEdit, onDuplicate, onDelete, columns, currentTitle, onMove
 
 const TaskCard = ({
   task, extras, columns, isDragging, isDropTargetAbove,
+  resources, resourcesLoading,
   onDragStart, onDragOverCard, onOpen,
   onEdit, onDuplicate, onDelete, onMoveTo,
+  onEnsureResources, onAssigneeChange, onDateChange,
 }) => (
   <div className="relative">
     {isDropTargetAbove && <div className="absolute -top-1.5 left-0 right-0 h-0.5 rounded-full bg-blue-500" />}
@@ -193,14 +360,22 @@ const TaskCard = ({
       )}
 
       <div className="flex items-center justify-between mt-2">
-        <img src={task.avatar} alt="Assignee" className="w-6 h-6 rounded-full border border-slate-200 pointer-events-none" />
+        <AssigneePicker
+          resources={resources}
+          resourcesLoading={resourcesLoading}
+          currentResourceId={task.rawApiData?.resource_id}
+          currentResourceName={task.rawApiData?.resource_name}
+          onRequestResources={onEnsureResources}
+          onSelect={onAssigneeChange}
+        />
         {task.isCompleted ? (
           <CheckCircle2 className="w-5 h-5 text-green-500" />
         ) : (
-          <div className="flex items-center text-slate-400 text-xs font-medium gap-1.5">
-            <Calendar className="w-3.5 h-3.5" />
-            {task.date}
-          </div>
+          <DueDatePicker
+            isoDate={task.rawApiData?.due_date?.slice(0, 10)}
+            displayDate={task.date}
+            onChange={onDateChange}
+          />
         )}
       </div>
     </div>
@@ -208,7 +383,7 @@ const TaskCard = ({
 );
 
 
-export default function ProjectBoardSection({ projectId, pmId, subProjectId = null }) {
+export default function ProjectBoardSection({ projectId, pmId }) {
   const { toasts, showToast, dismissToast } = useToast();
   const {
     columns, labelPalette, getExtras, toggleLabel,
@@ -240,9 +415,16 @@ export default function ProjectBoardSection({ projectId, pmId, subProjectId = nu
   const moreMenuRef = useRef(null);
 
   const [activeColumnForAdd, setActiveColumnForAdd] = useState(null);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef(null);
+
+  // CREATE_BOARD links a board card to an existing schedule task (task_id),
+  // it doesn't accept a free-text title — so "Add Task" picks from the
+  // project's schedule instead of typing a new name.
+  const [scheduleTaskOptions, setScheduleTaskOptions] = useState([]);
+  const [scheduleTasksLoading, setScheduleTasksLoading] = useState(false);
+  const [scheduleTasksFetched, setScheduleTasksFetched] = useState(false);
+  const [selectedScheduleTaskId, setSelectedScheduleTaskId] = useState('');
 
   const [newColumnTitle, setNewColumnTitle] = useState('');
   const [addingColumn, setAddingColumn] = useState(false);
@@ -300,10 +482,18 @@ export default function ProjectBoardSection({ projectId, pmId, subProjectId = nu
     return { name: 'Dianne Russell', role: 'UI/UX Designer', avatar: 'https://i.pravatar.cc/150?img=47' };
   };
 
+  // Local cache key for this project's board — see the loadTasks/persistence
+  // note below for why this exists.
+  const tasksKey = `board_tasks_${projectId || 'default'}`;
+
   // --- PURE DATA LOADER (no state writes) ---
-  // TODO(backend): once GET_BOARDS_BY_RESOURCE is live, restore the fetch
-  // below and drop the mock fallback — the returned shape already matches
-  // what the rest of this component expects, so nothing else needs to change.
+  // TODO(backend): once GET_BOARDS_BY_RESOURCE (or whatever the real "list
+  // boards" endpoint ends up being called) is live, restore the fetch below
+  // — the returned shape already matches what the rest of this component
+  // expects — AND delete the localStorage cache read here together with its
+  // matching write effect further down. Leaving the cache in place after a
+  // real endpoint exists would make it silently shadow the server's data
+  // forever, which is worse than today's problem.
   const loadTasks = useCallback(async () => {
     try {
       // const { id: resourceId, role } = getResourceId();
@@ -328,7 +518,6 @@ export default function ProjectBoardSection({ projectId, pmId, subProjectId = nu
       //     title: item.sub_project_name,
       //     projectName: item.project_name,
       //     priority: item.priority || 'Medium',
-      //     avatar: item.assignee_avatar || 'https://i.pravatar.cc/150?img=47',
       //     date: item.due_date
       //       ? new Date(item.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
       //       : '—',
@@ -337,12 +526,23 @@ export default function ProjectBoardSection({ projectId, pmId, subProjectId = nu
       //     rawApiData: item,
       //   }));
 
+      // Interim persistence: CREATE_BOARD is live, but there's no matching
+      // "list boards" endpoint yet, so a page refresh has nothing real to
+      // refetch from — every card added via the real API call was getting
+      // silently thrown away on reload. Cache the board's current state in
+      // localStorage instead (same stopgap pattern useBoardExtras.js already
+      // uses for labels/checklist/comments) so created/edited/moved/deleted
+      // cards survive a refresh. This is per-browser only, not shared across
+      // users/devices — the real fix is the backend list endpoint above.
+      const cached = safeParse(localStorage.getItem(tasksKey), null);
+      if (cached) return cached;
+
       return getMockBoardTasks(projectId);
     } catch (error) {
       console.error('ProjectBoardSection: fetch failed, using mock data', error);
       return getMockBoardTasks(projectId);
     }
-  }, [projectId]);
+  }, [projectId, tasksKey]);
 
   useEffect(() => {
     let isMounted = true;
@@ -355,6 +555,17 @@ export default function ProjectBoardSection({ projectId, pmId, subProjectId = nu
       .finally(() => { if (isMounted) setIsLoading(false); });
     return () => { isMounted = false; };
   }, [loadTasks]);
+
+  // Keep the cache in sync with every board mutation (create/edit/move/
+  // delete/duplicate) — not just initial load — so any of them survives a
+  // refresh. Skipped while the initial load is still in flight so we don't
+  // clobber the cache with the transient empty `tasks` the component starts
+  // with. Delete this together with the cache read above once the real list
+  // endpoint lands.
+  useEffect(() => {
+    if (isLoading) return;
+    localStorage.setItem(tasksKey, JSON.stringify(tasks));
+  }, [tasks, tasksKey, isLoading]);
 
   // Kept for the TODO(backend) restore path in handleCreateTaskAPI / handleDuplicateTask below.
   const _refetchTasks = useCallback(async () => {
@@ -408,46 +619,74 @@ export default function ProjectBoardSection({ projectId, pmId, subProjectId = nu
     }
   }, [resourcesFetched]);
 
+  // Real endpoint (GanttChart already uses this one successfully) — fetches
+  // the project's schedule so "Add Task" can link a board card to one of
+  // the actual top-level tasks. Sub-tasks are left out: CREATE_BOARD's
+  // task_id and a sub-task's own id share the same numbering, so picking a
+  // sub-task here could silently attach the card to the wrong task_id.
+  const ensureScheduleTasksLoaded = useCallback(async () => {
+    if (scheduleTasksFetched || !projectId || !pmId) return;
+    setScheduleTasksLoading(true);
+    try {
+      const response = await fetch(API_ENDPOINTS.GET_PROJECT_SCHEDULE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId, pm_id: pmId }),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.message || 'Failed to load schedule tasks');
+      const options = (result.data || []).map((task) => ({ id: task.id, label: task.task_name }));
+      setScheduleTaskOptions(options);
+    } catch (error) {
+      console.error('Error fetching schedule tasks for board:', error);
+    } finally {
+      setScheduleTasksLoading(false);
+      setScheduleTasksFetched(true);
+    }
+  }, [scheduleTasksFetched, projectId, pmId]);
+
   // --- CREATE TASK ---
-  // TODO(backend): once CREATE_BOARD is live, POST first and refetch on
-  // success (see commented block) instead of inserting the task locally.
+  // CREATE_BOARD links a card to an existing schedule task (task_id) —
+  // there's no "read back the new card" response (just { success, message
+  // }), so on success we add a local card built from the picked task's own
+  // label/id rather than refetching (GET_BOARDS_BY_RESOURCE isn't
+  // confirmed live yet — see loadTasks above).
   const handleCreateTaskAPI = async (columnTitle) => {
-    if (!newTaskTitle.trim()) return;
+    if (!selectedScheduleTaskId) return;
+    const pickedTask = scheduleTaskOptions.find((t) => String(t.id) === String(selectedScheduleTaskId));
+    if (!pickedTask) return;
+
     setIsSubmitting(true);
     try {
-      // const { id: resourceId } = getResourceId();
-      // const response = await fetch(API_ENDPOINTS.CREATE_BOARD, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     project_id: projectId,
-      //     sub_project_id: subProjectId,
-      //     status: columnTitle.toLowerCase(),
-      //     resource_id: resourceId,
-      //     pm_id: pmId,
-      //     title: newTaskTitle.trim()
-      //   }),
-      // });
-      // const data = await response.json();
-      // if (!data.success) throw new Error(data.message || 'Failed to create task');
-      // await _refetchTasks();
-
       const { id: resourceId } = getResourceId();
+      const response = await fetch(API_ENDPOINTS.CREATE_BOARD, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: projectId,
+          task_id: pickedTask.id,
+          status: columnTitle.toLowerCase(),
+          resource_id: resourceId,
+          pm_id: pmId,
+        }),
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.message || 'Failed to create task');
+
       const newBoardId = nextMockBoardId();
       const newTask = {
         id: `WR-${newBoardId}`,
         boardId: newBoardId,
-        title: newTaskTitle.trim(),
+        title: pickedTask.label,
         projectName: tasks[0]?.projectName,
         priority: 'Medium',
-        avatar: 'https://i.pravatar.cc/150?img=47',
         date: '—',
         isCompleted: columnTitle === 'Completed',
         status: columnTitle,
-        rawApiData: { project_id: projectId, sub_project_id: subProjectId, resource_id: resourceId, pm_id: pmId },
+        rawApiData: { project_id: projectId, task_id: pickedTask.id, resource_id: resourceId, pm_id: pmId },
       };
       setTasks((current) => [...current, newTask]);
-      setNewTaskTitle('');
+      setSelectedScheduleTaskId('');
       setActiveColumnForAdd(null);
       showToast('Task created.', { type: 'success' });
     } catch (error) {
@@ -460,17 +699,18 @@ export default function ProjectBoardSection({ projectId, pmId, subProjectId = nu
 
   const handleDuplicateTask = async (task) => {
     try {
+      // CREATE_BOARD takes a task_id (not a free-text title), so "duplicate"
+      // would create a second card pointing at the same schedule task:
       // const { id: resourceId } = getResourceId();
       // const response = await fetch(API_ENDPOINTS.CREATE_BOARD, {
       //   method: 'POST',
       //   headers: { 'Content-Type': 'application/json' },
       //   body: JSON.stringify({
       //     project_id: projectId,
-      //     sub_project_id: subProjectId,
+      //     task_id: task.rawApiData?.task_id,
       //     status: task.status.toLowerCase(),
       //     resource_id: task.rawApiData?.resource_id || resourceId,
       //     pm_id: pmId,
-      //     title: `${task.title} (copy)`,
       //   }),
       // });
       // const data = await response.json();
@@ -543,6 +783,20 @@ export default function ProjectBoardSection({ projectId, pmId, subProjectId = nu
     // });
     // const data = await response.json();
     // if (!data.success) throw new Error(data.message || 'Update failed');
+  };
+
+  // --- Quick-edit from the card itself (avatar / date icon), same
+  // save path as the detail modal's fields, just with a toast for feedback
+  // since there's no inline "Saving…" indicator on the card.
+  const handleQuickAssigneeChange = async (task, resourceId) => {
+    await handleSaveField(task, 'resource_id', resourceId);
+    const resource = resources.find((r) => String(r.id) === String(resourceId));
+    showToast(resource ? `Assigned to ${resource.name}.` : 'Unassigned.', { type: 'success' });
+  };
+
+  const handleQuickDateChange = async (task, value) => {
+    await handleSaveField(task, 'due_date', value);
+    showToast('Due date updated.', { type: 'success' });
   };
 
   const isDefaultColumn = (title) =>
@@ -958,6 +1212,8 @@ export default function ProjectBoardSection({ projectId, pmId, subProjectId = nu
                       columns={columns}
                       isDragging={draggingTaskId === task.id}
                       isDropTargetAbove={dropTarget?.status === column.title && dropTarget?.beforeTaskId === task.id}
+                      resources={resources}
+                      resourcesLoading={resourcesLoading}
                       onDragStart={(e) => handleTaskDragStart(e, task.id)}
                       onDragOverCard={(e) => handleCardDragOver(e, column.title, task.id)}
                       onOpen={() => { setSelectedTaskId(task.id); ensureResourcesLoaded(); }}
@@ -965,54 +1221,68 @@ export default function ProjectBoardSection({ projectId, pmId, subProjectId = nu
                       onDuplicate={() => handleDuplicateTask(task)}
                       onDelete={() => handleDeleteTask(task)}
                       onMoveTo={(targetTitle) => moveTask(task.id, targetTitle, null)}
+                      onEnsureResources={ensureResourcesLoaded}
+                      onAssigneeChange={(value) => handleQuickAssigneeChange(task, value)}
+                      onDateChange={(value) => handleQuickDateChange(task, value)}
                     />
                   ))
                 )}
               </div>
 
-              {/* Add Task Input Area */}
-              <div className="mt-auto pt-2">
-                {activeColumnForAdd === column.title ? (
-                  <div className="bg-white p-3 rounded-xl border border-blue-200 shadow-sm flex flex-col gap-2">
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      placeholder="Enter task name..."
-                      value={newTaskTitle}
-                      onChange={(e) => setNewTaskTitle(e.target.value)}
-                      disabled={isSubmitting}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleCreateTaskAPI(column.title);
-                        if (e.key === 'Escape') { setActiveColumnForAdd(null); setNewTaskTitle(''); }
-                      }}
-                      className="h-auto w-full border-none bg-transparent p-0 text-sm outline-none placeholder:text-slate-400"
-                    />
-                    <div className="flex items-center justify-end gap-2 mt-2">
-                      <button
-                        onClick={() => { setActiveColumnForAdd(null); setNewTaskTitle(''); }}
-                        className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-700"
-                        disabled={isSubmitting}
+              {/* Add Task — only on the leftmost column (To Do). New work
+                  starts there and moves right via drag/"Move to", matching
+                  how the board is meant to be used; the other columns just
+                  don't get an add-task affordance. */}
+              {index === 0 && (
+                <div className="mt-auto pt-2">
+                  {activeColumnForAdd === column.title ? (
+                    <div className="bg-white p-3 rounded-xl border border-blue-200 shadow-sm flex flex-col gap-2">
+                      <select
+                        ref={inputRef}
+                        value={selectedScheduleTaskId}
+                        onChange={(e) => setSelectedScheduleTaskId(e.target.value)}
+                        disabled={isSubmitting || scheduleTasksLoading}
+                        className="h-auto w-full border-none bg-transparent p-0 text-sm outline-none disabled:text-slate-400"
                       >
-                        <X className="w-3.5 h-3.5" /> Cancel
-                      </button>
-                      <button
-                        onClick={() => handleCreateTaskAPI(column.title)}
-                        disabled={isSubmitting || !newTaskTitle.trim()}
-                        className="bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        {isSubmitting ? 'Saving...' : 'Add'}
-                      </button>
+                        <option value="" disabled>
+                          {scheduleTasksLoading ? 'Loading tasks…' : 'Select a task from Schedule…'}
+                        </option>
+                        {scheduleTaskOptions.map((option) => (
+                          <option key={option.id} value={option.id}>{option.label}</option>
+                        ))}
+                      </select>
+                      {!scheduleTasksLoading && scheduleTaskOptions.length === 0 && (
+                        <p className="text-[11px] text-slate-400">
+                          No tasks in this project's Schedule yet — add one there first.
+                        </p>
+                      )}
+                      <div className="flex items-center justify-end gap-2 mt-2">
+                        <button
+                          onClick={() => { setActiveColumnForAdd(null); setSelectedScheduleTaskId(''); }}
+                          className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-700"
+                          disabled={isSubmitting}
+                        >
+                          <X className="w-3.5 h-3.5" /> Cancel
+                        </button>
+                        <button
+                          onClick={() => handleCreateTaskAPI(column.title)}
+                          disabled={isSubmitting || !selectedScheduleTaskId}
+                          className="bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          {isSubmitting ? 'Saving...' : 'Add'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setActiveColumnForAdd(column.title)}
-                    className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-slate-500 hover:bg-slate-200/50 rounded-xl transition-colors"
-                  >
-                    <Plus className="w-4 h-4" /> Add Task
-                  </button>
-                )}
-              </div>
+                  ) : (
+                    <button
+                      onClick={() => { setActiveColumnForAdd(column.title); ensureScheduleTasksLoaded(); }}
+                      className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-slate-500 hover:bg-slate-200/50 rounded-xl transition-colors"
+                    >
+                      <Plus className="w-4 h-4" /> Add Task
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}

@@ -11,7 +11,6 @@ const MOCK_ASSIGNEE = {
   resource_id: 'res-dianne',
   resource_name: 'Dianne Russell',
   resource_role: 'UI/UX Designer',
-  avatar: 'https://i.pravatar.cc/150?img=47',
 };
 
 const RAW_MOCK_BOARD_TASKS = [
@@ -33,7 +32,6 @@ export function getMockBoardTasks(projectId, projectName = 'Website Redesign') {
     title: item.title,
     projectName,
     priority: item.priority,
-    avatar: MOCK_ASSIGNEE.avatar,
     date: new Date(item.dueDate).toLocaleDateString('en-GB', {
       day: '2-digit',
       month: 'short',

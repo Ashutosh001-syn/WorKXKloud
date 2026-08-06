@@ -1,14 +1,18 @@
-export const API_ROOT_URL = import.meta.env.VITE_API_ROOT_URL ||
-  'http://103.185.75.124:8021/api'
-  // 'http://localhost:8021/api'
-  ;
+export const API_ROOT_URL =
+  import.meta.env.VITE_API_ROOT_URL ||
+  'http://103.185.75.124:8021/api';
+// 'http://localhost:8021/api';
+
 export const API_BASE_URL = `${API_ROOT_URL}/admin`;
 
 export const API_ENDPOINTS = {
+  // Authentication
   LOGIN: `${API_ROOT_URL}/auth/login`,
   FORGOT_PASSWORD_GENERATE_OTP: `${API_ROOT_URL}/auth/forgot-password/generate-otp`,
   FORGOT_PASSWORD_VERIFY_OTP: `${API_ROOT_URL}/auth/forgot-password/verify-otp`,
   FORGOT_PASSWORD_RESET: `${API_ROOT_URL}/auth/forgot-password/reset`,
+
+  // Admin
   ALL_PROJECTS: `${API_BASE_URL}/all_projects`,
   USER_LIST: `${API_BASE_URL}/user_list`,
   CREATE_USER: `${API_BASE_URL}/create_user`,
@@ -24,28 +28,44 @@ export const API_ENDPOINTS = {
   UPDATE_RESOURCE: `${API_BASE_URL}/update_resource`,
   ASSIGN_PROJECT: `${API_ROOT_URL}/projectManager/assign_project`,
   DEACTIVATE_RESOURCE: `${API_BASE_URL}/deactivate_resource`,
+
   // Holidays
   HOLIDAYS: `${API_BASE_URL}/holidays`,
   ADD_HOLIDAY: `${API_BASE_URL}/add_holiday`,
   UPDATE_HOLIDAY: `${API_BASE_URL}/update_holiday`,
   DELETE_HOLIDAY: `${API_BASE_URL}/delete_holiday`,
   CHECK_HOLIDAYS: `${API_BASE_URL}/check_holidays`,
+
   // Project Manager
   GET_PROJECTS_BY_PM: `${API_ROOT_URL}/projectManager/get_projectsByPm`,
   PROJECT_APPROVAL_BY_PM: `${API_ROOT_URL}/projectManager/project_approvalBYPM`,
   CREATE_REQUIRED_RESOURCE: `${API_ROOT_URL}/projectManager/create_requiredResource`,
   GET_PM_BACKLOG: `${API_ROOT_URL}/projectManager/get_pmBacklog`,
+
+  // Boards
   GET_BOARDS_BY_RESOURCE: `${API_ROOT_URL}/users/get_BoardsByResource`,
   CREATE_BOARD: `${API_ROOT_URL}/users/create_board`,
   UPDATE_BOARD_STATUS: `${API_ROOT_URL}/users/update_boardStatus`,
   UPDATE_BOARD: `${API_ROOT_URL}/users/update_board`,
   DELETE_BOARD: `${API_ROOT_URL}/users/delete_board`,
   GET_USER_DISCUSSION: `${API_ROOT_URL}/users/get_userDiscussion`,
+
+  // Milestone
   UPDATE_PROJECT_MILESTONE: `${API_ROOT_URL}/projectManager/update_project_milestone`,
-  // Project Schedule (Gantt chart)
+
+  // ==========================
+  // Project Schedule (Gantt)
+  // ==========================
   GET_PROJECT_SCHEDULE: `${API_ROOT_URL}/projectManager/get_project_schedule`,
   SCHEDULE_PROJECT_TASK: `${API_ROOT_URL}/projectManager/schedule_project`,
   CREATE_SUBTASK_SCHEDULE: `${API_ROOT_URL}/projectManager/subTask_schedule`,
+
+  // NEW
+  UPDATE_TASK_SCHEDULE: `${API_ROOT_URL}/projectManager/editTaskScheduleProject`,
+  UPDATE_SUBTASK_SCHEDULE: `${API_ROOT_URL}/projectManager/editSubTaskSchedule`,
+
+  DELETE_TASK_SUBTASK: `${API_ROOT_URL}/projectManager/deleteTaskSubtask`,
+
   // Notifications
   GET_NOTIFICATIONS: `${API_ROOT_URL}/users/get_notifications`,
   MARK_NOTIFICATION_READ: `${API_ROOT_URL}/users/mark_notification_read`,

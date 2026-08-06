@@ -1,7 +1,8 @@
 # Backend API Requirements
 
-The application currently runs on mock/dummy data for three features. None of them are connected to a real server yet.
+The application currently runs on mock/dummy data for two features (Notifications, Workload) and is **partially** live for the Kanban Board — see status column below. None of the "New" rows are connected to a real server yet.
 
+- **Live** — integrated and working against the real backend today.
 - **Ready** — endpoint already exists in `src/config/api.js` and the frontend code is already written for it (currently commented out). Needs a real backend implementation, then it will be enabled.
 - **New** — does not exist yet. Needs to be designed together.
 
@@ -9,12 +10,12 @@ The application currently runs on mock/dummy data for three features. None of th
 
 | Feature | Endpoint | Method | Status |
 |---|---|---|---|
-| Board | Get tasks | `GET_BOARDS_BY_RESOURCE` | Ready |
-| Board | Create task | `CREATE_BOARD` | Ready |
+| Board | Create task | `CREATE_BOARD` | **Live** |
+| Board | **Get tasks (list boards)** | `GET_BOARDS_BY_RESOURCE` | **Ready — blocking, see note** |
 | Board | Edit task | `UPDATE_BOARD` | Ready |
 | Board | Move task (status) | `UPDATE_BOARD_STATUS` | Ready |
 | Board | Delete task | `DELETE_BOARD` | Ready |
-| Board | Assignee list | `RESOURCE_LIST` | Already working |
+| Board | Assignee list | `RESOURCE_LIST` | Already working elsewhere — needs Board wiring |
 | Board | Labels, checklist, comments, attachments, custom columns | — | New |
 | Notifications | Get list | `GET_NOTIFICATIONS` | Ready |
 | Notifications | Mark one read | `MARK_NOTIFICATION_READ` | Ready |
@@ -23,11 +24,22 @@ The application currently runs on mock/dummy data for three features. None of th
 | Notifications | Delete one | `DELETE_NOTIFICATION` | Ready |
 | Workload | Get workload data | `get_workload` (suggested) | New |
 
+> **Blocking note (get tasks / list boards):** without this endpoint, a created/edited/moved card only lives in the browser's `localStorage` — it will not show up for another user or another device, and clearing browser data loses it. This is the single most important Board endpoint left.
+
 ---
 
 ## 1. Kanban Board
 
-### Get tasks — `GET_BOARDS_BY_RESOURCE`
+### Create task — `CREATE_BOARD` ✅ Live
+`POST /users/create_board`
+
+Request: `{ project_id, task_id, status, resource_id, pm_id }`
+
+Response: `{ success, message }`
+
+Links a card to an existing Schedule task (`task_id`, from `get_project_schedule`) — it does not take a free-text title. The response has no `board_id`, so the frontend cannot ask "what did I just create" — see the note under the next endpoint.
+
+### Get tasks (list boards) — `GET_BOARDS_BY_RESOURCE`
 `POST /users/get_BoardsByResource`
 
 Request
@@ -42,11 +54,11 @@ Response
   "data": [
     {
       "board_id": 1,
-      "sub_project_name": "Research & Analysis",
+      "task_id": 9,
+      "task_name": "Research & Analysis",
       "project_name": "Website Redesign",
       "project_id": "P-2026071",
       "priority": "High",
-      "assignee_avatar": "https://...",
       "due_date": "2024-07-09",
       "status": "To Do",
       "resource_id": "res-1",
@@ -57,14 +69,7 @@ Response
 }
 ```
 
-### Create task — `CREATE_BOARD`
-`POST /users/create_board`
-
-Request: `{ project_id, sub_project_id, status, resource_id, pm_id, title }`
-
-Response: `{ success, message, data: { board_id } }`
-
-The new `board_id` should be returned in the response so the frontend does not need a full refetch after create.
+Needed for two things: (1) showing the real list of cards on page load instead of the mock seed list, and (2) letting the frontend refetch right after `create_board` succeeds (since that response doesn't return a `board_id`) so the new card shows its real `board_id` instead of a locally-generated placeholder one.
 
 ### Edit task — `UPDATE_BOARD`
 `POST /users/update_board`
