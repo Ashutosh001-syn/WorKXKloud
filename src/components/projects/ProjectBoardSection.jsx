@@ -527,18 +527,30 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
     }
     setLoadError(null);
     try {
+      // Checked for response.ok before parsing (rather than jumping straight
+      // to .json()) so a route that isn't deployed on this server yet shows
+      // up as a clear "server error" instead of a raw JSON-parse failure —
+      // a 404 page is HTML, and .json() on HTML throws a confusing
+      // "Unexpected token '<'" error.
+      const parseJsonResponse = async (response) => {
+        if (!response.ok) {
+          throw new Error(`Server returned ${response.status} — this endpoint may not be deployed here yet.`);
+        }
+        return response.json();
+      };
+
       const [boardResult, scheduleResult, resourceResult] = await Promise.allSettled([
         fetch(API_ENDPOINTS.GET_BOARD, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pm_id: pmId, project_id: projectId }),
-        }).then((r) => r.json()),
+        }).then(parseJsonResponse),
         fetch(API_ENDPOINTS.GET_PROJECT_SCHEDULE, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ project_id: projectId, pm_id: pmId }),
-        }).then((r) => r.json()),
-        fetch(API_ENDPOINTS.RESOURCE_LIST).then((r) => r.json()),
+        }).then(parseJsonResponse),
+        fetch(API_ENDPOINTS.RESOURCE_LIST).then(parseJsonResponse),
       ]);
 
       const boardData = boardResult.status === 'fulfilled' ? boardResult.value : null;
