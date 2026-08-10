@@ -9,11 +9,16 @@ const LABEL_PALETTE = [
     { name: 'Docs', color: '#1aa37a' },
 ]
 
+// `statusKey` is the exact snake_case value GET_BOARD/CREATE_BOARD use on
+// the backend. It's what actually drives which column a card belongs to —
+// `title` is just the label shown in the UI and can be renamed freely
+// (double-click a column header) without breaking that link.
 const DEFAULT_COLUMNS = [
-    { id: 'todo', title: 'To Do', color: 'bg-green-500', wipLimit: null },
-    { id: 'in-progress', title: 'In Progress', color: 'bg-blue-500', wipLimit: null },
-    { id: 'review', title: 'Review', color: 'bg-orange-500', wipLimit: null },
-    { id: 'completed', title: 'Completed', color: 'bg-green-500', wipLimit: null },
+    { id: 'in-discussion', title: 'In Discussion', color: 'bg-slate-400', wipLimit: null, statusKey: 'in_discussion' },
+    { id: 'todo', title: 'To Do', color: 'bg-green-500', wipLimit: null, statusKey: 'to_do' },
+    { id: 'in-work', title: 'In Work', color: 'bg-purple-500', wipLimit: null, statusKey: 'in_work' },
+    { id: 'in-progress', title: 'In Progress', color: 'bg-blue-500', wipLimit: null, statusKey: 'in_progress' },
+    { id: 'completed', title: 'Completed', color: 'bg-emerald-600', wipLimit: null, statusKey: 'completed' },
 ]
 
 const COLUMN_COLOR_CYCLE = ['bg-slate-400', 'bg-purple-500', 'bg-pink-500', 'bg-cyan-500', 'bg-amber-500'];
@@ -27,17 +32,13 @@ function safeParse(raw, fallback) {
     }
 }
 
-/**
- * TODO(backend): everything in this hook (labels, subtasks, comments,
- * attachments, custom columns / WIP limits) currently lives in
- * localStorage because the board API only persists title/status/priority.
- * Once dedicated endpoints exist, swap the localStorage reads/writes below
- * for real fetch/save calls — the shape returned to consumers won't need
- * to change.
- */
 export function useBoardExtras(projectId) {
     const extrasKey = `board_task_extras_${projectId || 'default'}`
-    const columnsKey = `board_columns_${projectId || 'default'}`
+    // v2: columns now carry a statusKey (see DEFAULT_COLUMNS above) — bumped
+    // so anyone with the old 4-column/no-statusKey cache gets a clean reseed
+    // instead of silently running with columns that can't map to a backend
+    // status.
+    const columnsKey = `board_columns_v2_${projectId || 'default'}`
 
     const [loadedProjectId, setLoadedProjectId] = useState(projectId)
     const [taskExtras, setTaskExtras] = useState(() =>
@@ -47,10 +48,7 @@ export function useBoardExtras(projectId) {
         safeParse(localStorage.getItem(columnsKey), DEFAULT_COLUMNS)
     )
 
-    // Reset local state when the open project changes. This runs during
-    // render (not inside an effect) — the React-recommended pattern for
-    // "adjusting state when a prop changes" — so it avoids the extra
-    // render pass a useEffect-based reset would cause.
+
     if (projectId !== loadedProjectId) {
         setLoadedProjectId(projectId)
         setTaskExtras(safeParse(localStorage.getItem(extrasKey), {}))
@@ -158,6 +156,10 @@ export function useBoardExtras(projectId) {
                 title,
                 color: COLUMN_COLOR_CYCLE[current.length % COLUMN_COLOR_CYCLE.length],
                 wipLimit: null,
+                // Custom columns have no backend status to map to — cards
+                // moved here stay local-only (see ProjectBoardSection's
+                // moveTask) until the backend supports arbitrary statuses.
+                statusKey: null,
             },
         ])
     }, [])

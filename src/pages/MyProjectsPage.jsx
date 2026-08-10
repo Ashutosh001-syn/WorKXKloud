@@ -802,7 +802,11 @@ function MyProjectsPage() {
                 </div>
 
               ) : activeTab === 'Board' ? (
-                <ProjectBoardSection projectId={selectedProject.id} pmId={getPmId()} />
+                <ProjectBoardSection
+                  projectId={selectedProject.id}
+                  pmId={getPmId()}
+                  projectName={selectedProject.project_name}
+                />
               ) : activeTab === 'Schedule' ? (
                 <GanttChart
                   tasks={getGanttDataForProject(selectedProject)}

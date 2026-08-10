@@ -1,30 +1,25 @@
 # Backend API Requirements
 
-The application currently runs on mock/dummy data for two features (Notifications, Workload) and is **partially** live for the Kanban Board — see status column below. None of the "New" rows are connected to a real server yet.
+The application currently runs on mock/dummy data for two features (Notifications, Workload). The Kanban Board is now **mostly live** — see status column below.
 
 - **Live** — integrated and working against the real backend today.
 - **Ready** — endpoint already exists in `src/config/api.js` and the frontend code is already written for it (currently commented out). Needs a real backend implementation, then it will be enabled.
 - **New** — does not exist yet. Needs to be designed together.
 
-## Summary
+## Summary — Kanban Board
 
-| Feature | Endpoint | Method | Status |
+| # | Endpoint | Status | What's blocked without it |
 |---|---|---|---|
-| Board | Create task | `CREATE_BOARD` | **Live** |
-| Board | **Get tasks (list boards)** | `GET_BOARDS_BY_RESOURCE` | **Ready — blocking, see note** |
-| Board | Edit task | `UPDATE_BOARD` | Ready |
-| Board | Move task (status) | `UPDATE_BOARD_STATUS` | Ready |
-| Board | Delete task | `DELETE_BOARD` | Ready |
-| Board | Assignee list | `RESOURCE_LIST` | Already working elsewhere — needs Board wiring |
-| Board | Labels, checklist, comments, attachments, custom columns | — | New |
-| Notifications | Get list | `GET_NOTIFICATIONS` | Ready |
-| Notifications | Mark one read | `MARK_NOTIFICATION_READ` | Ready |
-| Notifications | Mark all read | `MARK_ALL_NOTIFICATIONS_READ` | Ready |
-| Notifications | Clear all | `CLEAR_ALL_NOTIFICATIONS` | Ready |
-| Notifications | Delete one | `DELETE_NOTIFICATION` | Ready |
-| Workload | Get workload data | `get_workload` (suggested) | New |
+| 1 | `CREATE_BOARD` (`create_board`) | ✅ **Live** | — |
+| 2 | `GET_BOARD` (`getBoard`) | ✅ **Live** | — |
+| 3 | `RESOURCE_LIST` (`resource_list`) | ✅ **Live** | — |
+| 4 | `UPDATE_BOARD` (`update_board`) | ⏳ Ready, not confirmed | Editing a card's title/priority/due date/assignee doesn't save — resets on refresh |
+| 5 | `UPDATE_BOARD_STATUS` (`update_boardStatus`) | ⏳ Ready, not confirmed | Dragging a card / "Move to" doesn't save — resets on refresh |
+| 6 | `DELETE_BOARD` (`delete_board`) | ⏳ Ready, not confirmed | Deleting a card doesn't save — reappears on refresh |
+| 7 | Priority + due date on board rows | 🆕 New (suggested field addition) | Every card shows "Medium" priority and "—" due date — the board API has neither field yet |
+| 8 | Labels, checklist, comments, attachments, custom columns | 🆕 New | All local-only (browser storage), not shared between users/devices |
 
-> **Blocking note (get tasks / list boards):** without this endpoint, a created/edited/moved card only lives in the browser's `localStorage` — it will not show up for another user or another device, and clearing browser data loses it. This is the single most important Board endpoint left.
+**Bottom line for this sprint:** create + read are done and live. Everything else on the board (edit, move, delete) still only changes what's on screen — it reverts the moment the page is refreshed, since there's nothing yet to actually save those 3 actions to the server. **#4, #5, #6 are the next priority.**
 
 ---
 
@@ -37,69 +32,68 @@ Request: `{ project_id, task_id, status, resource_id, pm_id }`
 
 Response: `{ success, message }`
 
-Links a card to an existing Schedule task (`task_id`, from `get_project_schedule`) — it does not take a free-text title. The response has no `board_id`, so the frontend cannot ask "what did I just create" — see the note under the next endpoint.
+Links a card to an existing Schedule task (`task_id`, from `get_project_schedule`) — it does not take a free-text title. The response has no `board_id`, so after a successful create the frontend re-calls `GET_BOARD` to pick up the real row.
 
-### Get tasks (list boards) — `GET_BOARDS_BY_RESOURCE`
-`POST /users/get_BoardsByResource`
+### Get board — `GET_BOARD` ✅ Live
+`POST /projectManager/getBoard`
 
-Request
-```json
-{ "resource_id": "string", "type": "role", "project_id": "string" }
-```
+Request: `{ pm_id, project_id }`
 
-Response
+Response (confirmed live shape):
 ```json
 {
   "success": true,
-  "data": [
-    {
-      "board_id": 1,
-      "task_id": 9,
-      "task_name": "Research & Analysis",
-      "project_name": "Website Redesign",
-      "project_id": "P-2026071",
-      "priority": "High",
-      "due_date": "2024-07-09",
-      "status": "To Do",
-      "resource_id": "res-1",
-      "resource_name": "Dianne Russell",
-      "resource_role": "UI/UX Designer"
-    }
-  ]
+  "message": "Board data fetched successfully",
+  "data": {
+    "in_discussion": [],
+    "to_do": [
+      { "id": 10, "project_id": 4, "task_id": 2, "resource_id": 10, "status": "to_do", "pm_id": 4, "created_at": "2026-08-05T13:21:33.000Z" }
+    ],
+    "in_work": [],
+    "in_progress": [],
+    "completed": []
+  }
 }
 ```
 
-Needed for two things: (1) showing the real list of cards on page load instead of the mock seed list, and (2) letting the frontend refetch right after `create_board` succeeds (since that response doesn't return a `board_id`) so the new card shows its real `board_id` instead of a locally-generated placeholder one.
+Cards are grouped under exactly these 5 status keys — `in_discussion`, `to_do`, `in_work`, `in_progress`, `completed` — which is what `status` on `CREATE_BOARD`/`UPDATE_BOARD_STATUS` must also use. There's no "Review" status on the backend; the board's 5 default columns (In Discussion / To Do / In Work / In Progress / Completed) map 1:1 to these.
 
-### Edit task — `UPDATE_BOARD`
+**Gap:** a row has no `task_name`, `priority`, or `due_date` — the frontend currently resolves the title by cross-referencing `task_id` against `get_project_schedule`, and shows a hardcoded "Medium" priority / "—" due date since there's no source for either. See #7 below.
+
+### Assignee list — `RESOURCE_LIST` ✅ Live
+`GET /admin/resource_list`
+
+Already used elsewhere (Resource Master, Create Project wizard) and now wired into the Board too, for the assignee picker and for resolving `resource_id` → name on each card. Response: `{ success, data: [{ id, name, role, ... }] }`.
+
+### Edit task — `UPDATE_BOARD` — not confirmed live
 `POST /users/update_board`
 
-Request: `{ board_id, [field]: value }`, where field is one of `title`, `priority`, `due_date`, `resource_id`, `description`.
+Request: `{ board_id, [field]: value }`, field is one of `title`, `priority`, `due_date`, `resource_id`, `description`.
 
 Response: `{ success, message }`
 
-### Move task — `UPDATE_BOARD_STATUS`
+The frontend already has the UI for this (detail modal + the card's own quick-edit avatar/date icons) — it just needs this endpoint confirmed working to actually persist.
+
+### Move task — `UPDATE_BOARD_STATUS` — not confirmed live
 `POST /users/update_boardStatus`
 
 Triggered on drag-and-drop or "Move to" a different column.
 
-Request: `{ board_id, status }`
+Request: `{ board_id, status }` — `status` uses the same 5 keys as `GET_BOARD` (`to_do`, `in_work`, etc.)
 
 Response: `{ success, message }`
 
-### Delete task — `DELETE_BOARD`
+### Delete task — `DELETE_BOARD` — not confirmed live
 `POST /users/delete_board`
 
 Request: `{ board_id }`
 
 Response: `{ success, message }`
 
-### Assignee list — `RESOURCE_LIST`
-`GET /admin/resource_list`
+### Priority + due date on board rows — suggested addition
+`GET_BOARD`'s rows currently carry no `priority` or `due_date`. Two options: (a) add both fields to the board row itself (set via `CREATE_BOARD`/`UPDATE_BOARD`), or (b) confirm whether Schedule's `get_project_schedule` already has a date range per task that the board should just borrow. Until one of these exists, every card will keep showing "Medium" / "—".
 
-Already implemented and used elsewhere in the application. No backend work needed. The response should include `id` and `name` (or `first_name` / `last_name`) for each resource.
-
-### Labels, checklist, comments, attachments, custom columns
+### Labels, checklist, comments, attachments, custom columns — new
 These currently exist only in the browser's localStorage and are not shared between users or devices. Real endpoints are needed for:
 
 - Labels — attach/detach a label (from a shared palette) to a task
@@ -108,7 +102,7 @@ These currently exist only in the browser's localStorage and are not shared betw
 - Attachments — add/delete, link-style only (no file upload yet), per task
 - Custom columns — add/rename/delete/reorder, with an optional WIP limit, per project
 
-This is the largest gap for multi-user use and should be prioritized accordingly.
+Lower priority than #4–6 above — this is a real gap for multi-user use but doesn't block the core "create, see, move, edit, delete a card" flow the way those three do.
 
 ---
 

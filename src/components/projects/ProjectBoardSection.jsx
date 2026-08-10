@@ -10,20 +10,38 @@ import { useToast } from '../../hooks/useToast';
 import { useBoardExtras } from '../../hooks/useBoardExtras';
 import ToastStack from '../ui/ToastStack';
 import TaskDetailModal from './board/TaskDetailModel';
-import { getMockBoardTasks, mockBoardResources } from '../../data/mockBoardTasks';
 
 const PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 };
+const PRIORITY_GROUPS = [
+  { id: 'High', title: 'High', color: 'bg-red-500', wipLimit: null },
+  { id: 'Medium', title: 'Medium', color: 'bg-orange-400', wipLimit: null },
+  { id: 'Low', title: 'Low', color: 'bg-slate-400', wipLimit: null },
+];
 
-let mockBoardIdSeq = 1000;
-const nextMockBoardId = () => (mockBoardIdSeq += 1);
-
-function safeParse(raw, fallback) {
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
+// Enriches one GET_BOARD row into the task shape the rest of this component
+// expects. The board row itself only carries ids (task_id, resource_id) and
+// a status — no title, no resource name, no due date, no priority — so a
+// schedule-task map and a resource map are passed in to fill in what's
+// available for display. `statusKey` (the raw backend value, e.g. "to_do")
+// is kept as-is rather than converted to a display label — matching a card
+// to its column is always done against this, never against a column's
+// (renamable) title.
+function boardItemToTask(item, statusKey, scheduleMap, resourceMap) {
+  return {
+    id: `WR-${item.id}`,
+    boardId: item.id,
+    title: scheduleMap.get(String(item.task_id)) || `Task #${item.task_id}`,
+    projectName: undefined, // filled in by the caller, which knows the project name
+    priority: 'Medium', // TODO(backend): GET_BOARD doesn't return a priority yet
+    date: '—', // TODO(backend): GET_BOARD doesn't return a due date yet
+    isCompleted: statusKey === 'completed',
+    statusKey,
+    customColumnId: null, // set when locally moved into a user-added column — see moveTask
+    rawApiData: {
+      ...item,
+      resource_name: resourceMap.get(String(item.resource_id)),
+    },
+  };
 }
 
 // --- Small presentational helpers ---
@@ -215,7 +233,7 @@ function LabelChips({ labels }) {
   );
 }
 
-function CardMenu({ onEdit, onDuplicate, onDelete, columns, currentTitle, onMoveTo }) {
+function CardMenu({ onEdit, onDuplicate, onDelete, columns, currentStatusKey, currentCustomColumnId, onMoveTo }) {
   const [open, setOpen] = useState(false);
   const [showMoveTo, setShowMoveTo] = useState(false);
   const ref = useRef(null);
@@ -268,17 +286,19 @@ function CardMenu({ onEdit, onDuplicate, onDelete, columns, currentTitle, onMove
             </button>
             {showMoveTo && (
               <div className="absolute left-full top-0 ml-1 w-36 rounded-xl border border-slate-100 bg-white shadow-lg py-1.5">
-                {columns.filter((c) => c.title !== currentTitle).map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onMoveTo(c.title); setOpen(false); setShowMoveTo(false); }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-slate-600 hover:bg-slate-50 text-left"
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${c.color}`} />
-                    {c.title}
-                  </button>
-                ))}
+                {columns
+                  .filter((c) => (c.statusKey ? c.statusKey !== currentStatusKey : c.id !== currentCustomColumnId))
+                  .map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onMoveTo(c); setOpen(false); setShowMoveTo(false); }}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-slate-600 hover:bg-slate-50 text-left"
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${c.color}`} />
+                      {c.title}
+                    </button>
+                  ))}
               </div>
             )}
           </div>
@@ -331,7 +351,8 @@ const TaskCard = ({
           onDelete={onDelete}
           onMoveTo={onMoveTo}
           columns={columns}
-          currentTitle={task.status}
+          currentStatusKey={task.statusKey}
+          currentCustomColumnId={task.customColumnId}
         />
       </div>
 
@@ -383,7 +404,7 @@ const TaskCard = ({
 );
 
 
-export default function ProjectBoardSection({ projectId, pmId }) {
+export default function ProjectBoardSection({ projectId, pmId, projectName }) {
   const { toasts, showToast, dismissToast } = useToast();
   const {
     columns, labelPalette, getExtras, toggleLabel,
@@ -394,8 +415,9 @@ export default function ProjectBoardSection({ projectId, pmId }) {
 
   const [tasks, setTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [draggingTaskId, setDraggingTaskId] = useState(null);
-  const [dropTarget, setDropTarget] = useState(null); // { status, beforeTaskId | null }
+  const [dropTarget, setDropTarget] = useState(null); // { columnId, beforeTaskId | null }
   const [draggingColumnIndex, setDraggingColumnIndex] = useState(null);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -408,8 +430,13 @@ export default function ProjectBoardSection({ projectId, pmId }) {
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const roleDropdownRef = useRef(null);
 
+  const [groupBy, setGroupBy] = useState('Status'); // 'Status' | 'Assignee' | 'Priority'
   const [groupByOpen, setGroupByOpen] = useState(false);
   const groupByRef = useRef(null);
+  // Only used when groupBy !== 'Status' — those groups don't support the
+  // "insert before this card" tracking that dropTarget gives Status mode,
+  // just a simple "you're hovering this group" highlight.
+  const [hoveredGroupId, setHoveredGroupId] = useState(null);
 
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
@@ -482,102 +509,93 @@ export default function ProjectBoardSection({ projectId, pmId }) {
     return { name: 'Dianne Russell', role: 'UI/UX Designer', avatar: 'https://i.pravatar.cc/150?img=47' };
   };
 
-  // Local cache key for this project's board — see the loadTasks/persistence
-  // note below for why this exists.
-  const tasksKey = `board_tasks_${projectId || 'default'}`;
-
-  // --- PURE DATA LOADER (no state writes) ---
-  // TODO(backend): once GET_BOARDS_BY_RESOURCE (or whatever the real "list
-  // boards" endpoint ends up being called) is live, restore the fetch below
-  // — the returned shape already matches what the rest of this component
-  // expects — AND delete the localStorage cache read here together with its
-  // matching write effect further down. Leaving the cache in place after a
-  // real endpoint exists would make it silently shadow the server's data
-  // forever, which is worse than today's problem.
-  const loadTasks = useCallback(async () => {
-    try {
-      // const { id: resourceId, role } = getResourceId();
-      // if (!resourceId) {
-      //   console.warn("resource_id not found in localStorage");
-      //   return null;
-      // }
-      //
-      // const response = await fetch(API_ENDPOINTS.GET_BOARDS_BY_RESOURCE, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ resource_id: resourceId, type: role, project_id: projectId })
-      // });
-      // const result = await response.json();
-      // if (!result.success || !result.data) return null;
-      //
-      // return result.data
-      //   .filter((item) => !projectId || !item.project_id || String(item.project_id) === String(projectId))
-      //   .map((item) => ({
-      //     id: `BRD-${item.board_id}`,
-      //     boardId: item.board_id,
-      //     title: item.sub_project_name,
-      //     projectName: item.project_name,
-      //     priority: item.priority || 'Medium',
-      //     date: item.due_date
-      //       ? new Date(item.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-      //       : '—',
-      //     isCompleted: item.status?.toLowerCase() === 'completed',
-      //     status: item.status,
-      //     rawApiData: item,
-      //   }));
-
-      // Interim persistence: CREATE_BOARD is live, but there's no matching
-      // "list boards" endpoint yet, so a page refresh has nothing real to
-      // refetch from — every card added via the real API call was getting
-      // silently thrown away on reload. Cache the board's current state in
-      // localStorage instead (same stopgap pattern useBoardExtras.js already
-      // uses for labels/checklist/comments) so created/edited/moved/deleted
-      // cards survive a refresh. This is per-browser only, not shared across
-      // users/devices — the real fix is the backend list endpoint above.
-      const cached = safeParse(localStorage.getItem(tasksKey), null);
-      if (cached) return cached;
-
-      return getMockBoardTasks(projectId);
-    } catch (error) {
-      console.error('ProjectBoardSection: fetch failed, using mock data', error);
-      return getMockBoardTasks(projectId);
+  // --- BOARD LOADER ---
+  // GET_BOARD is live (projectManager/getBoard) and groups cards by status:
+  // in_discussion, to_do, in_work, in_progress, completed. Each row only
+  // carries ids (task_id, resource_id) — no title, no resource name, no
+  // priority, no due date — so it's enriched here against the project's
+  // Schedule (task_id -> task_name) and the resource list (resource_id ->
+  // name/role), fetched in parallel. Schedule/resource lookups degrade
+  // gracefully (cards still render, just with fallback labels) — only
+  // GET_BOARD itself failing is treated as a hard error, since that's the
+  // one piece with no reasonable fallback.
+  const refetchBoard = useCallback(async () => {
+    if (!projectId || !pmId) {
+      setTasks([]);
+      setLoadError(null);
+      return;
     }
-  }, [projectId, tasksKey]);
+    setLoadError(null);
+    try {
+      const [boardResult, scheduleResult, resourceResult] = await Promise.allSettled([
+        fetch(API_ENDPOINTS.GET_BOARD, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pm_id: pmId, project_id: projectId }),
+        }).then((r) => r.json()),
+        fetch(API_ENDPOINTS.GET_PROJECT_SCHEDULE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ project_id: projectId, pm_id: pmId }),
+        }).then((r) => r.json()),
+        fetch(API_ENDPOINTS.RESOURCE_LIST).then((r) => r.json()),
+      ]);
+
+      const boardData = boardResult.status === 'fulfilled' ? boardResult.value : null;
+      if (!boardData?.success || !boardData.data) {
+        throw new Error(
+          boardData?.message ||
+          (boardResult.status === 'rejected' ? boardResult.reason?.message : null) ||
+          'Could not reach the board server.'
+        );
+      }
+
+      const scheduleTasks = (scheduleResult.status === 'fulfilled' && scheduleResult.value?.success)
+        ? (scheduleResult.value.data || [])
+        : [];
+      const scheduleMap = new Map(scheduleTasks.map((t) => [String(t.id), t.task_name]));
+
+      const resourceRows = (resourceResult.status === 'fulfilled' && resourceResult.value?.success)
+        ? (resourceResult.value.data || [])
+        : [];
+      const resourceMap = new Map(resourceRows.map((r) => [String(r.id), r.name]));
+
+      const flattened = [];
+      Object.entries(boardData.data).forEach(([statusKey, items]) => {
+        (items || []).forEach((item) => {
+          const task = boardItemToTask(item, statusKey, scheduleMap, resourceMap);
+          task.projectName = projectName;
+          flattened.push(task);
+        });
+      });
+      setTasks(flattened);
+
+      // The board load already pulls the full resource list — reuse it for
+      // the assignee picker/grouping instead of firing a second identical
+      // request the first time someone opens it.
+      if (resourceRows.length > 0) {
+        setResources(resourceRows.map((r) => ({ id: r.id, name: r.name, role: r.role })));
+        setResourcesFetched(true);
+      }
+    } catch (error) {
+      console.error('Error fetching board data:', error);
+      setLoadError(error.message || 'Failed to load board data.');
+      setTasks([]);
+    }
+  }, [projectId, pmId, projectName]);
 
   useEffect(() => {
     let isMounted = true;
-    loadTasks()
-      .then((data) => { if (isMounted && data) setTasks(data); })
-      .catch((error) => {
-        console.error('Error fetching board data:', error);
-        showToast('Failed to load board data from server.', { type: 'error' });
-      })
-      .finally(() => { if (isMounted) setIsLoading(false); });
-    return () => { isMounted = false; };
-  }, [loadTasks]);
-
-  // Keep the cache in sync with every board mutation (create/edit/move/
-  // delete/duplicate) — not just initial load — so any of them survives a
-  // refresh. Skipped while the initial load is still in flight so we don't
-  // clobber the cache with the transient empty `tasks` the component starts
-  // with. Delete this together with the cache read above once the real list
-  // endpoint lands.
-  useEffect(() => {
-    if (isLoading) return;
-    localStorage.setItem(tasksKey, JSON.stringify(tasks));
-  }, [tasks, tasksKey, isLoading]);
-
-  // Kept for the TODO(backend) restore path in handleCreateTaskAPI / handleDuplicateTask below.
-  const _refetchTasks = useCallback(async () => {
-    try {
-      const data = await loadTasks();
-      if (data) setTasks(data);
-    } catch (error) {
-      console.error('Error fetching board data:', error);
-      showToast('Failed to refresh board data.', { type: 'error' });
+    async function run() {
+      try {
+        await refetchBoard();
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadTasks]);
+    run();
+    return () => { isMounted = false; };
+  }, [refetchBoard]);
 
   useEffect(() => {
     if (activeColumnForAdd) inputRef.current?.focus();
@@ -594,23 +612,20 @@ export default function ProjectBoardSection({ projectId, pmId }) {
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
 
-  // TODO(backend): once RESOURCE_LIST is confirmed for this page, restore
-  // the fetch below in place of the mock resource list.
+  // RESOURCE_LIST is confirmed live (already used by Resource Master and the
+  // create-project wizard). Usually already populated by refetchBoard above
+  // by the time this is called — this only hits the network if that hasn't
+  // happened yet (e.g. the board itself failed to load but someone still
+  // opens the assignee picker).
   const ensureResourcesLoaded = useCallback(async () => {
     if (resourcesFetched) return;
     setResourcesLoading(true);
     try {
-      // const res = await fetch(API_ENDPOINTS.RESOURCE_LIST);
-      // const data = await res.json();
-      // const list = data?.data || data?.resources || [];
-      // setResources(
-      //   list.map((r) => ({
-      //     id: r.id || r.resource_id,
-      //     name: r.name || r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || 'Unnamed',
-      //   }))
-      // );
-
-      setResources(mockBoardResources);
+      const res = await fetch(API_ENDPOINTS.RESOURCE_LIST);
+      const data = await res.json();
+      if (data.success) {
+        setResources((data.data || []).map((r) => ({ id: r.id, name: r.name, role: r.role })));
+      }
     } catch (error) {
       console.error('Error fetching resources:', error);
     } finally {
@@ -645,14 +660,22 @@ export default function ProjectBoardSection({ projectId, pmId }) {
     }
   }, [scheduleTasksFetched, projectId, pmId]);
 
+  // Assignee grouping needs the full resource list (to build one group per
+  // resource, including people with zero cards) — not just the names that
+  // happen to show up on already-loaded tasks. Deferred a tick so the
+  // resulting setState doesn't fire synchronously inside this effect.
+  useEffect(() => {
+    if (groupBy !== 'Assignee') return;
+    queueMicrotask(() => ensureResourcesLoaded());
+  }, [groupBy, ensureResourcesLoaded]);
+
   // --- CREATE TASK ---
-  // CREATE_BOARD links a card to an existing schedule task (task_id) —
-  // there's no "read back the new card" response (just { success, message
-  // }), so on success we add a local card built from the picked task's own
-  // label/id rather than refetching (GET_BOARDS_BY_RESOURCE isn't
-  // confirmed live yet — see loadTasks above).
-  const handleCreateTaskAPI = async (columnTitle) => {
-    if (!selectedScheduleTaskId) return;
+  // CREATE_BOARD is live and confirmed: { project_id, task_id, status,
+  // resource_id, pm_id } -> { success, message } (no card payload back), so
+  // on success we just re-pull the board via GET_BOARD rather than guessing
+  // at the new row's id.
+  const handleCreateTaskAPI = async (column) => {
+    if (!selectedScheduleTaskId || !column.statusKey) return;
     const pickedTask = scheduleTaskOptions.find((t) => String(t.id) === String(selectedScheduleTaskId));
     if (!pickedTask) return;
 
@@ -665,7 +688,7 @@ export default function ProjectBoardSection({ projectId, pmId }) {
         body: JSON.stringify({
           project_id: projectId,
           task_id: pickedTask.id,
-          status: columnTitle.toLowerCase(),
+          status: column.statusKey,
           resource_id: resourceId,
           pm_id: pmId,
         }),
@@ -673,19 +696,7 @@ export default function ProjectBoardSection({ projectId, pmId }) {
       const data = await response.json();
       if (!data.success) throw new Error(data.message || 'Failed to create task');
 
-      const newBoardId = nextMockBoardId();
-      const newTask = {
-        id: `WR-${newBoardId}`,
-        boardId: newBoardId,
-        title: pickedTask.label,
-        projectName: tasks[0]?.projectName,
-        priority: 'Medium',
-        date: '—',
-        isCompleted: columnTitle === 'Completed',
-        status: columnTitle,
-        rawApiData: { project_id: projectId, task_id: pickedTask.id, resource_id: resourceId, pm_id: pmId },
-      };
-      setTasks((current) => [...current, newTask]);
+      await refetchBoard();
       setSelectedScheduleTaskId('');
       setActiveColumnForAdd(null);
       showToast('Task created.', { type: 'success' });
@@ -697,34 +708,33 @@ export default function ProjectBoardSection({ projectId, pmId }) {
     }
   };
 
+  // GET_BOARD's sample data shows several rows sharing the same task_id
+  // (e.g. task_id 2 appears six times under to_do with different resource
+  // ids/created_at) — so a second CREATE_BOARD call against the same
+  // task_id is normal here, not a data-integrity problem. Duplicate goes
+  // through the real API and refetches, same as create.
   const handleDuplicateTask = async (task) => {
+    if (!task.statusKey) {
+      showToast('Cards in a custom column can\'t be duplicated yet — the backend has no status for it.', { type: 'info' });
+      return;
+    }
     try {
-      // CREATE_BOARD takes a task_id (not a free-text title), so "duplicate"
-      // would create a second card pointing at the same schedule task:
-      // const { id: resourceId } = getResourceId();
-      // const response = await fetch(API_ENDPOINTS.CREATE_BOARD, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     project_id: projectId,
-      //     task_id: task.rawApiData?.task_id,
-      //     status: task.status.toLowerCase(),
-      //     resource_id: task.rawApiData?.resource_id || resourceId,
-      //     pm_id: pmId,
-      //   }),
-      // });
-      // const data = await response.json();
-      // if (!data.success) throw new Error(data.message || 'Failed to duplicate task');
-      // await _refetchTasks();
+      const { id: resourceId } = getResourceId();
+      const response = await fetch(API_ENDPOINTS.CREATE_BOARD, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: task.rawApiData?.project_id || projectId,
+          task_id: task.rawApiData?.task_id,
+          status: task.statusKey,
+          resource_id: task.rawApiData?.resource_id || resourceId,
+          pm_id: pmId,
+        }),
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.message || 'Failed to duplicate task');
 
-      const newBoardId = nextMockBoardId();
-      const duplicated = {
-        ...task,
-        id: `WR-${newBoardId}`,
-        boardId: newBoardId,
-        title: `${task.title} (copy)`,
-      };
-      setTasks((current) => [...current, duplicated]);
+      await refetchBoard();
       showToast('Task duplicated.', { type: 'success' });
     } catch (error) {
       console.error('Error duplicating task:', error);
@@ -735,7 +745,7 @@ export default function ProjectBoardSection({ projectId, pmId }) {
   const handleDeleteTask = async (task) => {
     if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
 
-    // TODO(backend): once DELETE_BOARD is live, restore:
+    // TODO(backend): once DELETE_BOARD is confirmed live, restore:
     // const response = await fetch(API_ENDPOINTS.DELETE_BOARD, {
     //   method: 'POST',
     //   headers: { 'Content-Type': 'application/json' },
@@ -743,6 +753,7 @@ export default function ProjectBoardSection({ projectId, pmId }) {
     // });
     // const data = await response.json();
     // if (!data.success) throw new Error(data.message || 'Delete failed');
+    // await refetchBoard();
 
     setTasks((current) => current.filter((t) => t.id !== task.id));
     removeExtras(task.boardId);
@@ -750,8 +761,9 @@ export default function ProjectBoardSection({ projectId, pmId }) {
   };
 
   // --- FIELD EDIT (from the detail modal) ---
-  // TODO(backend): once UPDATE_BOARD is live, restore the fetch below and
-  // revert setTasks(previousTasks) on failure.
+  // TODO(backend): once UPDATE_BOARD is confirmed live, restore the fetch
+  // below and revert setTasks(previousTasks) on failure. Until then this
+  // edit is local only and won't survive a refresh.
   const handleSaveField = async (task, field, value) => {
     setTasks((current) =>
       current.map((t) => {
@@ -799,40 +811,50 @@ export default function ProjectBoardSection({ projectId, pmId }) {
     showToast('Due date updated.', { type: 'success' });
   };
 
-  const isDefaultColumn = (title) =>
-    ['to do', 'in progress', 'review', 'completed'].includes(title.toLowerCase());
-
   // --- STATUS MOVE (drag-and-drop / move-to) ---
-  // TODO(backend): once UPDATE_BOARD_STATUS is live, restore the fetch below
-  // and revert setTasks(previousTasks) on failure.
-  const moveTask = async (taskId, targetStatus, beforeTaskId) => {
+  // Takes the target column object (not a title string) so this keeps
+  // working correctly even if a column has been renamed. Default columns
+  // move the card's real statusKey; a custom column has none, so the card
+  // just tracks it locally via customColumnId until the backend supports
+  // arbitrary statuses.
+  const moveTask = async (taskId, targetColumn, beforeTaskId) => {
     const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
+    if (!task || !targetColumn) return;
 
-    const targetColumn = columns.find((c) => c.title === targetStatus);
-    const currentInTarget = tasks.filter((t) => t.status === targetStatus && t.id !== taskId);
-    if (targetColumn?.wipLimit && currentInTarget.length >= targetColumn.wipLimit) {
+    const currentInTarget = tasks.filter((t) => {
+      const inTarget = targetColumn.statusKey ? t.statusKey === targetColumn.statusKey : t.customColumnId === targetColumn.id;
+      return inTarget && t.id !== taskId;
+    });
+    if (targetColumn.wipLimit && currentInTarget.length >= targetColumn.wipLimit) {
       showToast(`"${targetColumn.title}" is at its WIP limit (${targetColumn.wipLimit}).`, { type: 'info' });
     }
 
     setTasks((current) => {
       const withoutTask = current.filter((t) => t.id !== taskId);
-      const updatedTask = { ...task, status: targetStatus, isCompleted: targetStatus === 'Completed' };
+      const updatedTask = {
+        ...task,
+        statusKey: targetColumn.statusKey || task.statusKey,
+        customColumnId: targetColumn.statusKey ? null : targetColumn.id,
+        isCompleted: targetColumn.statusKey === 'completed',
+      };
       if (!beforeTaskId) return [...withoutTask, updatedTask];
       const insertAt = withoutTask.findIndex((t) => t.id === beforeTaskId);
       if (insertAt === -1) return [...withoutTask, updatedTask];
       return [...withoutTask.slice(0, insertAt), updatedTask, ...withoutTask.slice(insertAt)];
     });
 
-    if (!isDefaultColumn(targetStatus)) {
-      showToast(`Moved to a custom column — status "${targetStatus}" may not be recognized by the backend yet.`, { type: 'info' });
+    if (!targetColumn.statusKey) {
+      showToast(`Moved to a custom column — status "${targetColumn.title}" isn't recognized by the backend yet, so this only shows locally.`, { type: 'info' });
     }
 
-    // await fetch(API_ENDPOINTS.UPDATE_BOARD_STATUS, {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ board_id: task.boardId, status: targetStatus.toLowerCase() }),
-    // });
+    // TODO(backend): once UPDATE_BOARD_STATUS is confirmed live:
+    // if (targetColumn.statusKey) {
+    //   await fetch(API_ENDPOINTS.UPDATE_BOARD_STATUS, {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify({ board_id: task.boardId, status: targetColumn.statusKey }),
+    //   });
+    // }
   };
 
   // --- Drag and drop: tasks ---
@@ -843,30 +865,57 @@ export default function ProjectBoardSection({ projectId, pmId }) {
     e.dataTransfer.setData('application/x-task', taskId);
   };
 
-  const handleCardDragOver = (e, columnTitle, taskId) => {
+  const handleCardDragOver = (e, columnId, taskId) => {
     e.preventDefault();
     e.stopPropagation();
     if (!e.dataTransfer.types.includes('application/x-task')) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const isAbove = e.clientY < rect.top + rect.height / 2;
-    setDropTarget({ status: columnTitle, beforeTaskId: isAbove ? taskId : null });
+    setDropTarget({ columnId, beforeTaskId: isAbove ? taskId : null });
   };
 
-  const handleColumnDragOver = (e, columnTitle) => {
+  const handleColumnDragOver = (e, columnId) => {
     e.preventDefault();
     if (e.dataTransfer.types.includes('application/x-task')) {
-      setDropTarget((current) => current?.status === columnTitle ? current : { status: columnTitle, beforeTaskId: null });
+      setDropTarget((current) => current?.columnId === columnId ? current : { columnId, beforeTaskId: null });
     }
   };
 
-  const handleColumnDrop = async (e, columnTitle) => {
+  const handleColumnDrop = async (e, column) => {
     e.preventDefault();
     const taskId = e.dataTransfer.getData('application/x-task');
     setDraggingTaskId(null);
-    const target = dropTarget?.status === columnTitle ? dropTarget : { status: columnTitle, beforeTaskId: null };
+    const target = dropTarget?.columnId === column.id ? dropTarget : { columnId: column.id, beforeTaskId: null };
     setDropTarget(null);
     if (!taskId) return;
-    await moveTask(taskId, columnTitle, target.beforeTaskId);
+    await moveTask(taskId, column, target.beforeTaskId);
+  };
+
+  // --- Drag and drop when grouped by Assignee or Priority ---
+  // These groups aren't status columns, so dropping a card into one changes
+  // a different field instead: resource_id for Assignee, priority for
+  // Priority. No "insert before this card" tracking here — just "which
+  // group is the card now in".
+  const handleGroupDragOver = (e, groupId) => {
+    e.preventDefault();
+    if (e.dataTransfer.types.includes('application/x-task')) setHoveredGroupId(groupId);
+  };
+
+  const handleGroupDrop = async (e, group) => {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData('application/x-task');
+    setDraggingTaskId(null);
+    setHoveredGroupId(null);
+    if (!taskId) return;
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    if (groupBy === 'Assignee') {
+      await handleQuickAssigneeChange(task, group.id);
+    } else if (groupBy === 'Priority') {
+      await handleSaveField(task, 'priority', group.id);
+      showToast(`Priority set to ${group.id}.`, { type: 'success' });
+    }
   };
 
   // --- Drag and drop: columns (header drag handle) ---
@@ -917,6 +966,40 @@ export default function ProjectBoardSection({ projectId, pmId }) {
     return matchesSearch && matchesPriority && matchesAssignee && matchesRole;
   }, [searchTerm, selectedPriorities, selectedAssignees, selectedRole]);
 
+  // --- Grouping (Status / Assignee / Priority) ---
+  // "Status" uses the real board columns (from useBoardExtras — supports
+  // WIP limits, rename, custom columns, reordering, add-task). Assignee and
+  // Priority are lighter read/write groupings built on the fly: dragging a
+  // card into one of these changes resource_id / priority instead of
+  // status, and they don't get the column-management affordances since
+  // there's nothing to rename/limit/reorder there.
+  const displayGroups = useMemo(() => {
+    if (groupBy === 'Assignee') {
+      return [
+        { id: '', title: 'Unassigned', color: 'bg-slate-300', wipLimit: null },
+        ...resources.map((r) => ({ id: String(r.id), title: r.name, color: 'bg-blue-400', wipLimit: null })),
+      ];
+    }
+    if (groupBy === 'Priority') return PRIORITY_GROUPS;
+    return columns;
+  }, [groupBy, columns, resources]);
+
+  const getGroupTasks = useCallback((group) => {
+    return tasks
+      .filter((t) => {
+        if (groupBy === 'Assignee') {
+          const rid = t.rawApiData?.resource_id ? String(t.rawApiData.resource_id) : '';
+          return rid === group.id;
+        }
+        if (groupBy === 'Priority') return (t.priority || 'Medium') === group.id;
+        // Status mode: match the column's fixed backend statusKey, not its
+        // (renamable) title — a custom column has no statusKey, so those
+        // match on the locally-tracked customColumnId instead.
+        return group.statusKey ? t.statusKey === group.statusKey : t.customColumnId === group.id;
+      })
+      .filter(matchesFilters);
+  }, [tasks, groupBy, matchesFilters]);
+
   const toggleSetValue = (setter) => (value) => {
     setter((current) => {
       const next = new Set(current);
@@ -935,6 +1018,22 @@ export default function ProjectBoardSection({ projectId, pmId }) {
       <div className="min-h-100 bg-[#F8F9FB] flex items-center justify-center font-sans text-slate-500">
         <Loader2 className="w-8 h-8 animate-spin mr-3 text-blue-600" />
         Loading your workspace...
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-100 bg-[#F8F9FB] flex flex-col items-center justify-center gap-3 p-8 text-center font-sans">
+        <p className="text-sm font-semibold text-slate-700">Couldn't load the board</p>
+        <p className="max-w-sm text-sm text-slate-400">{loadError}</p>
+        <button
+          type="button"
+          onClick={() => { setIsLoading(true); refetchBoard().finally(() => setIsLoading(false)); }}
+          className="mt-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -1009,20 +1108,23 @@ export default function ProjectBoardSection({ projectId, pmId }) {
                 className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 transition"
               >
                 <ListFilter className="w-3.5 h-3.5 text-slate-400" />
-                Group by <span className="font-semibold text-slate-700">Status</span>
+                Group by <span className="font-semibold text-slate-700">{groupBy}</span>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
               </button>
 
               {groupByOpen && (
                 <div className="absolute right-0 top-11 z-30 w-40 rounded-xl border border-slate-100 bg-white shadow-xl p-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setGroupByOpen(false)}
-                    className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-600 hover:bg-slate-50"
-                  >
-                    Status
-                    <Check className="w-3.5 h-3.5 text-blue-600" />
-                  </button>
+                  {['Status', 'Assignee', 'Priority'].map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => { setGroupBy(option); setGroupByOpen(false); }}
+                      className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-600 hover:bg-slate-50"
+                    >
+                      {option}
+                      {groupBy === option && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
@@ -1113,31 +1215,41 @@ export default function ProjectBoardSection({ projectId, pmId }) {
       </div>
 
       <div className="flex gap-6 overflow-x-auto pb-4">
-        {columns.map((column, index) => {
-          const columnTasks = tasks
-            .filter((t) => t.status?.toLowerCase() === column.title.toLowerCase())
-            .filter(matchesFilters);
+        {displayGroups.map((column, index) => {
+          const isStatusMode = groupBy === 'Status';
+          const columnTasks = getGroupTasks(column);
           const overLimit = column.wipLimit && columnTasks.length > column.wipLimit;
+          const isHighlighted = isStatusMode
+            ? dropTarget?.columnId === column.id
+            : hoveredGroupId === column.id;
 
           return (
             <div
               key={column.id}
-              className={`shrink-0 w-75 flex flex-col bg-slate-50/50 rounded-2xl p-4 border transition-colors ${dropTarget?.status === column.title ? 'border-blue-300 bg-blue-50/40' : 'border-slate-100/50'
+              className={`shrink-0 w-75 flex flex-col bg-slate-50/50 rounded-2xl p-4 border transition-colors ${isHighlighted ? 'border-blue-300 bg-blue-50/40' : 'border-slate-100/50'
                 } ${draggingColumnIndex === index ? 'opacity-50' : ''}`}
-              onDragOver={(e) => handleColumnDragOver(e, column.title)}
-              onDrop={(e) => { handleColumnDrop(e, column.title); handleColumnHeaderDrop(e, index); }}
+              onDragOver={(e) => isStatusMode ? handleColumnDragOver(e, column.id) : handleGroupDragOver(e, column.id)}
+              onDragLeave={() => { if (!isStatusMode) setHoveredGroupId((v) => (v === column.id ? null : v)); }}
+              onDrop={(e) => {
+                if (isStatusMode) {
+                  handleColumnDrop(e, column);
+                  handleColumnHeaderDrop(e, index);
+                } else {
+                  handleGroupDrop(e, column);
+                }
+              }}
             >
               {/* Column Header */}
               <div className="flex items-center justify-between mb-3 px-1">
                 <div
                   className="flex items-center gap-2 flex-1 min-w-0"
-                  draggable
-                  onDragStart={(e) => handleColumnHeaderDragStart(e, index)}
-                  onDragEnd={handleColumnHeaderDragEnd}
+                  draggable={isStatusMode}
+                  onDragStart={isStatusMode ? (e) => handleColumnHeaderDragStart(e, index) : undefined}
+                  onDragEnd={isStatusMode ? handleColumnHeaderDragEnd : undefined}
                 >
-                  <GripVertical size={14} className="text-slate-300 cursor-grab shrink-0" />
+                  {isStatusMode && <GripVertical size={14} className="text-slate-300 cursor-grab shrink-0" />}
                   <span className={`w-2 h-2 rounded-full shrink-0 ${column.color}`}></span>
-                  {editingColumnId === column.id ? (
+                  {isStatusMode && editingColumnId === column.id ? (
                     <input
                       autoFocus
                       defaultValue={column.title}
@@ -1148,8 +1260,8 @@ export default function ProjectBoardSection({ projectId, pmId }) {
                   ) : (
                     <h3
                       className="font-semibold text-slate-800 text-sm truncate cursor-text"
-                      onDoubleClick={() => setEditingColumnId(column.id)}
-                      title="Double-click to rename"
+                      onDoubleClick={isStatusMode ? () => setEditingColumnId(column.id) : undefined}
+                      title={isStatusMode ? 'Double-click to rename' : undefined}
                     >
                       {column.title}
                     </h3>
@@ -1159,17 +1271,19 @@ export default function ProjectBoardSection({ projectId, pmId }) {
                   <span className={`text-sm font-semibold ${overLimit ? 'text-rose-500' : 'text-slate-500'}`}>
                     {columnTasks.length}{column.wipLimit ? `/${column.wipLimit}` : ''}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setColumnSettingsId((v) => v === column.id ? null : column.id)}
-                    className="text-slate-300 hover:text-slate-500"
-                  >
-                    <Settings2 size={14} />
-                  </button>
+                  {isStatusMode && (
+                    <button
+                      type="button"
+                      onClick={() => setColumnSettingsId((v) => v === column.id ? null : column.id)}
+                      className="text-slate-300 hover:text-slate-500"
+                    >
+                      <Settings2 size={14} />
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {columnSettingsId === column.id && (
+              {isStatusMode && columnSettingsId === column.id && (
                 <div className="mb-3 rounded-lg border border-slate-200 bg-white p-2.5 flex flex-col gap-2">
                   <label className="text-[11px] font-semibold text-slate-500">WIP limit</label>
                   <div className="flex items-center gap-2">
@@ -1211,16 +1325,16 @@ export default function ProjectBoardSection({ projectId, pmId }) {
                       extras={getExtras(task.boardId)}
                       columns={columns}
                       isDragging={draggingTaskId === task.id}
-                      isDropTargetAbove={dropTarget?.status === column.title && dropTarget?.beforeTaskId === task.id}
+                      isDropTargetAbove={isStatusMode && dropTarget?.columnId === column.id && dropTarget?.beforeTaskId === task.id}
                       resources={resources}
                       resourcesLoading={resourcesLoading}
                       onDragStart={(e) => handleTaskDragStart(e, task.id)}
-                      onDragOverCard={(e) => handleCardDragOver(e, column.title, task.id)}
+                      onDragOverCard={isStatusMode ? (e) => handleCardDragOver(e, column.id, task.id) : undefined}
                       onOpen={() => { setSelectedTaskId(task.id); ensureResourcesLoaded(); }}
                       onEdit={() => { setSelectedTaskId(task.id); ensureResourcesLoaded(); }}
                       onDuplicate={() => handleDuplicateTask(task)}
                       onDelete={() => handleDeleteTask(task)}
-                      onMoveTo={(targetTitle) => moveTask(task.id, targetTitle, null)}
+                      onMoveTo={(targetColumn) => moveTask(task.id, targetColumn, null)}
                       onEnsureResources={ensureResourcesLoaded}
                       onAssigneeChange={(value) => handleQuickAssigneeChange(task, value)}
                       onDateChange={(value) => handleQuickDateChange(task, value)}
@@ -1229,13 +1343,13 @@ export default function ProjectBoardSection({ projectId, pmId }) {
                 )}
               </div>
 
-              {/* Add Task — only on the leftmost column (To Do). New work
-                  starts there and moves right via drag/"Move to", matching
-                  how the board is meant to be used; the other columns just
-                  don't get an add-task affordance. */}
-              {index === 0 && (
+              {/* Add Task — only on the "To Do" column specifically (not just
+                  "leftmost" — In Discussion sits before it in column order),
+                  and only in Status grouping. New work starts in To Do and
+                  moves right via drag/"Move to". */}
+              {isStatusMode && column.statusKey === 'to_do' && (
                 <div className="mt-auto pt-2">
-                  {activeColumnForAdd === column.title ? (
+                  {activeColumnForAdd === column.id ? (
                     <div className="bg-white p-3 rounded-xl border border-blue-200 shadow-sm flex flex-col gap-2">
                       <select
                         ref={inputRef}
@@ -1265,7 +1379,7 @@ export default function ProjectBoardSection({ projectId, pmId }) {
                           <X className="w-3.5 h-3.5" /> Cancel
                         </button>
                         <button
-                          onClick={() => handleCreateTaskAPI(column.title)}
+                          onClick={() => handleCreateTaskAPI(column)}
                           disabled={isSubmitting || !selectedScheduleTaskId}
                           className="bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50"
                         >
@@ -1275,7 +1389,7 @@ export default function ProjectBoardSection({ projectId, pmId }) {
                     </div>
                   ) : (
                     <button
-                      onClick={() => { setActiveColumnForAdd(column.title); ensureScheduleTasksLoaded(); }}
+                      onClick={() => { setActiveColumnForAdd(column.id); ensureScheduleTasksLoaded(); }}
                       className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-slate-500 hover:bg-slate-200/50 rounded-xl transition-colors"
                     >
                       <Plus className="w-4 h-4" /> Add Task
@@ -1287,55 +1401,58 @@ export default function ProjectBoardSection({ projectId, pmId }) {
           );
         })}
 
-        {/* Add Column */}
-        <div className="shrink-0 w-65">
-          {addingColumn ? (
-            <div className="bg-white p-3 rounded-xl border border-blue-200 shadow-sm flex flex-col gap-2">
-              <input
-                autoFocus
-                type="text"
-                placeholder="Column name..."
-                value={newColumnTitle}
-                onChange={(e) => setNewColumnTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newColumnTitle.trim()) {
-                    addColumn(newColumnTitle.trim());
-                    setNewColumnTitle('');
-                    setAddingColumn(false);
-                  }
-                  if (e.key === 'Escape') { setAddingColumn(false); setNewColumnTitle(''); }
-                }}
-                className="w-full text-sm outline-none placeholder:text-slate-400"
-              />
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  onClick={() => { setAddingColumn(false); setNewColumnTitle(''); }}
-                  className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-700"
-                >
-                  <X className="w-3.5 h-3.5" /> Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    if (!newColumnTitle.trim()) return;
-                    addColumn(newColumnTitle.trim());
-                    setNewColumnTitle('');
-                    setAddingColumn(false);
+        {/* Add Column — only in Status mode; Assignee/Priority groups are
+            derived, not user-defined, so there's nothing to add here. */}
+        {groupBy === 'Status' && (
+          <div className="shrink-0 w-65">
+            {addingColumn ? (
+              <div className="bg-white p-3 rounded-xl border border-blue-200 shadow-sm flex flex-col gap-2">
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Column name..."
+                  value={newColumnTitle}
+                  onChange={(e) => setNewColumnTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newColumnTitle.trim()) {
+                      addColumn(newColumnTitle.trim());
+                      setNewColumnTitle('');
+                      setAddingColumn(false);
+                    }
+                    if (e.key === 'Escape') { setAddingColumn(false); setNewColumnTitle(''); }
                   }}
-                  className="bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-700"
-                >
-                  Add
-                </button>
+                  className="w-full text-sm outline-none placeholder:text-slate-400"
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => { setAddingColumn(false); setNewColumnTitle(''); }}
+                    className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-700"
+                  >
+                    <X className="w-3.5 h-3.5" /> Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!newColumnTitle.trim()) return;
+                      addColumn(newColumnTitle.trim());
+                      setNewColumnTitle('');
+                      setAddingColumn(false);
+                    }}
+                    className="bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-700"
+                  >
+                    Add
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => setAddingColumn(true)}
-              className="w-full flex items-center justify-center gap-2 py-3 text-sm font-medium text-slate-400 hover:text-slate-600 hover:bg-slate-100/60 rounded-2xl border border-dashed border-slate-200 transition-colors"
-            >
-              <Plus className="w-4 h-4" /> Add Column
-            </button>
-          )}
-        </div>
+            ) : (
+              <button
+                onClick={() => setAddingColumn(true)}
+                className="w-full flex items-center justify-center gap-2 py-3 text-sm font-medium text-slate-400 hover:text-slate-600 hover:bg-slate-100/60 rounded-2xl border border-dashed border-slate-200 transition-colors"
+              >
+                <Plus className="w-4 h-4" /> Add Column
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {selectedTask && (

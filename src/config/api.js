@@ -1,6 +1,6 @@
 export const API_ROOT_URL =
   import.meta.env.VITE_API_ROOT_URL ||
-  'http://103.185.75.124:8021/api';
+  'http://72.61.239.7:5051/api';
 // 'http://localhost:8021/api';
 
 export const API_BASE_URL = `${API_ROOT_URL}/admin`;
@@ -43,8 +43,8 @@ export const API_ENDPOINTS = {
   GET_PM_BACKLOG: `${API_ROOT_URL}/projectManager/get_pmBacklog`,
 
   // Boards
-  GET_BOARDS_BY_RESOURCE: `${API_ROOT_URL}/users/get_BoardsByResource`,
   CREATE_BOARD: `${API_ROOT_URL}/users/create_board`,
+  GET_BOARD: `${API_ROOT_URL}/projectManager/getBoard`,
   UPDATE_BOARD_STATUS: `${API_ROOT_URL}/users/update_boardStatus`,
   UPDATE_BOARD: `${API_ROOT_URL}/users/update_board`,
   DELETE_BOARD: `${API_ROOT_URL}/users/delete_board`,
