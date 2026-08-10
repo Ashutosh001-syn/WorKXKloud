@@ -41,13 +41,15 @@ body {
 }
 
 /* Media never forces its container wider than available space. */
-img,
-video,
-svg,
-canvas,
-iframe {
-  max-width: 100%;
-  height: auto;
+@layer base {
+  img,
+  video,
+  svg,
+  canvas,
+  iframe {
+    max-width: 100%;
+    height: auto;
+  }
 }
 
 /* Custom Scrollbar */

@@ -160,8 +160,8 @@ const Login = () => {
   return (
     <div className="min-h-screen w-full flex flex-col md:flex-row font-sans">
       <div className="relative flex w-full flex-col items-center justify-center bg-[#f3f3f3] px-6 py-10 md:w-[60%] md:px-10 md:py-0">
-        <div className="absolute top-4 left-4 md:top-6 md:left-8">
-          <img src={logo} alt="logo" className="h-12" />
+        <div className="absolute top-4 left-4 md:top-6 md:left-8 z-10">
+          <img src={logo} alt="logo" className="h-8 md:h-12 w-auto" />
         </div>
         <img src={login} alt="illustration" className="w-[85%] max-w-md" />
         <div className="text-center mt-6">

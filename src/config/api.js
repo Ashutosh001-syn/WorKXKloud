@@ -1,7 +1,7 @@
 export const API_ROOT_URL =
   import.meta.env.VITE_API_ROOT_URL ||
   'http://72.61.239.7:5051/api';
-// 'http://localhost:8021/api';
+
 
 export const API_BASE_URL = `${API_ROOT_URL}/admin`;
 
