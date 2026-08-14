@@ -15,6 +15,7 @@ import ProfilePage from './pages/ProfilePage'
 import CalendarPage from './pages/CalendarPage'
 import NewAssignedProjectPage from './pages/NewAssignedProjectPage'
 import MyProjectsPage from './pages/MyProjectsPage'
+import PMOReviewPage from './pages/PMOReviewPage'
 import WorkloadPage from './pages/Workload/WorkloadPage'
 import { hasPermission } from './utils/permissions'
 
@@ -122,6 +123,8 @@ function App() {
                         <NewAssignedProjectPage />
                       ) : route.to === '/my-projects' ? (
                         <MyProjectsPage />
+                      ) : route.to === '/pmo-review' ? (
+                        <PMOReviewPage />
                       ) : route.to === '/project-management/create-project' ? (
                         <CreateProjectPage />
                       ) : route.to === '/resource/resource-master' ? (

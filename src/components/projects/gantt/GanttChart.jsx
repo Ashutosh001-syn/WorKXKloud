@@ -1,0 +1,1208 @@
+import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { gantt } from 'dhtmlx-gantt'
+import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
+import './ganttStyles.css'
+import { API_ENDPOINTS } from '../../../config/api'
+import {
+  WORKFLOW_STATUS,
+  WORKFLOW_STATUS_META,
+  getWorkflow,
+  setWorkflow,
+  subscribeToWorkflowChanges,
+  fetchWorkflowFromBackend,
+} from '../../../utils/scheduleWorkflow'
+
+import {
+  LINK_FS,
+  LINK_SS,
+  LINK_FF,
+  LINK_SF,
+  COLUMN_WIDTHS,
+  MOBILE_COLUMN_KEYS,
+  getGridWidth,
+  CHART_MIN_WIDTH,
+  CHART_MIN_WIDTH_MOBILE,
+  dropdownMenu,
+} from './ganttConstants'
+import {
+  formatDateShort,
+  getInclusiveEndDate,
+  formatToAPI,
+  formatToAPIDateOnly,
+  parseDateOnlyLocal,
+} from './dateUtils'
+import {
+  computeConstrainedDates,
+  hasCircularDependency,
+  propagateScheduling,
+  rollUpParentDates,
+  topologicalSchedule,
+} from './schedulingUtils'
+import {
+  isSubTask,
+  getAssigneeLabel,
+  transformScheduleToGanttData,
+  getApiTaskId,
+} from './dataUtils'
+import { createPredecessorEditorConfig } from './predecessorEditor'
+import GanttToolbar from './GanttToolbar'
+import GanttLegend from './GanttLegend'
+import GanttTaskModal from './GanttTaskModal'
+import GanttAlertModal from './GanttAlertModal'
+import GanttDeleteModal from './GanttDeleteModal'
+import GanttLinkMenu from './GanttLinkMenu'
+
+function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
+  const containerRef = useRef(null)
+  const wrapperRef = useRef(null)
+  const isGanttInitialized = useRef(false)
+  const schedulingRef = useRef(false)
+  const editSnapshotRef = useRef({})
+
+  const [zoomLevel, setZoomLevel] = useState('day')
+  const [criticalPath, setCriticalPath] = useState(false)
+  const [showGantt, setShowGantt] = useState(true)
+  const [scheduleSearch, setScheduleSearch] = useState('')
+  const scheduleSearchRef = useRef('')
+
+  // Mobile View Modes: 'grid' (Full Table) | 'split' | 'timeline' (Full Gantt)
+  const [mobileViewMode, setMobileViewMode] = useState('grid')
+
+  const [containerWidth, setContainerWidth] = useState(
+    typeof window !== 'undefined' ? window.innerWidth : 1024
+  )
+  const isMobile = containerWidth < 640
+
+  const [workflowStatus, setWorkflowStatus] = useState(WORKFLOW_STATUS.DRAFT)
+  const [workflowNote, setWorkflowNote] = useState('')
+  const isLockedRef = useRef(false)
+
+  // 1. Workflow Sync
+  useEffect(() => {
+    if (!projectId) return undefined
+    let cancelled = false
+
+    const loadLocal = () => {
+      const wf = getWorkflow(projectId)
+      setWorkflowStatus(wf.status)
+      setWorkflowNote(wf.note || '')
+    }
+    const loadRemote = async () => {
+      const remote = await fetchWorkflowFromBackend(projectId)
+      if (remote && !cancelled) {
+        setWorkflowStatus(remote.status)
+        setWorkflowNote(remote.note)
+      }
+    }
+
+    loadLocal()
+    loadRemote()
+
+    const unsubscribe = subscribeToWorkflowChanges(() => {
+      loadLocal()
+      loadRemote()
+    })
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    isLockedRef.current =
+      workflowStatus === WORKFLOW_STATUS.FROZEN_PENDING_REVIEW ||
+      workflowStatus === WORKFLOW_STATUS.APPROVED
+  }, [workflowStatus])
+
+  const isScheduleLocked =
+    workflowStatus === WORKFLOW_STATUS.FROZEN_PENDING_REVIEW ||
+    workflowStatus === WORKFLOW_STATUS.APPROVED
+
+  useEffect(() => {
+    try {
+      if (isGanttInitialized.current) {
+        gantt.config.readonly = isScheduleLocked
+        gantt.render()
+      }
+    } catch { /* ignore */ }
+  }, [isScheduleLocked])
+
+  const handleScheduleTaskToPMO = () => {
+    if (!projectId) return
+    if (!window.confirm('Freeze this schedule and send it for PMO review? It will become read-only until PMO approves or rejects it.')) return
+    let snapshot = null
+    try { snapshot = gantt.serialize() } catch { /* ignore */ }
+    setWorkflow(projectId, WORKFLOW_STATUS.FROZEN_PENDING_REVIEW, '', pmId, snapshot)
+  }
+
+  // Modals & Menu State
+  const [addOpen, setAddOpen] = useState(false)
+  const [baselineOpen, setBaselineOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 })
+  const addWrapRef = useRef(null)
+  const baselineWrapRef = useRef(null)
+  const moreWrapRef = useRef(null)
+
+  const openMenuFrom = (wrapRef, setOpen, isOpen) => {
+    if (!isOpen) {
+      const rect = wrapRef.current?.getBoundingClientRect()
+      const screenW = window.innerWidth
+      let targetLeft = rect?.left ?? 0
+      if (targetLeft + 220 > screenW) {
+        targetLeft = Math.max(10, screenW - 230)
+      }
+      setMenuPos({ top: (rect?.bottom ?? 0) + 6, left: targetLeft })
+    }
+    setOpen((o) => !o)
+  }
+
+  const getMenuFixedStyle = (extra) => ({
+    ...dropdownMenu,
+    ...extra,
+    position: 'fixed',
+    top: menuPos.top,
+    left: menuPos.left,
+    maxWidth: 'calc(100vw - 20px)',
+    marginTop: 0,
+    zIndex: 9999,
+  })
+
+  const [selectedTaskId, setSelectedTaskId] = useState(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [taskToDelete, setTaskToDelete] = useState(null)
+  const [deleteText, setDeleteText] = useState('')
+  const [linkMenu, setLinkMenu] = useState(null)
+
+  const [activeBaseline, setActiveBaseline] = useState('Baseline 1')
+  const [taskModalOpen, setTaskModalOpen] = useState(false)
+  const [taskModalData, setTaskModalData] = useState(null)
+  const [alertMessage, setAlertMessage] = useState('')
+
+  const [calendarType, setCalendarType] = useState('standard')
+  const [customWorkingDays, setCustomWorkingDays] = useState([1, 2, 3, 4, 5])
+  const [includeHolidays, setIncludeHolidays] = useState(true)
+  const [customDropdownOpen, setCustomDropdownOpen] = useState(false)
+
+  const [gridWidth, setGridWidth] = useState(() => (isMobile ? 320 : getGridWidth(false)))
+  const [holidaysData, setHolidaysData] = useState([])
+  const [ganttError, setGanttError] = useState(null)
+  const [scheduleTasks, setScheduleTasks] = useState(null)
+  const [scheduleReloadKey, setScheduleReloadKey] = useState(0)
+  const [isSavingTask, setIsSavingTask] = useState(false)
+  const [projectResourceNames, setProjectResourceNames] = useState([])
+
+  // 2. Load Resources
+  const loadProjectResources = useCallback(async () => {
+    if (!projectId) return
+    try {
+      const response = await fetch(API_ENDPOINTS.GET_PROJECT_LIST)
+      const data = await response.json()
+      if (!data?.success) return
+      const project = (data.data || []).find((p) => String(p.id) === String(projectId))
+      if (!project) return
+      const groups = Array.isArray(project.resource_allocations)
+        ? project.resource_allocations
+        : JSON.parse(project.resource_allocations || '[]')
+      const names = new Set()
+        ; (Array.isArray(groups) ? groups : []).forEach((group) => {
+          if (group.type === 'Cost') return
+            ; (group.rows || []).forEach((row) => {
+              if (row.resourceName) names.add(row.resourceName)
+            })
+        })
+      setProjectResourceNames([...names])
+    } catch {
+      setProjectResourceNames([])
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    if (!projectId) return
+    queueMicrotask(() => loadProjectResources())
+  }, [projectId, loadProjectResources])
+
+  // 3. Resize Observer
+  useEffect(() => {
+    const el = wrapperRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) return
+      const newWidth = entry.contentRect.width
+      setContainerWidth(newWidth)
+
+      if (isGanttInitialized.current) {
+        try {
+          gantt.setSizes()
+        } catch { /* ignore */ }
+      }
+    })
+    ro.observe(el)
+    setContainerWidth(el.getBoundingClientRect().width)
+
+    return () => ro.disconnect()
+  }, [])
+
+  // 4. Fetch Schedule Data
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadSchedule() {
+      if (!projectId || !pmId) {
+        setScheduleTasks({ data: [], links: [] })
+        return
+      }
+      try {
+        const response = await fetch(API_ENDPOINTS.GET_PROJECT_SCHEDULE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ project_id: projectId, pm_id: pmId }),
+        })
+
+        const result = await response.json()
+        if (!result.success) throw new Error(result.message || 'Failed to fetch schedule')
+        if (cancelled) return
+        setScheduleTasks(transformScheduleToGanttData(result.data || []))
+      } catch (err) {
+        console.error('Failed to load schedule:', err)
+        if (cancelled) return
+        setScheduleTasks({ data: [], links: [] })
+      }
+    }
+
+    loadSchedule()
+    return () => { cancelled = true }
+  }, [projectId, pmId, scheduleReloadKey])
+
+  const reloadSchedule = useCallback(() => {
+    setScheduleReloadKey((k) => k + 1)
+  }, [])
+
+  // 5. Fetch Holidays
+  useEffect(() => {
+    const fetchHolidays = async () => {
+      try {
+        const res = await fetch(API_ENDPOINTS.HOLIDAYS)
+        const data = await res.json()
+        if (data.success) setHolidaysData(data.data || [])
+      } catch (err) {
+        console.error('Failed to load holidays:', err)
+      }
+    }
+    fetchHolidays()
+  }, [])
+
+  // 6. Search Filter
+  useEffect(() => {
+    scheduleSearchRef.current = scheduleSearch
+    if (isGanttInitialized.current) {
+      try { gantt.render() } catch { /* ignore */ }
+    }
+  }, [scheduleSearch])
+
+  // Dropdown close listener
+  useEffect(() => {
+    const h = () => {
+      setAddOpen(false)
+      setBaselineOpen(false)
+      setMoreOpen(false)
+      setLinkMenu(null)
+      setCustomDropdownOpen(false)
+    }
+    document.addEventListener('mousedown', h)
+    window.addEventListener('scroll', h, true)
+    window.addEventListener('resize', h)
+    return () => {
+      document.removeEventListener('mousedown', h)
+      window.removeEventListener('scroll', h, true)
+      window.removeEventListener('resize', h)
+    }
+  }, [])
+
+  // Helpers
+  const getLinkTypeLabel = (type) => {
+    const t = parseInt(type, 10)
+    return t === LINK_SS ? 'SS' : t === LINK_FF ? 'FF' : t === LINK_SF ? 'SF' : 'FS'
+  }
+
+  const getPredecessorsText = useCallback((task) => {
+    try {
+      const links = gantt.getLinks() || []
+      const taskLinks = links.filter(l => String(l.target) === String(task.id))
+      if (!taskLinks.length) return ''
+      return taskLinks.map(link => {
+        if (!gantt.isTaskExists(link.source)) return ''
+        const src = gantt.getTask(link.source)
+        const wbs = gantt.getWBSCode(src) || ''
+        const label = getLinkTypeLabel(link.type)
+        const lag = link.lag ? (link.lag > 0 ? `+${link.lag}d` : `${link.lag}d`) : ''
+        return `${wbs}${label !== 'FS' ? label : ''}${lag}`
+      }).filter(Boolean).join(', ')
+    } catch { return '' }
+  }, [])
+
+  const syncTaskWithAPI = async (task, isSubTaskOverride = null) => {
+    try {
+      const isSubTaskFlag =
+        isSubTaskOverride !== null
+          ? isSubTaskOverride
+          : String(task.id).startsWith('subtask_')
+
+      const predText = getPredecessorsText(task) || task.predecessor || ''
+      const resText = getAssigneeLabel(task) || task.resource || task.assignees || ''
+
+      if (isSubTaskFlag) {
+        const parentTask = gantt.getTask(task.parent)
+        const payload = {
+          sub_task_id: task.apiId,
+          pm_id: pmId,
+          project_id: projectId,
+          task_id: parentTask.apiId,
+          sub_task_name: task.text,
+          planned_start: formatToAPIDateOnly(task.start_date),
+          planned_end: formatToAPIDateOnly(getInclusiveEndDate(task.end_date)),
+          duration: Number(task.duration),
+          resource: resText,
+          predecessor: predText,
+        }
+
+        const response = await fetch(API_ENDPOINTS.UPDATE_SUBTASK_SCHEDULE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+
+        const result = await response.json()
+        if (!response.ok || !result.success) throw new Error(result.message || 'Failed to update sub task.')
+      } else {
+        const payload = {
+          task_id: task.apiId,
+          pm_id: pmId,
+          project_id: projectId,
+          task_name: task.text,
+          planned_start: formatToAPIDateOnly(task.start_date),
+          planned_end: formatToAPIDateOnly(getInclusiveEndDate(task.end_date)),
+          duration: Number(task.duration),
+          resource: resText,
+          predecessor: predText,
+        }
+
+        const response = await fetch(API_ENDPOINTS.UPDATE_TASK_SCHEDULE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+
+        const result = await response.json()
+        if (!response.ok || !result.success) throw new Error(result.message || 'Failed to update task.')
+      }
+
+      reloadSchedule()
+    } catch (err) {
+      console.error('Schedule Update Error:', err)
+      setAlertMessage(err.message || 'Failed to update schedule.')
+    }
+  }
+
+  // 7. INITIALIZE GANTT ONCE (Mount Only - DOM Node Stays Persistent)
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    try {
+      gantt.plugins({
+        critical_path: true,
+        tooltip: true,
+        auto_scheduling: true,
+        inline_editors: true,
+        marker: true,
+        drag_timeline: true,
+        export_api: true,
+      })
+    } catch (e) {
+      console.warn('Gantt plugins notice:', e)
+    }
+
+    gantt.config.touch = 'force'
+    gantt.config.touch_drag = 500
+    gantt.config.date_format = '%Y-%m-%d'
+    gantt.config.link_line_width = 1.5
+    gantt.config.start_on_monday = false
+    gantt.config.inline_editors_date_format = '%Y-%m-%d'
+    gantt.config.details_on_dblclick = false
+    gantt.config.auto_scheduling = false
+
+    // Two-pane smooth scrolling layout
+    gantt.config.layout = {
+      css: 'gantt_container',
+      cols: [
+        {
+          width: gridWidth,
+          rows: [
+            { view: 'grid', scrollX: 'gridHorScroll', scrollY: 'gridVerScroll' },
+            { view: 'scrollbar', id: 'gridHorScroll', height: 14 },
+          ],
+        },
+        {
+          rows: [
+            { view: 'timeline', scrollX: 'timelineHorScroll', scrollY: 'gridVerScroll' },
+            { view: 'scrollbar', id: 'timelineHorScroll', height: 14 },
+          ],
+        },
+        { view: 'scrollbar', id: 'gridVerScroll', width: 14 },
+      ],
+    }
+
+    const events = []
+
+    events.push(gantt.attachEvent('onBeforeTaskDisplay', (id, task) => {
+      const term = scheduleSearchRef.current.trim().toLowerCase()
+      if (!term) return true
+      const taskMatches = (t) =>
+        (t.text || '').toLowerCase().includes(term) ||
+        (t.assignees || '').toLowerCase().includes(term) ||
+        (t.resource || '').toLowerCase().includes(term)
+
+      if (taskMatches(task)) return true
+
+      const hasMatchingDescendant = (taskId) => {
+        const children = gantt.getChildren(taskId) || []
+        return children.some((childId) => {
+          let child
+          try { child = gantt.getTask(childId) } catch { return false }
+          return child && (taskMatches(child) || hasMatchingDescendant(childId))
+        })
+      }
+      if (hasMatchingDescendant(id)) return true
+
+      const hasMatchingAncestor = (taskId) => {
+        let parentId
+        try { parentId = gantt.getParent(taskId) } catch { return false }
+        if (!parentId || !gantt.isTaskExists(parentId)) return false
+        const parent = gantt.getTask(parentId)
+        return taskMatches(parent) || hasMatchingAncestor(parentId)
+      }
+      return hasMatchingAncestor(id)
+    }))
+
+    events.push(gantt.attachEvent('onTaskDblClick', () => false))
+
+    events.push(gantt.attachEvent('onBeforeLinkAdd', (id, link) => {
+      if (String(link.source) === String(link.target)) {
+        setAlertMessage('A task cannot link to itself.')
+        return false
+      }
+      if (hasCircularDependency(link.source, link.target)) {
+        setAlertMessage('Cannot create this link: circular dependency.')
+        return false
+      }
+      return true
+    }))
+
+    events.push(gantt.attachEvent('onBeforeEditorOpen', (taskId, columnName) => {
+      if (isLockedRef.current) return false
+      try {
+        const task = gantt.getTask(taskId)
+        const hasChildren = (gantt.getChildren(taskId) || []).length > 0
+        if ((task.type === 'project' || hasChildren) && (columnName === 'duration' || columnName === 'start_date' || columnName === 'end_date')) {
+          return false
+        }
+        if (columnName === 'duration' || columnName === 'start_date' || columnName === 'end_date') {
+          editSnapshotRef.current[taskId] = {
+            start_date: new Date(task.start_date).getTime(),
+            end_date: new Date(task.end_date).getTime(),
+            duration: task.duration,
+          }
+        }
+      } catch { /* allow */ }
+      return true
+    }))
+
+    events.push(gantt.attachEvent('onAfterTaskUpdate', (id, task) => {
+      if (schedulingRef.current) return
+
+      const before = editSnapshotRef.current[id]
+      if (before) {
+        delete editSnapshotRef.current[id]
+        const durationChanged = before.duration !== task.duration
+        const startChanged = before.start_date !== new Date(task.start_date).getTime()
+        const endChanged = before.end_date !== new Date(task.end_date).getTime()
+
+        if (durationChanged || startChanged) {
+          task.end_date = gantt.calculateEndDate({ start_date: task.start_date, duration: task.duration })
+        } else if (endChanged) {
+          task.duration = gantt.calculateDuration({ start_date: task.start_date, end_date: task.end_date })
+        }
+      }
+      schedulingRef.current = true
+      try {
+        gantt.refreshData()
+        propagateScheduling(id)
+        rollUpParentDates(id)
+      } finally {
+        schedulingRef.current = false
+      }
+      syncTaskWithAPI(task)
+    }))
+
+    events.push(gantt.attachEvent('onAfterTaskDrag', (id, mode) => {
+      if (schedulingRef.current) return
+      if (mode === 'move' || mode === 'resize') {
+        schedulingRef.current = true
+        try {
+          propagateScheduling(id)
+          rollUpParentDates(id)
+          gantt.refreshData()
+        } finally {
+          schedulingRef.current = false
+        }
+        try { syncTaskWithAPI(gantt.getTask(id)) } catch { /* ignore */ }
+      }
+    }))
+
+    events.push(gantt.attachEvent('onTaskSelect', (id) => { setSelectedTaskId(id); return true }))
+    events.push(gantt.attachEvent('onTaskUnselect', () => { setSelectedTaskId(null); return true }))
+
+    try {
+      gantt.init(containerRef.current)
+      isGanttInitialized.current = true
+      setGanttError(null)
+    } catch (e) {
+      console.error('Gantt Init Error:', e)
+      setGanttError(e.message || String(e))
+    }
+
+    return () => {
+      isGanttInitialized.current = false
+      gantt.clearAll()
+      events.forEach(ev => gantt.detachEvent(ev))
+    }
+  }, [])
+
+  // 8. Grid Columns & Dynamic View Layout (No '*' width, full reliable rendering)
+  useEffect(() => {
+    if (!isGanttInitialized.current) return
+
+    const textEditor = { type: 'text', map_to: 'text' }
+    const dateEditor = { type: 'date', map_to: 'start_date' }
+    const endEditor = { type: 'date', map_to: 'end_date' }
+    const durationEditor = { type: 'number', map_to: 'duration', min: 0, max: 1000 }
+    const resourceEditor = {
+      type: 'select',
+      map_to: 'assignees',
+      options: [
+        { key: '', label: '—' },
+        ...projectResourceNames.map((name) => ({ key: name, label: name })),
+      ],
+    }
+
+    gantt.config.editor_types.custom_predecessor = createPredecessorEditorConfig(setAlertMessage)
+    const predecessorEditor = { type: 'custom_predecessor', map_to: 'auto' }
+
+    const columnsConfig = [
+      {
+        name: 'wbs_code', label: '#', width: 38, min_width: 38, align: 'center', resize: false,
+        header: [{ text: '#', align: 'center' }],
+        template: (task) => gantt.getWBSCode(task) || '',
+      },
+      {
+        name: 'text', label: 'Task Name', tree: true, width: isMobile ? 160 : 220, min_width: 150, resize: true,
+        editor: textEditor,
+        header: [{ text: 'Task Name', align: 'center' }],
+        template: (task) => {
+          const isProj = task.type === 'project'
+          return `<span style="font-weight:${isProj ? '700' : '500'};color:${isProj ? '#0f172a' : '#334155'};">${task.text || ''}</span>`
+        },
+      },
+      {
+        name: 'start_date', label: 'Start', width: 85, min_width: 80, align: 'center', resize: true,
+        editor: dateEditor,
+        header: [{ text: 'Planned Start', align: 'center' }],
+        template: (task) => formatDateShort(task.start_date),
+      },
+      {
+        name: 'end_date', label: 'End', width: 85, min_width: 80, align: 'center', resize: true,
+        editor: endEditor,
+        header: [{ text: 'Planned End', align: 'center' }],
+        template: (task) => formatDateShort(getInclusiveEndDate(task.end_date)),
+      },
+      {
+        name: 'duration', label: 'Dur', width: 60, min_width: 55, align: 'center', resize: true,
+        editor: durationEditor,
+        header: [{ text: 'Dur', align: 'center' }],
+        template: (task) => `${task.duration ?? 0} d`,
+      },
+      {
+        name: 'assignees', label: 'Resource', width: 110, min_width: 95, align: 'center', resize: true,
+        editor: resourceEditor,
+        header: [{ text: 'Resource', align: 'center' }],
+        template: (task) => {
+          const res = getAssigneeLabel(task) || task.resource || task.assignees || task.resourceName
+          return res ? `<span style="color:#1e293b;font-weight:500;">${res}</span>` : '<span style="color:#94a3b8;">—</span>'
+        },
+      },
+      {
+        name: 'predecessors', label: 'Pred', width: 75, min_width: 70, align: 'center', resize: true,
+        editor: predecessorEditor,
+        header: [{ text: 'Pred', align: 'center' }],
+        template: (task) => {
+          const pred = getPredecessorsText(task) || task.predecessor || task.predecessors
+          return pred && pred !== '-' ? `<span style="font-weight:600;color:#334155;">${pred}</span>` : '<span style="color:#cbd5e1;">—</span>'
+        },
+      },
+    ]
+
+    gantt.config.columns = columnsConfig
+    gantt.config.row_height = 42
+    gantt.config.task_height = 24
+    gantt.config.highlight_critical_path = criticalPath
+    gantt.config.show_chart = showGantt
+
+    // Dynamic width calculation based on selected View Mode
+    let targetGridWidth = getGridWidth(false)
+    if (isMobile) {
+      if (mobileViewMode === 'grid') {
+        // Table mode: Grid takes 100% full screen with internal horizontal scroll for all columns
+        targetGridWidth = Math.max(containerWidth, 340)
+      } else if (mobileViewMode === 'timeline') {
+        // Timeline mode: Hide grid, show 100% Gantt visual bars
+        targetGridWidth = 0
+      } else {
+        // Split mode
+        targetGridWidth = Math.round(containerWidth * 0.5)
+      }
+    }
+
+    gantt.config.grid_width = targetGridWidth
+    if (gantt.config.layout?.cols?.[0]) {
+      gantt.config.layout.cols[0].width = targetGridWidth
+    }
+
+    try {
+      gantt.resetLayout()
+      gantt.render()
+    } catch { /* ignore */ }
+  }, [isMobile, mobileViewMode, criticalPath, showGantt, containerWidth, projectResourceNames, getPredecessorsText])
+
+  // 9. Parse Schedule Data
+  useEffect(() => {
+    if (!isGanttInitialized.current || !scheduleTasks) return
+    try {
+      gantt.clearAll()
+      gantt.parse(scheduleTasks)
+      gantt.render()
+    } catch (e) {
+      console.error('Data parse error:', e)
+    }
+  }, [scheduleTasks])
+
+  // 10. Zoom Scale Updates
+  useEffect(() => {
+    if (!isGanttInitialized.current) return
+    const zoomConfig = {
+      levels: [
+        {
+          name: 'day', scale_height: isMobile ? 40 : 50, min_column_width: isMobile ? 30 : 34,
+          scales: [
+            { unit: 'week', step: 1, format: (d) => d.getDate() <= 7 ? gantt.date.date_to_str('%M %Y')(d) : gantt.date.date_to_str('%D %d %M %Y')(d) },
+            { unit: 'day', step: 1, format: (d) => ['S', 'M', 'T', 'W', 'T', 'F', 'S'][d.getDay()] },
+          ],
+        },
+        {
+          name: 'week', scale_height: isMobile ? 40 : 50, min_column_width: 60,
+          scales: [
+            { unit: 'month', step: 1, format: '%F, %Y' },
+            { unit: 'week', step: 1, format: 'Week #%W' },
+          ],
+        },
+        {
+          name: 'month', scale_height: isMobile ? 40 : 50, min_column_width: 100,
+          scales: [
+            { unit: 'year', step: 1, format: '%Y' },
+            { unit: 'month', step: 1, format: '%F' },
+          ],
+        },
+        {
+          name: 'year', scale_height: isMobile ? 40 : 50, min_column_width: 120,
+          scales: [
+            { unit: 'year', step: 1, format: '%Y' },
+            { unit: 'quarter', step: 1, format: 'Q%q' },
+          ],
+        },
+      ],
+    }
+    gantt.ext.zoom.init(zoomConfig)
+    gantt.ext.zoom.setLevel(zoomLevel)
+    try { gantt.render() } catch { /* ignore */ }
+  }, [zoomLevel, isMobile])
+
+  // Task Modal Handlers
+  const handleOpenAddTaskModal = (type, isSubTaskFlag = false) => {
+    setAddOpen(false)
+    const activeId = gantt.getSelectedId()
+    let parentId
+
+    if (activeId) {
+      if (isSubTaskFlag) { parentId = activeId; gantt.open(activeId) }
+      else parentId = gantt.getParent(activeId) || undefined
+    } else if (isSubTaskFlag) {
+      setAlertMessage('Please select a task first to add a sub-task.')
+      return
+    }
+
+    if (isSubTaskFlag && type === 'task' && getApiTaskId(parentId) === null) {
+      setAlertMessage('Sub-tasks can only be added to a top-level task.')
+      return
+    }
+
+    setTaskModalData({
+      type,
+      isSubTaskFlag,
+      parentId,
+      text: '',
+      start_date: formatToAPIDateOnly(new Date()),
+      duration: type === 'milestone' ? 0 : 5,
+      assignees: '',
+      predecessor: '',
+    })
+    setTaskModalOpen(true)
+    queueMicrotask(() => loadProjectResources())
+  }
+
+  const handleSubmitTaskModal = async (e) => {
+    e.preventDefault()
+    const { type, isSubTaskFlag, parentId, text, start_date, duration, assignees, predecessor } = taskModalData
+
+    if (type !== 'task') {
+      const newTask = {
+        id: `local_${Date.now()}`,
+        text: text || (type === 'project' ? 'New Category' : 'Milestone'),
+        start_date: parseDateOnlyLocal(start_date) || new Date(),
+        duration: type === 'milestone' ? 0 : Number(duration),
+        progress: 0,
+        parent: parentId,
+        type,
+        barClass: type === 'project' ? 'gantt-bar-dark-blue' : 'gantt-bar-green',
+        borderClass: type === 'project' ? 'border-left-none' : 'border-left-blue',
+        assignees: null,
+      }
+      gantt.addTask(newTask)
+      gantt.selectTask(newTask.id)
+      setTaskModalOpen(false)
+      setTaskModalData(null)
+      setAlertMessage(`"${newTask.text}" added locally.`)
+      return
+    }
+
+    setIsSavingTask(true)
+    try {
+      const startDateObj = parseDateOnlyLocal(start_date) || new Date()
+      const durationNum = Math.max(1, Number(duration) || 1)
+      const endDateObj = gantt.calculateEndDate({ start_date: startDateObj, duration: durationNum })
+
+      const payload = {
+        pm_id: pmId,
+        project_id: projectId,
+        planned_start: formatToAPI(startDateObj, false),
+        planned_end: formatToAPI(endDateObj, true),
+        duration: durationNum,
+        resource: assignees || '',
+        predecessor: predecessor || '',
+      }
+
+      let response
+      if (isSubTaskFlag) {
+        const taskId = getApiTaskId(parentId)
+        if (!taskId) {
+          setAlertMessage('Parent task not found.')
+          setIsSavingTask(false)
+          return
+        }
+        response = await fetch(API_ENDPOINTS.CREATE_SUBTASK_SCHEDULE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...payload, task_id: taskId, sub_task_name: text }),
+        })
+      } else {
+        response = await fetch(API_ENDPOINTS.SCHEDULE_PROJECT_TASK, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...payload, task_name: text }),
+        })
+      }
+
+      const result = await response.json()
+      if (!result.success) throw new Error(result.message || 'Failed to save task')
+
+      setTaskModalOpen(false)
+      setTaskModalData(null)
+      reloadSchedule()
+    } catch (err) {
+      console.error('Error creating task:', err)
+      setAlertMessage(err.message || 'Could not save the task.')
+    } finally {
+      setIsSavingTask(false)
+    }
+  }
+
+  const handleDeleteClick = () => {
+    const selectedId = gantt.getSelectedId() || selectedTaskId
+    if (!selectedId) {
+      setAlertMessage('Please select a task to delete.')
+      return
+    }
+    if (selectedId === `project_${projectId}`) {
+      setAlertMessage('The project root task cannot be deleted.')
+      return
+    }
+    try {
+      const task = gantt.getTask(selectedId)
+      if (!task) return
+      setTaskToDelete(task)
+      setDeleteText('')
+      setDeleteConfirmOpen(true)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const handleConfirmDeleteTask = async () => {
+    if (!taskToDelete || deleteText.trim().toLowerCase() !== 'delete') return
+
+    try {
+      const isSubTaskFlag = String(taskToDelete.id).startsWith('subtask_')
+      let payload
+      if (isSubTaskFlag) {
+        const parentTask = gantt.getTask(taskToDelete.parent)
+        payload = { task_id: parentTask.apiId, sub_task_id: taskToDelete.apiId }
+      } else {
+        payload = { task_id: taskToDelete.apiId }
+      }
+
+      const response = await fetch(API_ENDPOINTS.DELETE_TASK_SUBTASK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      const result = await response.json()
+      if (!response.ok || !result.success) {
+        setAlertMessage(result.message || 'Failed to delete.')
+        return
+      }
+
+      gantt.deleteTask(taskToDelete.id)
+      setDeleteConfirmOpen(false)
+      setTaskToDelete(null)
+      setSelectedTaskId(null)
+      setDeleteText('')
+    } catch (err) {
+      console.error('Delete Error:', err)
+      setAlertMessage('Failed to delete.')
+    }
+  }
+
+  const handleScrollToday = () => gantt.showDate(new Date())
+  const handleScrollLeft = () => { const s = gantt.getScrollState(); gantt.scrollTo(s.x - 220, null) }
+  const handleScrollRight = () => { const s = gantt.getScrollState(); gantt.scrollTo(s.x + 220, null) }
+
+  const handleExport = (fmt) => {
+    setMoreOpen(false)
+    try {
+      const exportName = (projectName || 'gantt-chart').replace(/[^\w-]+/g, '_')
+      if (fmt === 'pdf') gantt.exportToPDF({ name: `${exportName}.pdf` })
+      else if (fmt === 'png') gantt.exportToPNG({ name: `${exportName}.png` })
+    } catch (err) {
+      setAlertMessage('Export failed.')
+    }
+  }
+
+  const handleClearAll = () => { setMoreOpen(false); if (confirm('Clear all tasks?')) gantt.clearAll() }
+
+  const handleIndent = () => {
+    const selectedId = gantt.getSelectedId()
+    if (!selectedId) return
+    const prevSibling = gantt.getPrevSibling(selectedId)
+    if (!prevSibling) return
+    gantt.moveTask(selectedId, gantt.getChildren(prevSibling).length, prevSibling)
+    gantt.open(prevSibling)
+    schedulingRef.current = true
+    try { rollUpParentDates(selectedId); gantt.refreshData() } finally { schedulingRef.current = false }
+  }
+
+  const handleOutdent = () => {
+    const selectedId = gantt.getSelectedId()
+    if (!selectedId) return
+    const parentId = gantt.getParent(selectedId)
+    if (!parentId || !gantt.isTaskExists(parentId)) return
+    const grandParentId = gantt.getParent(parentId)
+    const parentIndex = gantt.getTaskIndex(parentId)
+    gantt.moveTask(selectedId, parentIndex + 1, grandParentId || 0)
+    schedulingRef.current = true
+    try { rollUpParentDates(selectedId); gantt.refreshData() } finally { schedulingRef.current = false }
+  }
+
+  const totalTasks = tasks?.data?.length || 0
+  const totalMilestones = tasks?.data?.filter(t => t.duration === 0).length || 0
+
+  return (
+    <div
+      ref={wrapperRef}
+      className="gantt-responsive-container"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+        height: isMobile ? 'clamp(480px, 86vh, 720px)' : 'clamp(480px, 80vh, 780px)',
+        background: '#ffffff',
+        borderRadius: isMobile ? 12 : 18,
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 4px 20px rgba(15, 23, 42, 0.06)',
+        overflow: 'hidden',
+        marginTop: isMobile ? 12 : 20,
+        userSelect: 'none',
+        position: 'relative',
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      }}
+    >
+      <GanttToolbar
+        isMobile={isMobile}
+        projectName={projectName}
+        scheduleSearch={scheduleSearch}
+        onSearchChange={setScheduleSearch}
+        calendarType={calendarType}
+        onCalendarTypeChange={setCalendarType}
+        customDropdownOpen={customDropdownOpen}
+        onToggleCustomDropdown={() => { setCustomDropdownOpen(!customDropdownOpen); setMoreOpen(false); setAddOpen(false); setBaselineOpen(false) }}
+        customWorkingDays={customWorkingDays}
+        onCustomWorkingDaysChange={setCustomWorkingDays}
+        includeHolidays={includeHolidays}
+        onIncludeHolidaysChange={setIncludeHolidays}
+        zoomLevel={zoomLevel}
+        onZoomChange={setZoomLevel}
+        workflowStatus={workflowStatus}
+        workflowStatusMeta={WORKFLOW_STATUS_META[workflowStatus]}
+        isScheduleLocked={isScheduleLocked}
+        addOpen={addOpen}
+        addWrapRef={addWrapRef}
+        onToggleAdd={() => { openMenuFrom(addWrapRef, setAddOpen, addOpen); setBaselineOpen(false); setMoreOpen(false) }}
+        onOpenAddTaskModal={handleOpenAddTaskModal}
+        onDeleteClick={handleDeleteClick}
+        onOutdent={handleOutdent}
+        onIndent={handleIndent}
+        baselineOpen={baselineOpen}
+        baselineWrapRef={baselineWrapRef}
+        onToggleBaseline={() => { openMenuFrom(baselineWrapRef, setBaselineOpen, baselineOpen); setAddOpen(false); setMoreOpen(false) }}
+        activeBaseline={activeBaseline}
+        onSelectBaseline={(item) => { setActiveBaseline(item); setBaselineOpen(false) }}
+        moreOpen={moreOpen}
+        moreWrapRef={moreWrapRef}
+        onToggleMore={() => { openMenuFrom(moreWrapRef, setMoreOpen, moreOpen); setAddOpen(false); setBaselineOpen(false) }}
+        onExport={handleExport}
+        onClearAll={handleClearAll}
+        onScrollLeft={handleScrollLeft}
+        onScrollToday={handleScrollToday}
+        onScrollRight={handleScrollRight}
+        criticalPath={criticalPath}
+        onCriticalPathChange={setCriticalPath}
+        showGantt={showGantt}
+        onShowGanttChange={setShowGantt}
+        onOpenSettings={() => setAlertMessage('Opening settings...')}
+        getMenuFixedStyle={getMenuFixedStyle}
+      />
+
+      {/* Mobile View Toggle Buttons */}
+      {isMobile && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '6px 12px',
+            background: '#f8fafc',
+            borderBottom: '1px solid #e2e8f0',
+            fontSize: '11px',
+            fontWeight: 600,
+          }}
+        >
+          <span style={{ color: '#64748b' }}>View:</span>
+          <div style={{ display: 'flex', background: '#e2e8f0', borderRadius: 6, padding: 2, gap: 2 }}>
+            <button
+              onClick={() => setMobileViewMode('grid')}
+              style={{
+                border: 'none',
+                padding: '4px 10px',
+                borderRadius: 4,
+                fontSize: 11,
+                fontWeight: mobileViewMode === 'grid' ? 700 : 500,
+                background: mobileViewMode === 'grid' ? '#ffffff' : 'transparent',
+                color: mobileViewMode === 'grid' ? '#0f172a' : '#64748b',
+                boxShadow: mobileViewMode === 'grid' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                cursor: 'pointer',
+              }}
+            >
+              📋 Table
+            </button>
+            <button
+              onClick={() => setMobileViewMode('split')}
+              style={{
+                border: 'none',
+                padding: '4px 10px',
+                borderRadius: 4,
+                fontSize: 11,
+                fontWeight: mobileViewMode === 'split' ? 700 : 500,
+                background: mobileViewMode === 'split' ? '#ffffff' : 'transparent',
+                color: mobileViewMode === 'split' ? '#0f172a' : '#64748b',
+                boxShadow: mobileViewMode === 'split' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                cursor: 'pointer',
+              }}
+            >
+              ◫ Split
+            </button>
+            <button
+              onClick={() => setMobileViewMode('timeline')}
+              style={{
+                border: 'none',
+                padding: '4px 10px',
+                borderRadius: 4,
+                fontSize: 11,
+                fontWeight: mobileViewMode === 'timeline' ? 700 : 500,
+                background: mobileViewMode === 'timeline' ? '#ffffff' : 'transparent',
+                color: mobileViewMode === 'timeline' ? '#0f172a' : '#64748b',
+                boxShadow: mobileViewMode === 'timeline' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                cursor: 'pointer',
+              }}
+            >
+              📊 Timeline
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Persistent Gantt Container (Never unmounted) */}
+      <div style={{ flex: 1, position: 'relative', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+        {ganttError ? (
+          <div style={{ padding: 20, color: '#ef4444', fontWeight: 'bold', fontSize: 13 }}>
+            Failed to initialize Gantt: {ganttError}
+          </div>
+        ) : (
+          <div
+            ref={containerRef}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              WebkitOverflowScrolling: 'touch',
+            }}
+          />
+        )}
+      </div>
+
+      {/* PMO Rejection Warning */}
+      {workflowStatus === WORKFLOW_STATUS.REJECTED && workflowNote && (
+        <div
+          style={{
+            padding: isMobile ? '8px 12px' : '10px 20px',
+            background: '#fef2f2',
+            borderTop: '1px solid #fecaca',
+            flexShrink: 0,
+          }}
+        >
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#b91c1c', marginBottom: 2 }}>
+            PMO rejected this schedule:
+          </div>
+          <div style={{ fontSize: 12, color: '#7f1d1d', lineHeight: 1.4 }}>
+            {workflowNote}
+          </div>
+        </div>
+      )}
+
+      {/* Submit Button */}
+      {(workflowStatus === WORKFLOW_STATUS.DRAFT || workflowStatus === WORKFLOW_STATUS.REJECTED) && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: isMobile ? '8px 12px' : '10px 20px',
+            background: '#f8fafc',
+            borderTop: '1px solid #e2e8f0',
+            flexShrink: 0,
+          }}
+        >
+          <button
+            onClick={handleScheduleTaskToPMO}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              height: isMobile ? 38 : 34,
+              borderRadius: 8,
+              fontSize: 12,
+              padding: '0 20px',
+              background: '#0f172a',
+              color: '#ffffff',
+              border: 'none',
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: '0 1px 4px rgba(15,23,42,0.25)',
+              minWidth: isMobile ? '100%' : 'auto',
+              justifyContent: 'center',
+            }}
+          >
+            Submit to PMO
+          </button>
+        </div>
+      )}
+
+      <GanttLegend isMobile={isMobile} totalTasks={totalTasks} totalMilestones={totalMilestones} />
+
+      <GanttTaskModal
+        open={taskModalOpen}
+        data={taskModalData}
+        onChange={setTaskModalData}
+        onClose={() => setTaskModalOpen(false)}
+        onSubmit={handleSubmitTaskModal}
+        isSaving={isSavingTask}
+        projectResourceNames={projectResourceNames}
+      />
+
+      <GanttAlertModal message={alertMessage} onClose={() => setAlertMessage('')} />
+
+      <GanttDeleteModal
+        open={deleteConfirmOpen}
+        task={taskToDelete}
+        deleteText={deleteText}
+        onDeleteTextChange={setDeleteText}
+        onCancel={() => { setDeleteConfirmOpen(false); setTaskToDelete(null); setDeleteText('') }}
+        onConfirm={handleConfirmDeleteTask}
+      />
+
+      <GanttLinkMenu
+        linkMenu={linkMenu}
+        onChangeType={(newType) => {
+          try {
+            const link = gantt.getLink(linkMenu.linkId)
+            if (link) {
+              link.type = String(newType)
+              gantt.updateLink(linkMenu.linkId)
+            }
+          } catch { /* ignore */ }
+          setLinkMenu(null)
+        }}
+        onDeleteLink={() => {
+          try { gantt.deleteLink(linkMenu.linkId) } catch { /* ignore */ }
+          setLinkMenu(null)
+        }}
+      />
+    </div>
+  )
+}
+
+export default GanttChart

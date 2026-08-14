@@ -6,6 +6,16 @@ import {
 
 const PRIORITY_OPTIONS = ['Low', 'Medium', 'High']
 
+function parseJsonArray(raw) {
+    if (!raw) return []
+    try {
+        const parsed = JSON.parse(raw)
+        return Array.isArray(parsed) ? parsed : []
+    } catch {
+        return []
+    }
+}
+
 function SectionLabel({ icon, children }) {
     const Icon = icon
     return (
@@ -21,39 +31,111 @@ function TaskDetailModal({
     resources,
     resourcesLoading,
     labelPalette,
-    extras,
     currentUserName,
     onClose,
     onSaveField,
-    onToggleLabel,
-    onAddSubtask,
-    onToggleSubtask,
-    onDeleteSubtask,
-    onAddComment,
-    onAddAttachment,
-    onDeleteAttachment,
+    onUploadAttachment,
+    onRemoveAttachment,
+    isUploadingAttachment,
     onDelete,
     onDuplicate,
 }) {
+    // Everything in this modal — Title/Priority/Assignee/Due date/
+    // Description/Labels/Checklist/Comments — is edited as a local draft
+    // and only sent on "Update Task". Labels/Checklist/Comments used to
+    // call their save handlers immediately on every click/keystroke (one
+    // editBoard call per toggle/add), which is exactly the "API call per
+    // field" bug — now they just mutate local draft state like every other
+    // field, and handleUpdateTask sends the whole batch in one shot.
+    const initialDueDate = task.rawApiData?.due_date?.slice(0, 10) || ''
+    const initialLabels = (task.rawApiData?.labels || '').split(',').map((n) => n.trim()).filter(Boolean)
+    const initialChecklist = parseJsonArray(task.rawApiData?.checklist)
+    const initialComments = parseJsonArray(task.rawApiData?.comments)
+
     const [title, setTitle] = useState(task.title || '')
+    const [priority, setPriority] = useState(task.priority || 'Medium')
+    const [resourceId, setResourceId] = useState(task.rawApiData?.resource_id || '')
+    const [dueDate, setDueDate] = useState(initialDueDate)
     const [description, setDescription] = useState(task.rawApiData?.description || '')
+    const [activeLabelNames, setActiveLabelNames] = useState(initialLabels)
+    const [subtasks, setSubtasks] = useState(initialChecklist)
+    const [comments, setComments] = useState(initialComments)
     const [newSubtask, setNewSubtask] = useState('')
     const [newComment, setNewComment] = useState('')
-    const [attachmentName, setAttachmentName] = useState('')
-    const [attachmentUrl, setAttachmentUrl] = useState('')
-    const [savingField, setSavingField] = useState(null)
+    const [isUpdating, setIsUpdating] = useState(false)
 
-    const handleFieldSave = async (field, value) => {
-        setSavingField(field)
+    const hasChanges =
+        title.trim() !== (task.title || '') ||
+        priority !== (task.priority || 'Medium') ||
+        String(resourceId) !== String(task.rawApiData?.resource_id || '') ||
+        dueDate !== initialDueDate ||
+        description !== (task.rawApiData?.description || '') ||
+        JSON.stringify(activeLabelNames) !== JSON.stringify(initialLabels) ||
+        JSON.stringify(subtasks) !== JSON.stringify(initialChecklist) ||
+        JSON.stringify(comments) !== JSON.stringify(initialComments)
+
+    const handleToggleLabel = (label) => {
+        setActiveLabelNames((current) =>
+            current.includes(label.name)
+                ? current.filter((name) => name !== label.name)
+                : [...current, label.name]
+        )
+    }
+
+    const handleAddSubtask = () => {
+        if (!newSubtask.trim()) return
+        setSubtasks((current) => [...current, { id: `st_${crypto.randomUUID()}`, text: newSubtask.trim(), done: false }])
+        setNewSubtask('')
+    }
+
+    const handleToggleSubtask = (subtaskId) => {
+        setSubtasks((current) => current.map((st) => (st.id === subtaskId ? { ...st, done: !st.done } : st)))
+    }
+
+    const handleDeleteSubtask = (subtaskId) => {
+        setSubtasks((current) => current.filter((st) => st.id !== subtaskId))
+    }
+
+    const handleAddComment = () => {
+        if (!newComment.trim()) return
+        setComments((current) => [
+            ...current,
+            { id: `cm_${crypto.randomUUID()}`, text: newComment.trim(), author: currentUserName, timestamp: new Date().toISOString() },
+        ])
+        setNewComment('')
+    }
+
+    const handleUpdateTask = async () => {
+        if (!hasChanges || isUpdating) return
+        setIsUpdating(true)
         try {
-            await onSaveField(field, value)
-        } finally {
-            setSavingField(null)
+            const saves = []
+            if (title.trim() && title.trim() !== (task.title || '')) saves.push(onSaveField('title', title.trim()))
+            if (priority !== (task.priority || 'Medium')) saves.push(onSaveField('priority', priority))
+            if (String(resourceId) !== String(task.rawApiData?.resource_id || '')) saves.push(onSaveField('resource_id', resourceId))
+            if (dueDate !== initialDueDate) saves.push(onSaveField('due_date', dueDate))
+            if (description !== (task.rawApiData?.description || '')) saves.push(onSaveField('description', description))
+            if (JSON.stringify(activeLabelNames) !== JSON.stringify(initialLabels)) saves.push(onSaveField('labels', activeLabelNames.join(',')))
+            if (JSON.stringify(subtasks) !== JSON.stringify(initialChecklist)) saves.push(onSaveField('checklist', JSON.stringify(subtasks)))
+            if (JSON.stringify(comments) !== JSON.stringify(initialComments)) saves.push(onSaveField('comments', JSON.stringify(comments)))
+
+            // Safety net to match onSaveField's own timeout — even if a save
+            // hangs, the button doesn't stay stuck on "Updating…" forever.
+            await Promise.race([
+                Promise.all(saves),
+                new Promise((resolve) => setTimeout(resolve, 4000)),
+            ])
+            // Back to the board so the update is visible on the card, instead
+            // of leaving the modal sitting open on top of it.
+            onClose()
+        } catch (err) {
+            console.error('Failed to update task:', err)
+            setIsUpdating(false)
         }
     }
 
-    const doneSubtasks = extras.subtasks.filter((st) => st.done).length
-    const totalSubtasks = extras.subtasks.length
+    const doneSubtasks = subtasks.filter((st) => st.done).length
+    const totalSubtasks = subtasks.length
 
     return (
         <div
@@ -73,7 +155,6 @@ function TaskDetailModal({
                         <input
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
-                            onBlur={() => title.trim() && title !== task.title && handleFieldSave('title', title.trim())}
                             className="mt-1 block w-full border-none bg-transparent p-0 text-[18px] font-bold text-slate-800 outline-none focus:ring-0"
                         />
                     </div>
@@ -93,9 +174,9 @@ function TaskDetailModal({
                         <div>
                             <SectionLabel icon={Flag}>Priority</SectionLabel>
                             <select
-                                value={task.priority || 'Medium'}
-                                onChange={(e) => handleFieldSave('priority', e.target.value)}
-                                disabled={savingField === 'priority'}
+                                value={priority}
+                                onChange={(e) => setPriority(e.target.value)}
+                                disabled={isUpdating}
                                 className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-[13px] font-medium text-slate-700 outline-none focus:border-blue-400"
                             >
                                 {PRIORITY_OPTIONS.map((p) => (
@@ -108,9 +189,9 @@ function TaskDetailModal({
                         <div>
                             <SectionLabel icon={UserIcon}>Assignee</SectionLabel>
                             <select
-                                value={task.rawApiData?.resource_id || ''}
-                                onChange={(e) => handleFieldSave('resource_id', e.target.value)}
-                                disabled={savingField === 'resource_id' || resourcesLoading}
+                                value={resourceId}
+                                onChange={(e) => setResourceId(e.target.value)}
+                                disabled={isUpdating || resourcesLoading}
                                 className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-[13px] font-medium text-slate-700 outline-none focus:border-blue-400"
                             >
                                 <option value="">Unassigned</option>
@@ -125,9 +206,9 @@ function TaskDetailModal({
                             <SectionLabel icon={Calendar}>Due date</SectionLabel>
                             <input
                                 type="date"
-                                defaultValue={task.rawApiData?.due_date?.slice(0, 10) || ''}
-                                onChange={(e) => handleFieldSave('due_date', e.target.value)}
-                                disabled={savingField === 'due_date'}
+                                value={dueDate}
+                                onChange={(e) => setDueDate(e.target.value)}
+                                disabled={isUpdating}
                                 className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-[13px] font-medium text-slate-700 outline-none focus:border-blue-400"
                             />
                         </div>
@@ -139,10 +220,10 @@ function TaskDetailModal({
                         <textarea
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
-                            onBlur={() => handleFieldSave('description', description)}
+                            disabled={isUpdating}
                             rows={3}
                             placeholder="Add a description..."
-                            className="w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[13.5px] text-slate-700 outline-none focus:border-blue-400"
+                            className="w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[13.5px] text-slate-700 outline-none focus:border-blue-400 disabled:opacity-60"
                         />
                     </div>
 
@@ -151,12 +232,12 @@ function TaskDetailModal({
                         <SectionLabel icon={Tag}>Labels</SectionLabel>
                         <div className="flex flex-wrap gap-2">
                             {labelPalette.map((label) => {
-                                const active = extras.labels.some((l) => l.name === label.name)
+                                const active = activeLabelNames.includes(label.name)
                                 return (
                                     <button
                                         key={label.name}
                                         type="button"
-                                        onClick={() => onToggleLabel(label)}
+                                        onClick={() => handleToggleLabel(label)}
                                         className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold transition"
                                         style={{
                                             backgroundColor: active ? `${label.color}22` : '#f1f5f9',
@@ -190,12 +271,12 @@ function TaskDetailModal({
                         )}
 
                         <div className="flex flex-col gap-1.5">
-                            {extras.subtasks.map((st) => (
+                            {subtasks.map((st) => (
                                 <div key={st.id} className="flex items-center gap-2 group">
                                     <input
                                         type="checkbox"
                                         checked={st.done}
-                                        onChange={() => onToggleSubtask(st.id)}
+                                        onChange={() => handleToggleSubtask(st.id)}
                                         className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-400"
                                     />
                                     <span className={`flex-1 text-[13.5px] ${st.done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
@@ -203,7 +284,7 @@ function TaskDetailModal({
                                     </span>
                                     <button
                                         type="button"
-                                        onClick={() => onDeleteSubtask(st.id)}
+                                        onClick={() => handleDeleteSubtask(st.id)}
                                         className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition"
                                     >
                                         <Trash2 size={13} />
@@ -218,21 +299,14 @@ function TaskDetailModal({
                                 value={newSubtask}
                                 onChange={(e) => setNewSubtask(e.target.value)}
                                 onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && newSubtask.trim()) {
-                                        onAddSubtask(newSubtask.trim())
-                                        setNewSubtask('')
-                                    }
+                                    if (e.key === 'Enter') { e.preventDefault(); handleAddSubtask() }
                                 }}
                                 placeholder="Add a checklist item..."
                                 className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] outline-none focus:border-blue-400"
                             />
                             <button
                                 type="button"
-                                onClick={() => {
-                                    if (!newSubtask.trim()) return
-                                    onAddSubtask(newSubtask.trim())
-                                    setNewSubtask('')
-                                }}
+                                onClick={handleAddSubtask}
                                 className="flex-shrink-0 rounded-lg bg-slate-100 p-2 text-slate-500 hover:bg-slate-200"
                             >
                                 <Plus size={14} />
@@ -240,68 +314,61 @@ function TaskDetailModal({
                         </div>
                     </div>
 
-                    {/* ATTACHMENTS (link-style) */}
+                    {/* ATTACHMENT (single file — backend stores one URL per task) */}
                     <div>
-                        <SectionLabel icon={Paperclip}>Attachments</SectionLabel>
-                        <div className="flex flex-col gap-1.5 mb-2">
-                            {extras.attachments.map((att) => (
-                                <div key={att.id} className="flex items-center gap-2 group">
-                                    <a
-                                        href={att.url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="flex-1 flex items-center gap-1.5 text-[13px] font-medium text-blue-600 hover:underline truncate"
-                                    >
-                                        <ExternalLink size={12} className="flex-shrink-0" />
-                                        {att.name}
-                                    </a>
-                                    <button
-                                        type="button"
-                                        onClick={() => onDeleteAttachment(att.id)}
-                                        className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition"
-                                    >
-                                        <Trash2 size={13} />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="text"
-                                value={attachmentName}
-                                onChange={(e) => setAttachmentName(e.target.value)}
-                                placeholder="Name"
-                                className="w-1/3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] outline-none focus:border-blue-400"
-                            />
-                            <input
-                                type="text"
-                                value={attachmentUrl}
-                                onChange={(e) => setAttachmentUrl(e.target.value)}
-                                placeholder="https://..."
-                                className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] outline-none focus:border-blue-400"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (!attachmentName.trim() || !attachmentUrl.trim()) return
-                                    onAddAttachment(attachmentName.trim(), attachmentUrl.trim())
-                                    setAttachmentName('')
-                                    setAttachmentUrl('')
-                                }}
-                                className="flex-shrink-0 rounded-lg bg-slate-100 p-2 text-slate-500 hover:bg-slate-200"
-                            >
-                                <Plus size={14} />
-                            </button>
-                        </div>
+                        <SectionLabel icon={Paperclip}>Attachment</SectionLabel>
+                        {task.rawApiData?.attachments ? (
+                            <div className="flex items-center gap-2 group">
+                                <a
+                                    href={task.rawApiData.attachments}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex-1 flex items-center gap-1.5 text-[13px] font-medium text-blue-600 hover:underline truncate"
+                                >
+                                    <ExternalLink size={12} className="flex-shrink-0" />
+                                    {task.rawApiData.attachments.split('/').pop()}
+                                </a>
+                                <button
+                                    type="button"
+                                    onClick={onRemoveAttachment}
+                                    disabled={isUploadingAttachment}
+                                    className="text-slate-300 hover:text-rose-500 transition disabled:opacity-40"
+                                >
+                                    <Trash2 size={13} />
+                                </button>
+                            </div>
+                        ) : (
+                            <label className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-[13px] font-medium text-slate-500 cursor-pointer hover:bg-slate-100 transition">
+                                {isUploadingAttachment ? (
+                                    <>
+                                        <Loader2 size={14} className="animate-spin" /> Uploading…
+                                    </>
+                                ) : (
+                                    <>
+                                        <Plus size={14} /> Upload a file
+                                    </>
+                                )}
+                                <input
+                                    type="file"
+                                    className="hidden"
+                                    disabled={isUploadingAttachment}
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0]
+                                        if (file) onUploadAttachment(file)
+                                        e.target.value = ''
+                                    }}
+                                />
+                            </label>
+                        )}
                     </div>
 
                     {/* COMMENTS */}
                     <div>
                         <SectionLabel icon={MessageSquare}>
-                            Comments {extras.comments.length > 0 && `(${extras.comments.length})`}
+                            Comments {comments.length > 0 && `(${comments.length})`}
                         </SectionLabel>
                         <div className="flex flex-col gap-3 mb-3">
-                            {extras.comments.map((c) => (
+                            {comments.map((c) => (
                                 <div key={c.id} className="rounded-lg bg-slate-50 px-3 py-2">
                                     <div className="flex items-center justify-between mb-0.5">
                                         <span className="text-[12.5px] font-bold text-slate-700">{c.author}</span>
@@ -319,21 +386,14 @@ function TaskDetailModal({
                                 value={newComment}
                                 onChange={(e) => setNewComment(e.target.value)}
                                 onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && newComment.trim()) {
-                                        onAddComment(newComment.trim(), currentUserName)
-                                        setNewComment('')
-                                    }
+                                    if (e.key === 'Enter') { e.preventDefault(); handleAddComment() }
                                 }}
                                 placeholder="Write a comment..."
                                 className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] outline-none focus:border-blue-400"
                             />
                             <button
                                 type="button"
-                                onClick={() => {
-                                    if (!newComment.trim()) return
-                                    onAddComment(newComment.trim(), currentUserName)
-                                    setNewComment('')
-                                }}
+                                onClick={handleAddComment}
                                 className="flex-shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-blue-700"
                             >
                                 Post
@@ -343,27 +403,23 @@ function TaskDetailModal({
                 </div>
 
                 {/* FOOTER ACTIONS */}
-                <div className="flex items-center justify-between border-t border-slate-100 px-6 py-3.5">
-                    <div className="flex items-center gap-1.5 text-[12px] text-slate-400">
-                        {savingField && <Loader2 size={13} className="animate-spin" />}
-                        {savingField ? 'Saving…' : 'All changes saved'}
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <button
-                            type="button"
-                            onClick={onDuplicate}
-                            className="text-[12.5px] font-semibold text-slate-500 hover:text-slate-700"
-                        >
-                            Duplicate
-                        </button>
-                        <button
-                            type="button"
-                            onClick={onDelete}
-                            className="text-[12.5px] font-semibold text-rose-600 hover:text-rose-700"
-                        >
-                            Delete task
-                        </button>
-                    </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-6 py-3.5">
+                    <button
+                        type="button"
+                        onClick={onDelete}
+                        className="text-[12.5px] font-semibold text-rose-600 hover:text-rose-700"
+                    >
+                        Delete task
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleUpdateTask}
+                        disabled={!hasChanges || isUpdating}
+                        className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                    >
+                        {isUpdating && <Loader2 size={13} className="animate-spin" />}
+                        {isUpdating ? 'Updating…' : 'Update Task'}
+                    </button>
                 </div>
             </div>
         </div>

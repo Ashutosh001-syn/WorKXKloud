@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { API_ENDPOINTS } from '../config/api'
 import {
   ClipboardList,
@@ -209,8 +209,31 @@ function NewAssignedProjectPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [fetchError, setFetchError] = useState(null)
 
-  const [selectedProjectId, setSelectedProjectId] = useState(null)
-  const [activeTab, setActiveTab] = useState('project-detail')
+  const [searchParams, setSearchParams] = useSearchParams()
+  // Selecting a project / switching tabs is plain React state, which a
+  // refresh wipes — mirror it into the URL (?project=&tab=), same fix as
+  // MyProjectsPage, so a refresh lands back on the same project + tab
+  // instead of bouncing to the project list.
+  const [selectedProjectId, setSelectedProjectId] = useState(() => searchParams.get('project'))
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'project-detail')
+
+  const openProject = (projectId, tab = 'project-detail') => {
+    setSelectedProjectId(projectId)
+    setActiveTab(tab)
+    setSearchParams({ project: String(projectId), tab })
+  }
+
+  const closeProject = () => {
+    setSelectedProjectId(null)
+    setSearchParams({})
+  }
+
+  const changeTab = (tab) => {
+    setActiveTab(tab)
+    if (selectedProjectId) {
+      setSearchParams({ project: String(selectedProjectId), tab })
+    }
+  }
   const [showToast, setShowToast] = useState(null)
   const [showDeclineModal, setShowDeclineModal] = useState(false)
   const [declineReason, setDeclineReason] = useState('')
@@ -565,10 +588,7 @@ const getPmId = () => {
                     {/* Action buttons */}
                     <div className="mt-6 flex flex-col gap-2.5">
                       <button
-                        onClick={() => {
-                          setSelectedProjectId(project.id)
-                          setActiveTab('project-detail')
-                        }}
+                        onClick={() => openProject(project.id, 'project-detail')}
                         className="w-full h-11 px-4 rounded-xl bg-blue-600 text-xs font-bold text-white shadow-sm hover:bg-blue-700 hover:shadow-md active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         View Project
@@ -620,12 +640,34 @@ const getPmId = () => {
               </button>
             </div>
           </div>
+        ) : !selectedProject ? (
+          /* selectedProjectId came from the URL (e.g. a refresh) but hasn't
+             matched a fetched project yet — either still loading, or the id
+             is stale/invalid. Don't render the detail view against
+             `undefined`, and don't punt to the list either while a valid
+             fetch is still in flight. */
+          <div className="rounded-[28px] bg-white p-10 shadow-[0_24px_60px_rgba(3,10,24,0.14)] text-center">
+            {isLoading ? (
+              <p className="text-sm font-bold text-slate-500">Loading project…</p>
+            ) : (
+              <>
+                <p className="text-sm font-bold text-slate-700">Project not found.</p>
+                <button
+                  onClick={closeProject}
+                  className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700"
+                >
+                  <ArrowLeft size={14} />
+                  Back to Projects
+                </button>
+              </>
+            )}
+          </div>
         ) : (
           /* Detail View */
           <div className="rounded-[28px] bg-white p-4 sm:p-6 md:p-8 shadow-[0_24px_60px_rgba(3,10,24,0.14)]">
             {/* Back button */}
             <button
-              onClick={() => setSelectedProjectId(null)}
+              onClick={closeProject}
               className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-700 mb-6 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-lg transition"
             >
               <ArrowLeft size={14} />
@@ -747,7 +789,7 @@ const getPmId = () => {
             <div className="mt-8 border-b border-slate-100 overflow-x-auto scrollbar-none">
               <div className="flex gap-4 sm:gap-6 text-sm font-bold min-w-max pb-px">
                 <button
-                  onClick={() => setActiveTab('project-detail')}
+                  onClick={() => changeTab('project-detail')}
                   className={`pb-3.5 transition-all relative ${activeTab === 'project-detail'
                     ? 'text-blue-600 border-b-2 border-blue-600'
                     : 'text-slate-400 hover:text-slate-600'
@@ -756,7 +798,7 @@ const getPmId = () => {
                   Project Detail
                 </button>
                 <button
-                  onClick={() => setActiveTab('client-details')}
+                  onClick={() => changeTab('client-details')}
                   className={`pb-3.5 transition-all relative ${activeTab === 'client-details'
                     ? 'text-blue-600 border-b-2 border-blue-600'
                     : 'text-slate-400 hover:text-slate-600'
@@ -765,7 +807,7 @@ const getPmId = () => {
                   Client Details
                 </button>
                 <button
-                  onClick={() => setActiveTab('resource')}
+                  onClick={() => changeTab('resource')}
                   className={`pb-3.5 transition-all relative ${activeTab === 'resource'
                     ? 'text-blue-600 border-b-2 border-blue-600'
                     : 'text-slate-400 hover:text-slate-600'
@@ -774,7 +816,7 @@ const getPmId = () => {
                   Resource
                 </button>
                 <button
-                  onClick={() => setActiveTab('payment-milestone')}
+                  onClick={() => changeTab('payment-milestone')}
                   className={`pb-3.5 transition-all relative ${activeTab === 'payment-milestone'
                     ? 'text-blue-600 border-b-2 border-blue-600'
                     : 'text-slate-400 hover:text-slate-600'
@@ -1099,7 +1141,7 @@ const getPmId = () => {
                     Go to Scheduling
                   </button>
                   <button
-                    onClick={() => setSelectedProjectId(null)}
+                    onClick={closeProject}
                     className="flex-1 sm:flex-none h-11 px-6 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-1.5 w-full sm:w-auto cursor-pointer"
                   >
                     Back to Dashboard

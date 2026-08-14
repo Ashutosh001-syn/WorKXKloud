@@ -56,6 +56,17 @@ export const sidebarMenu = [
   },
   {
     type: 'link',
+    key: 'pmo-review',
+    icon: 'allProjects',
+    label: 'PMO Review',
+    to: '/pmo-review',
+    eyebrow: 'Projects',
+    title: 'PMO Review',
+    description: 'Approve or reject schedules PMs have frozen for review.',
+    highlights: ['Approve or reject frozen schedules'],
+  },
+  {
+    type: 'link',
     key: 'workload',
     icon: 'workload',
     label: 'Workload',

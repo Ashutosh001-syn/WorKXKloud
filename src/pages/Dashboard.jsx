@@ -1,4 +1,4 @@
-import { createElement, useEffect, useRef, useState } from 'react'
+import { createElement, useEffect, useMemo, useRef, useState } from 'react'
 import {
   closestCenter,
   DndContext,
@@ -35,12 +35,52 @@ import { API_ENDPOINTS } from '../config/api'
 import SortableDashboardSection from '../components/dashboard/SortableDashboardSection'
 import {
   dashboardSectionMeta,
-  deadlineItems,
-  getSummaryCard,
-  myProjectsRows,
-  projectStatusRows,
+  DEADLINE_ICONS,
+  getSummaryCardMeta,
 } from '../components/dashboard/dashboardData'
 import { useDashboardLayout } from '../hooks/useDashboardLayout'
+
+const HEALTH_TONE = {
+  Red: 'bg-[#ffe6e3] text-[#f56a5d]',
+  Yellow: 'bg-[#fff0cb] text-[#e9a71b]',
+  Green: 'bg-[#ddf9df] text-[#2bbb44]',
+}
+const HEALTH_RANK = { Red: 3, Yellow: 2, Green: 1 }
+
+function getBudgetHealth(budget, cost) {
+  const budgetNum = Number(budget)
+  const costNum = Number(cost)
+  if (!Number.isFinite(budgetNum) || !Number.isFinite(costNum)) {
+    return 'Green'
+  }
+  return costNum > budgetNum ? 'Red' : 'Green'
+}
+
+function getScheduleHealth(deadline) {
+  const deadlineDate = new Date(deadline)
+  if (Number.isNaN(deadlineDate.getTime())) {
+    return 'Green'
+  }
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  deadlineDate.setHours(0, 0, 0, 0)
+  const daysLeft = Math.round((deadlineDate - today) / (1000 * 60 * 60 * 24))
+  if (daysLeft < 0) return 'Red'
+  if (daysLeft <= 7) return 'Yellow'
+  return 'Green'
+}
+
+function getOverallHealth(scheduleHealth, budgetHealth) {
+  return HEALTH_RANK[scheduleHealth] >= HEALTH_RANK[budgetHealth] ? scheduleHealth : budgetHealth
+}
+
+function formatDeadline(deadline) {
+  const date = new Date(deadline)
+  if (Number.isNaN(date.getTime())) {
+    return '-'
+  }
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')
+}
 
 function ToolbarIcon({ icon: Icon, label, onClick }) {
   return (
@@ -97,21 +137,21 @@ function TableScrollHint({ width = 'w-[92%]' }) {
   )
 }
 
-function SummaryCardSection({ sectionId }) {
-  const summaryCard = getSummaryCard(sectionId)
+function SummaryCardSection({ sectionId, value, isLoading }) {
+  const summaryCard = getSummaryCardMeta(sectionId)
 
   if (!summaryCard) {
     return null
   }
 
-  const { icon, iconWrap, value } = summaryCard
+  const { icon, iconWrap } = summaryCard
 
   return (
     <div className="px-3 pb-3 pt-1">
       <div className="grid min-h-[82px] grid-cols-[1fr_84px] overflow-hidden rounded-[6px] border border-[#edf1f5] bg-[#f5f8fb]">
         <div className="flex items-center px-3">
           <p className="text-[1.9rem] font-semibold tracking-[-0.04em] text-[#18437b]">
-            {value}
+            {isLoading ? '—' : value}
           </p>
         </div>
 
@@ -125,7 +165,7 @@ function SummaryCardSection({ sectionId }) {
   )
 }
 
-function ProjectsStatusSection() {
+function ProjectsStatusSection({ rows, isLoading, error }) {
   return (
     <div className="px-3 pb-3 pt-1">
       <div className="overflow-x-auto rounded-[6px] border border-[#edf1f5] bg-white">
@@ -143,26 +183,40 @@ function ProjectsStatusSection() {
             </tr>
           </thead>
           <tbody>
-            {projectStatusRows.map((row) => (
-              <tr key={row.project} className="border-b border-[#edf1f5] last:border-b-0">
-                <td className="px-3 py-2.5">
-                  <TableCheckbox />
-                </td>
-                <td className="px-3 py-2.5 text-[#7b8796]">{row.project}</td>
-                <td className="px-3 py-2.5">
-                  <StatusPill tone={row.overallTone}>{row.overall}</StatusPill>
-                </td>
-                <td className="px-3 py-2.5">
-                  <StatusPill tone={row.scheduleTone}>{row.schedule}</StatusPill>
-                </td>
-                <td className="px-3 py-2.5">
-                  <StatusPill tone={row.budgetTone}>{row.budget}</StatusPill>
-                </td>
-                <td className="max-w-[250px] px-3 py-2.5 text-[8.5px] leading-[1.35] text-[#8b95a5]">
-                  {row.summary}
-                </td>
+            {error ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-4 text-center text-[#f56a5d]">{error}</td>
               </tr>
-            ))}
+            ) : isLoading ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-4 text-center text-[#8b95a5]">Loading projects…</td>
+              </tr>
+            ) : rows.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-4 text-center text-[#8b95a5]">No projects found.</td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={row.id} className="border-b border-[#edf1f5] last:border-b-0">
+                  <td className="px-3 py-2.5">
+                    <TableCheckbox />
+                  </td>
+                  <td className="px-3 py-2.5 text-[#7b8796]">{row.project}</td>
+                  <td className="px-3 py-2.5">
+                    <StatusPill tone={row.overallTone}>{row.overall}</StatusPill>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <StatusPill tone={row.scheduleTone}>{row.schedule}</StatusPill>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <StatusPill tone={row.budgetTone}>{row.budget}</StatusPill>
+                  </td>
+                  <td className="max-w-[250px] px-3 py-2.5 text-[8.5px] leading-[1.35] text-[#8b95a5]">
+                    {row.summary}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -172,7 +226,7 @@ function ProjectsStatusSection() {
   )
 }
 
-function MyProjectsSection() {
+function MyProjectsSection({ rows, isLoading, error }) {
   return (
     <div className="px-3 pb-3 pt-1">
       <div className="overflow-x-auto rounded-[6px] border border-[#edf1f5] bg-white">
@@ -190,22 +244,36 @@ function MyProjectsSection() {
             </tr>
           </thead>
           <tbody>
-            {myProjectsRows.map((row) => (
-              <tr key={row.name} className="border-b border-[#edf1f5] last:border-b-0">
-                <td className="px-3 py-2.5">
-                  <TableCheckbox />
-                </td>
-                <td className="px-3 py-2.5 text-[#7b8796]">{row.name}</td>
-                <td className="px-3 py-2.5">
-                  <StatusPill tone={row.scheduleTone}>{row.scheduleHealth}</StatusPill>
-                </td>
-                <td className="px-3 py-2.5">
-                  <StatusPill tone={row.budgetTone}>{row.budgetHealth}</StatusPill>
-                </td>
-                <td className="px-3 py-2.5 text-[#7b8796]">{row.progress}</td>
-                <td className="px-3 py-2.5 text-[#7b8796]">{row.deadline}</td>
+            {error ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-4 text-center text-[#f56a5d]">{error}</td>
               </tr>
-            ))}
+            ) : isLoading ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-4 text-center text-[#8b95a5]">Loading projects…</td>
+              </tr>
+            ) : rows.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-4 text-center text-[#8b95a5]">No projects found.</td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={row.id} className="border-b border-[#edf1f5] last:border-b-0">
+                  <td className="px-3 py-2.5">
+                    <TableCheckbox />
+                  </td>
+                  <td className="px-3 py-2.5 text-[#7b8796]">{row.name}</td>
+                  <td className="px-3 py-2.5">
+                    <StatusPill tone={row.scheduleTone}>{row.scheduleHealth}</StatusPill>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <StatusPill tone={row.budgetTone}>{row.budgetHealth}</StatusPill>
+                  </td>
+                  <td className="px-3 py-2.5 text-[#7b8796]">{row.progress}</td>
+                  <td className="px-3 py-2.5 text-[#7b8796]">{row.deadline}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -215,29 +283,37 @@ function MyProjectsSection() {
   )
 }
 
-function UpcomingDeadlinesSection() {
+function UpcomingDeadlinesSection({ items, isLoading, error }) {
   return (
     <div className="px-3 pb-3 pt-1">
       <div className="space-y-3">
-        {deadlineItems.map((item) => (
-          <article
-            key={`${item.title}-${item.iconWrap}`}
-            className="flex items-center justify-between rounded-[6px] border border-[#edf1f5] bg-white px-3 py-2.5"
-          >
-            <div className="flex items-center gap-3">
-              <div className={`rounded-[6px] p-2 ${item.iconWrap}`}>
-                {createElement(item.icon, { size: 15, strokeWidth: 2 })}
+        {error ? (
+          <p className="px-1 py-4 text-center text-[11px] text-[#f56a5d]">{error}</p>
+        ) : isLoading ? (
+          <p className="px-1 py-4 text-center text-[11px] text-[#8b95a5]">Loading…</p>
+        ) : items.length === 0 ? (
+          <p className="px-1 py-4 text-center text-[11px] text-[#8b95a5]">No upcoming deadlines.</p>
+        ) : (
+          items.map((item) => (
+            <article
+              key={item.id}
+              className="flex items-center justify-between rounded-[6px] border border-[#edf1f5] bg-white px-3 py-2.5"
+            >
+              <div className="flex items-center gap-3">
+                <div className={`rounded-[6px] p-2 ${item.iconWrap}`}>
+                  {createElement(item.icon, { size: 15, strokeWidth: 2 })}
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-semibold text-[#202020]">{item.title}</p>
+                  <p className="mt-1 text-[10px] text-[#99a3b3]">{item.daysLeft}</p>
+                </div>
               </div>
 
-              <div>
-                <p className="text-[11px] font-semibold text-[#202020]">{item.title}</p>
-                <p className="mt-1 text-[10px] text-[#99a3b3]">{item.daysLeft}</p>
-              </div>
-            </div>
-
-            <ChevronRight size={14} className="text-[#aab3c0]" />
-          </article>
-        ))}
+              <ChevronRight size={14} className="text-[#aab3c0]" />
+            </article>
+          ))
+        )}
       </div>
 
       <button
@@ -374,6 +450,9 @@ function Dashboard() {
   const [activeLauncherMenu, setActiveLauncherMenu] = useState(null)
   const [showGridMenu, setShowGridMenu] = useState(false)
   const [gridLimit, setGridLimit] = useState(7)
+  const [projects, setProjects] = useState([])
+  const [projectsLoading, setProjectsLoading] = useState(true)
+  const [projectsError, setProjectsError] = useState('')
   const gridMenuRef = useRef(null)
   const resizeCleanupRef = useRef(null)
   const bodyStyleSnapshotRef = useRef({ cursor: '', userSelect: '' })
@@ -394,6 +473,134 @@ function Dashboard() {
       resizeCleanupRef.current?.()
     }
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchAllProjects() {
+      setProjectsLoading(true)
+      setProjectsError('')
+
+      try {
+        const response = await fetch(API_ENDPOINTS.ALL_PROJECTS)
+        const data = await response.json()
+
+        if (!response.ok || !data?.success) {
+          throw new Error(data?.message || 'Failed to fetch projects')
+        }
+
+        if (!cancelled) {
+          setProjects(Array.isArray(data.data) ? data.data : [])
+        }
+      } catch {
+        if (!cancelled) {
+          setProjectsError('Unable to load projects.')
+        }
+      } finally {
+        if (!cancelled) {
+          setProjectsLoading(false)
+        }
+      }
+    }
+
+    fetchAllProjects()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const projectStatusRows = useMemo(
+    () =>
+      projects.map((project) => {
+        const scheduleHealth = getScheduleHealth(project.deadline)
+        const budgetHealth = getBudgetHealth(project.budget, project.cost)
+        return {
+          id: project.id,
+          project: project.projectName || '-',
+          overall: getOverallHealth(scheduleHealth, budgetHealth),
+          overallTone: HEALTH_TONE[getOverallHealth(scheduleHealth, budgetHealth)],
+          schedule: scheduleHealth,
+          scheduleTone: HEALTH_TONE[scheduleHealth],
+          budget: budgetHealth,
+          budgetTone: HEALTH_TONE[budgetHealth],
+          summary: `Client: ${project.clientName || '-'} • PM: ${project.pm || '-'} • Status: ${project.status || '-'}`,
+        }
+      }),
+    [projects],
+  )
+
+  const myProjectsRows = useMemo(
+    () =>
+      projects.map((project) => {
+        const scheduleHealth = getScheduleHealth(project.deadline)
+        const budgetHealth = getBudgetHealth(project.budget, project.cost)
+        return {
+          id: project.id,
+          name: project.projectName || '-',
+          scheduleHealth,
+          scheduleTone: HEALTH_TONE[scheduleHealth],
+          budgetHealth,
+          budgetTone: HEALTH_TONE[budgetHealth],
+          progress: '-',
+          deadline: formatDeadline(project.deadline),
+        }
+      }),
+    [projects],
+  )
+
+  const summaryCounts = useMemo(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    let completed = 0
+    let overdue = 0
+    projects.forEach((project) => {
+      const status = (project.status || '').toLowerCase()
+      if (status === 'completed') {
+        completed += 1
+        return
+      }
+      const deadlineDate = new Date(project.deadline)
+      if (!Number.isNaN(deadlineDate.getTime()) && deadlineDate < today) {
+        overdue += 1
+      }
+    })
+
+    return {
+      totalProjects: projects.length,
+      completedProjects: completed,
+      overdueProjects: overdue,
+      activeProjects: Math.max(0, projects.length - completed - overdue),
+    }
+  }, [projects])
+
+  const upcomingDeadlines = useMemo(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    return projects
+      .filter((project) => {
+        const status = (project.status || '').toLowerCase()
+        if (status === 'completed') return false
+        const deadlineDate = new Date(project.deadline)
+        return !Number.isNaN(deadlineDate.getTime()) && deadlineDate >= today
+      })
+      .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
+      .slice(0, 3)
+      .map((project, index) => {
+        const deadlineDate = new Date(project.deadline)
+        const daysLeft = Math.round((deadlineDate - today) / (1000 * 60 * 60 * 24))
+        const iconMeta = DEADLINE_ICONS[index % DEADLINE_ICONS.length]
+        return {
+          id: project.id,
+          title: project.projectName || '-',
+          daysLeft: daysLeft === 0 ? 'Due today' : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`,
+          icon: iconMeta.icon,
+          iconWrap: iconMeta.iconWrap,
+        }
+      })
+  }, [projects])
 
   function handleCloseLauncher() {
     setActiveLauncherMenu(null)
@@ -512,7 +719,11 @@ function Dashboard() {
           titleClassName="text-[12px]"
           {...sharedProps}
         >
-          <SummaryCardSection sectionId={section.id} />
+          <SummaryCardSection
+            sectionId={section.id}
+            value={summaryCounts[section.id]}
+            isLoading={projectsLoading}
+          />
         </SortableDashboardSection>
       )
     }
@@ -525,7 +736,11 @@ function Dashboard() {
           bodyClassName="pb-1"
           {...sharedProps}
         >
-          <ProjectsStatusSection />
+          <ProjectsStatusSection
+            rows={projectStatusRows}
+            isLoading={projectsLoading}
+            error={projectsError}
+          />
         </SortableDashboardSection>
       )
     }
@@ -538,7 +753,11 @@ function Dashboard() {
           bodyClassName="pb-1"
           {...sharedProps}
         >
-          <MyProjectsSection />
+          <MyProjectsSection
+            rows={myProjectsRows}
+            isLoading={projectsLoading}
+            error={projectsError}
+          />
         </SortableDashboardSection>
       )
     }
@@ -561,7 +780,11 @@ function Dashboard() {
         bodyClassName="pb-2"
         {...sharedProps}
       >
-        <UpcomingDeadlinesSection />
+        <UpcomingDeadlinesSection
+          items={upcomingDeadlines}
+          isLoading={projectsLoading}
+          error={projectsError}
+        />
       </SortableDashboardSection>
     )
   }

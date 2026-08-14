@@ -7,7 +7,7 @@ const VIEW_OPTIONS = [
 
 export default function Legend({ view, onViewChange }) {
     return (
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-y-2 border-b border-slate-100 px-4 py-2.5">
             <div className="flex flex-wrap items-center gap-3">
                 {LEGEND_ITEMS.map((item) => (
                     <div key={item.key} className="flex items-center gap-1.5">

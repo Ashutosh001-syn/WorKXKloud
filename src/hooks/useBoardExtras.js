@@ -33,7 +33,6 @@ function safeParse(raw, fallback) {
 }
 
 export function useBoardExtras(projectId) {
-    const extrasKey = `board_task_extras_${projectId || 'default'}`
     // v2: columns now carry a statusKey (see DEFAULT_COLUMNS above) — bumped
     // so anyone with the old 4-column/no-statusKey cache gets a clean reseed
     // instead of silently running with columns that can't map to a backend
@@ -41,9 +40,10 @@ export function useBoardExtras(projectId) {
     const columnsKey = `board_columns_v2_${projectId || 'default'}`
 
     const [loadedProjectId, setLoadedProjectId] = useState(projectId)
-    const [taskExtras, setTaskExtras] = useState(() =>
-        safeParse(localStorage.getItem(extrasKey), {})
-    )
+    // Subtasks/comments/attachments have no backend field to persist to, so
+    // they're in-memory only (reset on refresh) — labels moved to the real
+    // backend `labels` field and are no longer tracked here at all.
+    const [taskExtras, setTaskExtras] = useState({})
     const [columns, setColumns] = useState(() =>
         safeParse(localStorage.getItem(columnsKey), DEFAULT_COLUMNS)
     )
@@ -51,13 +51,9 @@ export function useBoardExtras(projectId) {
 
     if (projectId !== loadedProjectId) {
         setLoadedProjectId(projectId)
-        setTaskExtras(safeParse(localStorage.getItem(extrasKey), {}))
+        setTaskExtras({})
         setColumns(safeParse(localStorage.getItem(columnsKey), DEFAULT_COLUMNS))
     }
-
-    useEffect(() => {
-        localStorage.setItem(extrasKey, JSON.stringify(taskExtras))
-    }, [taskExtras, extrasKey])
 
     useEffect(() => {
         localStorage.setItem(columnsKey, JSON.stringify(columns))
@@ -65,13 +61,13 @@ export function useBoardExtras(projectId) {
 
     const getExtras = useCallback(
         (boardId) =>
-            taskExtras[boardId] || { labels: [], subtasks: [], comments: [], attachments: [] },
+            taskExtras[boardId] || { subtasks: [], comments: [], attachments: [] },
         [taskExtras],
     )
 
     const updateExtras = useCallback((boardId, updater) => {
         setTaskExtras((current) => {
-            const existing = current[boardId] || { labels: [], subtasks: [], comments: [], attachments: [] }
+            const existing = current[boardId] || { subtasks: [], comments: [], attachments: [] }
             return { ...current, [boardId]: updater(existing) }
         })
     }, [])
@@ -83,19 +79,6 @@ export function useBoardExtras(projectId) {
             return next
         })
     }, [])
-
-    // --- Labels ---
-    const toggleLabel = useCallback((boardId, label) => {
-        updateExtras(boardId, (extras) => {
-            const exists = extras.labels.some((l) => l.name === label.name)
-            return {
-                ...extras,
-                labels: exists
-                    ? extras.labels.filter((l) => l.name !== label.name)
-                    : [...extras.labels, label],
-            }
-        })
-    }, [updateExtras])
 
     // --- Subtasks / checklist ---
     const addSubtask = useCallback((boardId, text) => {
@@ -193,7 +176,6 @@ export function useBoardExtras(projectId) {
         columns,
         labelPalette: LABEL_PALETTE,
         getExtras,
-        toggleLabel,
         addSubtask,
         toggleSubtask,
         deleteSubtask,

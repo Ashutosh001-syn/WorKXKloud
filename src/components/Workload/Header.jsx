@@ -50,7 +50,7 @@ export default function Header({ project }) {
                 </div>
             </div>
 
-            <div className="flex min-w-65 items-center gap-4">
+            <div className="flex items-center gap-4 lg:min-w-65">
                 <div className="shrink-0">
                     <div className="mb-1 flex items-center gap-1 text-[11px] font-medium text-slate-400">
                         <Calendar size={12} />

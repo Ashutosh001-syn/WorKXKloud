@@ -522,7 +522,7 @@ export default function CalendarPage() {
   const todayHighlight = todayStr
 
   return (
-    <div className="mx-auto max-w-[1400px] space-y-6 p-4 md:p-6 lg:p-8 font-sans text-slate-800">
+    <div className="w-full space-y-6 p-4 md:p-6 lg:p-8 font-sans text-slate-800">
 
       {/* API Error Toast */}
       {apiError && (
@@ -592,25 +592,25 @@ export default function CalendarPage() {
         <div className="lg:col-span-3 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           
           {/* Calendar Controls */}
-          <div className="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
-            <div className="flex items-center gap-2">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-y-3 border-b border-slate-100 pb-4">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={handlePrevMonth}
-                className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 hover:bg-slate-50 transition active:scale-95 text-slate-600"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 hover:bg-slate-50 transition active:scale-95 text-slate-600"
                 aria-label="Previous Month"
               >
                 <ChevronLeft size={20} />
               </button>
               <button
                 onClick={handleNextMonth}
-                className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 hover:bg-slate-50 transition active:scale-95 text-slate-600"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 hover:bg-slate-50 transition active:scale-95 text-slate-600"
                 aria-label="Next Month"
               >
                 <ChevronRight size={20} />
               </button>
 
               {/* Separate Month and Year Dropdown Selectors */}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {/* Month Dropdown */}
                 <div className="relative">
                   <button

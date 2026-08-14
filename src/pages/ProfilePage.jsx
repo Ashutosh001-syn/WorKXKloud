@@ -87,33 +87,68 @@ export default function ProfilePage() {
   return (
     <div className="relative min-h-[calc(100vh-64px)] bg-[#f1f5f9] p-3 sm:p-4">
       <section className="rounded-[10px] bg-white p-6 shadow-[0_16px_40px_rgba(3,10,24,0.16)]">
-        
+
         {/* Header Section */}
-        <div className="mb-8 flex items-start justify-between">
-          <div>
-            <h1 className="text-[20px] font-semibold text-[#1e293b]">My Profile</h1>
-            <p className="mt-1 text-[13px] text-[#64748b]">
+        <div className="mb-8 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-[20px] font-semibold text-[#1e293b]">
+              My Profile
+            </h1>
+
+            <p className="mt-1 text-[13px] leading-5 text-[#64748b]">
               Manage your personal information and account settings
             </p>
           </div>
+
           {!isEditing ? (
             <button
               onClick={handleEdit}
-              className="rounded-full bg-[#0052ff] px-6 py-2 text-[14px] font-medium text-white transition hover:bg-[#0042cc]"
+              className="
+        shrink-0 whitespace-nowrap
+        rounded-full
+        bg-[#0052ff]
+        px-5 py-2
+        text-[13px] font-medium text-white
+        shadow-[0_4px_12px_rgba(0,82,255,0.18)]
+        transition-all duration-200
+        hover:bg-[#0042cc]
+        hover:shadow-[0_6px_16px_rgba(0,82,255,0.25)]
+        sm:px-6 sm:py-2 sm:text-[14px]
+      "
             >
               Edit Profile
             </button>
           ) : (
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               <button
                 onClick={handleCancel}
-                className="rounded-full bg-[#f1f5f9] px-6 py-2 text-[14px] font-medium text-[#475569] transition hover:bg-[#e2e8f0]"
+                className="
+          whitespace-nowrap
+          rounded-full
+          bg-[#f1f5f9]
+          px-4 py-2
+          text-[13px] font-medium text-[#475569]
+          transition
+          hover:bg-[#e2e8f0]
+          sm:px-6 sm:text-[14px]
+        "
               >
                 Cancel
               </button>
+
               <button
                 onClick={handleSave}
-                className="rounded-full bg-[#0052ff] px-6 py-2 text-[14px] font-medium text-white transition hover:bg-[#0042cc]"
+                className="
+          whitespace-nowrap
+          rounded-full
+          bg-[#0052ff]
+          px-4 py-2
+          text-[13px] font-medium text-white
+          shadow-sm
+          transition
+          hover:bg-[#0042cc]
+          sm:px-6 sm:text-[14px]
+        "
               >
                 Save Changes
               </button>
@@ -126,10 +161,10 @@ export default function ProfilePage() {
           <div className="relative group">
             <div className="h-28 w-28 overflow-hidden rounded-full border-4 border-white bg-white shadow-md ring-1 ring-[#e2e8f0]">
               {(isEditing ? tempData.image : userData.image) ? (
-                <img 
-                  src={isEditing ? tempData.image : userData.image} 
-                  alt="Profile" 
-                  className="h-full w-full object-cover" 
+                <img
+                  src={isEditing ? tempData.image : userData.image}
+                  alt="Profile"
+                  className="h-full w-full object-cover"
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center bg-slate-100">
@@ -138,22 +173,22 @@ export default function ProfilePage() {
               )}
             </div>
             {isEditing && (
-              <button 
+              <button
                 onClick={() => fileInputRef.current?.click()}
                 className="absolute bottom-1 right-1 rounded-full bg-[#0052ff] p-2 text-white shadow-lg transition hover:bg-[#0042cc]"
               >
                 <Camera size={16} />
               </button>
             )}
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              className="hidden" 
-              accept="image/*" 
-              onChange={handleImageChange} 
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept="image/*"
+              onChange={handleImageChange}
             />
           </div>
-          
+
           <div className="text-center md:text-left">
             <h2 className="text-[22px] font-bold text-[#065f46]">
               {userData.firstName} {userData.lastName}

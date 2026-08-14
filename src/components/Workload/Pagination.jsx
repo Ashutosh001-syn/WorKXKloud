@@ -7,7 +7,7 @@ export default function Pagination({ page, pageSize, total, onPageChange }) {
     const pageNumbers = Array.from({ length: totalPages }, (_, index) => index + 1);
 
     return (
-        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-y-2 border-t border-slate-100 px-4 py-3">
             <p className="text-xs text-slate-500">
                 Showing <span className="font-medium text-slate-700">{startRecord}</span> to{" "}
                 <span className="font-medium text-slate-700">{endRecord}</span> of{" "}

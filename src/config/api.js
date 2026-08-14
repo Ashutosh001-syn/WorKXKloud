@@ -41,13 +41,24 @@ export const API_ENDPOINTS = {
   PROJECT_APPROVAL_BY_PM: `${API_ROOT_URL}/projectManager/project_approvalBYPM`,
   CREATE_REQUIRED_RESOURCE: `${API_ROOT_URL}/projectManager/create_requiredResource`,
   GET_PM_BACKLOG: `${API_ROOT_URL}/projectManager/get_pmBacklog`,
+  // Write-only — confirmed live, but there's no read/GET counterpart yet,
+  // so it can't be the source of truth for UI state (see scheduleWorkflow.js).
+  SCHEDULE_STATUS_BY_PM: `${API_ROOT_URL}/projectManager/scheduleStatusByPm`,
+  // Read counterpart — confirmed live. POST (not GET), and pmo_id is
+  // required + actually filters (returns only projects that PMO has
+  // touched via scheduleStatusByPm). No pm_id-scoped equivalent exists yet.
+  GET_PROJECTS_STATUS: `${API_ROOT_URL}/admin/getProjectsStatus`,
 
   // Boards
   CREATE_BOARD: `${API_ROOT_URL}/users/create_board`,
   GET_BOARD: `${API_ROOT_URL}/projectManager/getBoard`,
-  UPDATE_BOARD_STATUS: `${API_ROOT_URL}/users/update_boardStatus`,
-  UPDATE_BOARD: `${API_ROOT_URL}/users/update_board`,
-  DELETE_BOARD: `${API_ROOT_URL}/users/delete_board`,
+  // Both status moves and field edits (resource_id) go through the same
+  // record-level endpoint — confirmed live, and it requires the FULL
+  // record (id, project_id, task_id, resource_id, status, pm_id) on every
+  // call; sending a partial body nulls out the omitted columns server-side.
+  UPDATE_BOARD_STATUS: `${API_ROOT_URL}/users/editBoard`,
+  UPDATE_BOARD: `${API_ROOT_URL}/users/editBoard`,
+  DELETE_BOARD: `${API_ROOT_URL}/users/deleteBoard`,
   GET_USER_DISCUSSION: `${API_ROOT_URL}/users/get_userDiscussion`,
 
   // Milestone
@@ -65,6 +76,16 @@ export const API_ENDPOINTS = {
   UPDATE_SUBTASK_SCHEDULE: `${API_ROOT_URL}/projectManager/editSubTaskSchedule`,
 
   DELETE_TASK_SUBTASK: `${API_ROOT_URL}/projectManager/deleteTaskSubtask`,
+
+  // TODO(backend): placeholder — no workload/resource-allocation-hours
+  // endpoint exists yet (verified: not in resource_list, not in
+  // ResourceAllocationPage, not anywhere else). WorkloadPage tries this URL
+  // and falls back to workloadDummyData.js on failure, so once this route
+  // is real, swap the URL below and the page picks it up with no other
+  // changes needed. Expected shape: { success, data: { activeProject: {...},
+  // resources: [{ id, name, role, projects: [{ id, name, weekdayHours,
+  // monthly, exceptions }] }] } } — same as workloadDummyData.js's exports.
+  GET_WORKLOAD: `${API_ROOT_URL}/admin/get_workload`,
 
   // Notifications
   GET_NOTIFICATIONS: `${API_ROOT_URL}/users/get_notifications`,

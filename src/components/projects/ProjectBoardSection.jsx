@@ -18,25 +18,24 @@ const PRIORITY_GROUPS = [
   { id: 'Low', title: 'Low', color: 'bg-slate-400', wipLimit: null },
 ];
 
-// Enriches one GET_BOARD row into the task shape the rest of this component
-// expects. The board row itself only carries ids (task_id, resource_id) and
-// a status — no title, no resource name, no due date, no priority — so a
-// schedule-task map and a resource map are passed in to fill in what's
-// available for display. `statusKey` (the raw backend value, e.g. "to_do")
-// is kept as-is rather than converted to a display label — matching a card
-// to its column is always done against this, never against a column's
-// (renamable) title.
+
 function boardItemToTask(item, statusKey, scheduleMap, resourceMap) {
   return {
     id: `WR-${item.id}`,
     boardId: item.id,
-    title: scheduleMap.get(String(item.task_id)) || `Task #${item.task_id}`,
-    projectName: undefined, // filled in by the caller, which knows the project name
-    priority: 'Medium', // TODO(backend): GET_BOARD doesn't return a priority yet
-    date: '—', // TODO(backend): GET_BOARD doesn't return a due date yet
+    // editBoard's title/priority/due_date are now confirmed to persist and
+    // come back through getBoard — prefer them, and only fall back to the
+    // schedule task's own name/defaults for older records that predate this
+    // (title/priority/due_date still null on those).
+    title: item.title || scheduleMap.get(String(item.task_id)) || `Task #${item.task_id}`,
+    projectName: undefined,
+    priority: item.priority || 'Medium',
+    date: item.due_date
+      ? new Date(item.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+      : '—',
     isCompleted: statusKey === 'completed',
     statusKey,
-    customColumnId: null, // set when locally moved into a user-added column — see moveTask
+    customColumnId: null,
     rawApiData: {
       ...item,
       resource_name: resourceMap.get(String(item.resource_id)),
@@ -60,8 +59,7 @@ const PriorityBadge = ({ level }) => {
   );
 };
 
-// --- Initials avatar (no external image dependency — reflects the actual
-// assigned resource, unlike a static placeholder photo) ---
+
 const AVATAR_PALETTE = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#dc2626', '#0891b2', '#db2777', '#4f46e5'];
 
 function avatarColor(name) {
@@ -100,8 +98,7 @@ function AssigneeAvatar({ name, size = 24 }) {
   );
 }
 
-// --- Quick-assign popover, opened from the card's avatar. Doesn't open the
-// full task modal — just lets you pick a resource in place. ---
+
 function AssigneePicker({ resources, resourcesLoading, currentResourceId, currentResourceName, onRequestResources, onSelect }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -170,8 +167,6 @@ function AssigneePicker({ resources, resourcesLoading, currentResourceId, curren
   );
 }
 
-// --- Due-date quick edit: click opens the native date picker directly on
-// the card, no full modal needed. ---
 function DueDatePicker({ isoDate, displayDate, onChange }) {
   const inputRef = useRef(null);
 
@@ -214,6 +209,28 @@ function DueDatePicker({ isoDate, displayDate, onChange }) {
       />
     </div>
   );
+}
+
+function safeParseJsonArray(raw) {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+// Backend `labels` field is a comma-separated string of names; map each
+// name to its palette entry for color, falling back to a neutral tone for
+// names that don't match any palette entry.
+function parseTaskLabels(rawLabels, labelPalette) {
+  if (!rawLabels) return [];
+  return rawLabels
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .map((name) => labelPalette.find((l) => l.name === name) || { name, color: '#64748b' });
 }
 
 function LabelChips({ labels }) {
@@ -268,13 +285,13 @@ function CardMenu({ onEdit, onDuplicate, onDelete, columns, currentStatusKey, cu
           >
             <Pencil size={13} /> Edit
           </button>
-          <button
+          {/* <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onDuplicate(); setOpen(false); }}
             className="flex w-full items-center gap-2 px-3 py-1.5 text-slate-600 hover:bg-slate-50"
           >
             <Copy size={13} /> Duplicate
-          </button>
+          </button> */}
 
           <div className="relative">
             <button
@@ -318,12 +335,15 @@ function CardMenu({ onEdit, onDuplicate, onDelete, columns, currentStatusKey, cu
 }
 
 const TaskCard = ({
-  task, extras, columns, isDragging, isDropTargetAbove,
+  task, columns, labelPalette, isDragging, isDropTargetAbove,
   resources, resourcesLoading,
   onDragStart, onDragOverCard, onOpen,
   onEdit, onDuplicate, onDelete, onMoveTo,
   onEnsureResources, onAssigneeChange, onDateChange,
-}) => (
+}) => {
+  const cardSubtasks = safeParseJsonArray(task.rawApiData?.checklist);
+  const cardComments = safeParseJsonArray(task.rawApiData?.comments);
+  return (
   <div className="relative">
     {isDropTargetAbove && <div className="absolute -top-1.5 left-0 right-0 h-0.5 rounded-full bg-blue-500" />}
     <div
@@ -356,26 +376,26 @@ const TaskCard = ({
         />
       </div>
 
-      <LabelChips labels={extras.labels} />
+      <LabelChips labels={parseTaskLabels(task.rawApiData?.labels, labelPalette)} />
 
       <div className="flex items-center justify-between mt-1">
         <span className="text-xs text-slate-500 font-medium">#{task.id}</span>
         <PriorityBadge level={task.priority || 'Medium'} />
       </div>
 
-      {(extras.subtasks.length > 0 || extras.comments.length > 0 || extras.attachments.length > 0) && (
+      {(cardSubtasks.length > 0 || cardComments.length > 0 || task.rawApiData?.attachments) && (
         <div className="flex items-center gap-3 text-slate-400 text-[11px] font-medium">
-          {extras.subtasks.length > 0 && (
+          {cardSubtasks.length > 0 && (
             <span className="flex items-center gap-1">
               <CheckSquare size={12} />
-              {extras.subtasks.filter((s) => s.done).length}/{extras.subtasks.length}
+              {cardSubtasks.filter((s) => s.done).length}/{cardSubtasks.length}
             </span>
           )}
-          {extras.comments.length > 0 && (
-            <span className="flex items-center gap-1"><MessageSquare size={12} />{extras.comments.length}</span>
+          {cardComments.length > 0 && (
+            <span className="flex items-center gap-1"><MessageSquare size={12} />{cardComments.length}</span>
           )}
-          {extras.attachments.length > 0 && (
-            <span className="flex items-center gap-1"><Paperclip size={12} />{extras.attachments.length}</span>
+          {task.rawApiData?.attachments && (
+            <span className="flex items-center gap-1"><Paperclip size={12} />1</span>
           )}
         </div>
       )}
@@ -401,19 +421,19 @@ const TaskCard = ({
       </div>
     </div>
   </div>
-);
-
+  );
+};
 
 export default function ProjectBoardSection({ projectId, pmId, projectName }) {
   const { toasts, showToast, dismissToast } = useToast();
   const {
-    columns, labelPalette, getExtras, toggleLabel,
-    addSubtask, toggleSubtask, deleteSubtask, addComment,
-    addAttachment, deleteAttachment, addColumn, renameColumn,
+    columns, labelPalette,
+    addColumn, renameColumn,
     deleteColumn, setColumnWipLimit, reorderColumns, removeExtras,
   } = useBoardExtras(projectId);
 
   const [tasks, setTasks] = useState([]);
+  const [uploadingAttachmentId, setUploadingAttachmentId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [draggingTaskId, setDraggingTaskId] = useState(null);
@@ -429,6 +449,15 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
   const [selectedRole, setSelectedRole] = useState('All Roles');
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const roleDropdownRef = useRef(null);
+
+  // TODO(backend): switching boards between PMs needs a way to map a PM's
+  // name to the pm_id get_projectsByPm/getBoard actually expect — neither
+  // USER_LIST nor RESOURCE_LIST's `id` matches that space (verified: real
+  // pm_ids 1-4 return inconsistent project_manager names, and USER_LIST's
+  // "Project manager"-role ids return 0 projects). So this only lists PM
+  // resources for now; picking one is a no-op until that mapping exists.
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const userDropdownRef = useRef(null);
 
   const [groupBy, setGroupBy] = useState('Status'); // 'Status' | 'Assignee' | 'Priority'
   const [groupByOpen, setGroupByOpen] = useState(false);
@@ -499,7 +528,7 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
           return {
             name,
             role: profile.role || 'Team Member',
-            avatar: profile.image || 'https://i.pravatar.cc/150?img=47',
+            // avatar: profile.image || 'https://i.pravatar.cc/150?img=47',
           };
         }
       } catch {
@@ -617,6 +646,7 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
     function handleOutside(e) {
       if (filterRef.current && !filterRef.current.contains(e.target)) setFilterOpen(false);
       if (roleDropdownRef.current && !roleDropdownRef.current.contains(e.target)) setRoleDropdownOpen(false);
+      if (userDropdownRef.current && !userDropdownRef.current.contains(e.target)) setUserDropdownOpen(false);
       if (groupByRef.current && !groupByRef.current.contains(e.target)) setGroupByOpen(false);
       if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setMoreMenuOpen(false);
     }
@@ -757,25 +787,132 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
   const handleDeleteTask = async (task) => {
     if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
 
-    // TODO(backend): once DELETE_BOARD is confirmed live, restore:
-    // const response = await fetch(API_ENDPOINTS.DELETE_BOARD, {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ board_id: task.boardId }),
-    // });
-    // const data = await response.json();
-    // if (!data.success) throw new Error(data.message || 'Delete failed');
-    // await refetchBoard();
-
+    const previousTasks = tasks;
     setTasks((current) => current.filter((t) => t.id !== task.id));
-    removeExtras(task.boardId);
-    showToast('Task deleted.', { type: 'success' });
+
+    try {
+      const response = await fetch(API_ENDPOINTS.DELETE_BOARD, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: task.boardId }),
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.message || 'Delete failed');
+
+      removeExtras(task.boardId);
+      showToast('Task deleted.', { type: 'success' });
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+      setTasks(previousTasks);
+      showToast(err.message || 'Could not delete the task. Please try again.', { type: 'error' });
+    }
+  };
+
+  // --- Persist a board record edit ---
+  // editBoard is a full-record update: it always expects id, project_id,
+  // task_id, resource_id, status, pm_id together — sending only the
+  // changed field(s) nulls out the rest server-side (confirmed by testing),
+  // so this always sends task.rawApiData merged with the override(s).
+  // attachmentFile is only passed when the user is uploading a new file —
+  // the backend field is a single-file multer upload (confirmed via curl:
+  // field name "attachments", one URL stored, not a list), so this switches
+  // to multipart/form-data only for that call instead of every save.
+  const saveBoardRecord = async (task, overrides, attachmentFile) => {
+    const fields = {
+      id: task.boardId,
+      project_id: task.rawApiData?.project_id,
+      task_id: task.rawApiData?.task_id,
+      resource_id: task.rawApiData?.resource_id,
+      status: task.rawApiData?.status,
+      pm_id: task.rawApiData?.pm_id,
+      title: task.rawApiData?.title,
+      priority: task.rawApiData?.priority,
+      assignee_id: task.rawApiData?.assignee_id,
+      due_date: task.rawApiData?.due_date,
+      description: task.rawApiData?.description,
+      labels: task.rawApiData?.labels,
+      checklist: task.rawApiData?.checklist,
+      comments: task.rawApiData?.comments,
+      ...overrides,
+    };
+
+    let response;
+    if (attachmentFile) {
+      const formData = new FormData();
+      Object.entries(fields).forEach(([key, value]) => {
+        if (key === 'attachments') return;
+        formData.append(key, value ?? '');
+      });
+      formData.append('attachments', attachmentFile);
+      response = await fetch(API_ENDPOINTS.UPDATE_BOARD, { method: 'POST', body: formData });
+    } else {
+      response = await fetch(API_ENDPOINTS.UPDATE_BOARD, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields),
+      });
+    }
+
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || 'Update failed');
+    return data;
   };
 
   // --- FIELD EDIT (from the detail modal) ---
-  // TODO(backend): once UPDATE_BOARD is confirmed live, restore the fetch
-  // below and revert setTasks(previousTasks) on failure. Until then this
-  // edit is local only and won't survive a refresh.
+  // resource_id, title, priority, due_date, description are all confirmed
+  // round-tripping through editBoard -> getBoard now.
+  const FIELD_TO_OVERRIDE_KEY = {
+    resource_id: 'resource_id',
+    title: 'title',
+    priority: 'priority',
+    due_date: 'due_date',
+    description: 'description',
+    labels: 'labels',
+    checklist: 'checklist',
+    comments: 'comments',
+    attachments: 'attachments',
+  }
+
+  // editBoard is a full-record write every time, so editing several fields
+  // in quick succession (e.g. Priority, Assignee, Due Date one after
+  // another in the detail modal) shouldn't fire one network call per field —
+  // debounce and merge them into a single call. previousTasks is snapshotted
+  // once per batch (not per field) so a failure rolls back everything the
+  // batch touched, not just the last field.
+  const pendingSaveRef = useRef({});
+
+  useEffect(() => {
+    const pendingSaves = pendingSaveRef.current;
+    return () => {
+      Object.values(pendingSaves).forEach((pending) => clearTimeout(pending.timer));
+    };
+  }, []);
+
+  const flushSave = async (taskId) => {
+    const pending = pendingSaveRef.current[taskId];
+    if (!pending) return;
+    delete pendingSaveRef.current[taskId];
+
+    try {
+      await saveBoardRecord(pending.task, pending.overrides);
+    } catch (err) {
+      console.error('Failed to save task fields:', err);
+      setTasks(pending.previousTasks);
+      showToast(err.message || 'Could not save the change. Please try again.', { type: 'error' });
+    }
+  };
+
+  const queueFieldSave = (task, overrideKey, value) => {
+    const existing = pendingSaveRef.current[task.id];
+    if (existing) clearTimeout(existing.timer);
+
+    const previousTasks = existing ? existing.previousTasks : tasks;
+    const overrides = { ...(existing?.overrides || {}), [overrideKey]: value };
+    const timer = setTimeout(() => flushSave(task.id), 600);
+
+    pendingSaveRef.current[task.id] = { task, overrides, timer, previousTasks };
+  };
+
   const handleSaveField = async (task, field, value) => {
     setTasks((current) =>
       current.map((t) => {
@@ -796,17 +933,45 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
           return { ...t, rawApiData: { ...t.rawApiData, resource_id: value, resource_name: resource?.name } };
         }
         if (field === 'description') return { ...t, rawApiData: { ...t.rawApiData, description: value } };
+        if (field === 'labels') return { ...t, rawApiData: { ...t.rawApiData, labels: value } };
+        if (field === 'checklist') return { ...t, rawApiData: { ...t.rawApiData, checklist: value } };
+        if (field === 'comments') return { ...t, rawApiData: { ...t.rawApiData, comments: value } };
+        if (field === 'attachments') return { ...t, rawApiData: { ...t.rawApiData, attachments: value } };
         return t;
       })
     );
 
-    // const response = await fetch(API_ENDPOINTS.UPDATE_BOARD, {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ board_id: task.boardId, [field]: value }),
-    // });
-    // const data = await response.json();
-    // if (!data.success) throw new Error(data.message || 'Update failed');
+    const overrideKey = FIELD_TO_OVERRIDE_KEY[field]
+    if (!overrideKey) return
+
+    queueFieldSave(task, overrideKey, value || null);
+  };
+
+  // Attachments are a single-file multer upload on the backend (confirmed:
+  // one URL stored per task, not a list) — upload immediately on file
+  // select/remove rather than batching through the debounced field queue,
+  // since a file needs multipart/form-data and its own request.
+  const handleUploadAttachment = async (task, file) => {
+    setUploadingAttachmentId(task.id);
+    try {
+      const data = await saveBoardRecord(task, {}, file);
+      setTasks((current) =>
+        current.map((t) =>
+          t.id === task.id
+            ? { ...t, rawApiData: { ...t.rawApiData, attachments: data.attachment } }
+            : t
+        )
+      );
+    } catch (err) {
+      console.error('Failed to upload attachment:', err);
+      showToast(err.message || 'Could not upload the file. Please try again.', { type: 'error' });
+    } finally {
+      setUploadingAttachmentId(null);
+    }
+  };
+
+  const handleRemoveAttachment = (task) => {
+    handleSaveField(task, 'attachments', null);
   };
 
   // --- Quick-edit from the card itself (avatar / date icon), same
@@ -841,6 +1006,8 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
       showToast(`"${targetColumn.title}" is at its WIP limit (${targetColumn.wipLimit}).`, { type: 'info' });
     }
 
+    const previousTasks = tasks;
+
     setTasks((current) => {
       const withoutTask = current.filter((t) => t.id !== taskId);
       const updatedTask = {
@@ -848,6 +1015,9 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
         statusKey: targetColumn.statusKey || task.statusKey,
         customColumnId: targetColumn.statusKey ? null : targetColumn.id,
         isCompleted: targetColumn.statusKey === 'completed',
+        rawApiData: targetColumn.statusKey
+          ? { ...task.rawApiData, status: targetColumn.statusKey }
+          : task.rawApiData,
       };
       if (!beforeTaskId) return [...withoutTask, updatedTask];
       const insertAt = withoutTask.findIndex((t) => t.id === beforeTaskId);
@@ -857,16 +1027,16 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
 
     if (!targetColumn.statusKey) {
       showToast(`Moved to a custom column — status "${targetColumn.title}" isn't recognized by the backend yet, so this only shows locally.`, { type: 'info' });
+      return;
     }
 
-    // TODO(backend): once UPDATE_BOARD_STATUS is confirmed live:
-    // if (targetColumn.statusKey) {
-    //   await fetch(API_ENDPOINTS.UPDATE_BOARD_STATUS, {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ board_id: task.boardId, status: targetColumn.statusKey }),
-    //   });
-    // }
+    try {
+      await saveBoardRecord(task, { status: targetColumn.statusKey });
+    } catch (err) {
+      console.error('Failed to save status move:', err);
+      setTasks(previousTasks);
+      showToast(err.message || 'Could not move the task. Please try again.', { type: 'error' });
+    }
   };
 
   // --- Drag and drop: tasks ---
@@ -1060,19 +1230,52 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           {/* Left cluster: current user, role filter, search */}
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2.5 pr-3 border-r border-slate-200">
-              <img
-                src={currentUser.avatar}
-                alt={currentUser.name}
-                className="w-9 h-9 rounded-full border border-slate-200 object-cover"
-              />
-              <div className="leading-tight">
-                <p className="text-sm font-semibold text-slate-800">{currentUser.name}</p>
-                <p className="text-xs text-slate-400">{currentUser.role}</p>
-              </div>
+            <div className="relative pr-3 border-r border-slate-200" ref={userDropdownRef}>
+              <button
+                type="button"
+                onClick={() => { setUserDropdownOpen((v) => !v); ensureResourcesLoaded(); }}
+                className="flex items-center gap-2.5 rounded-lg px-1 py-0.5 hover:bg-slate-50 transition"
+              >
+                <img
+                  src={currentUser.avatar}
+                  alt={currentUser.name}
+                  className="w-9 h-9 rounded-full border border-slate-200 object-cover"
+                />
+                <div className="leading-tight text-left">
+                  <p className="text-sm font-semibold text-slate-800">{currentUser.name}</p>
+                  <p className="text-xs text-slate-400">{currentUser.role}</p>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+
+              {userDropdownOpen && (
+                <div className="absolute left-0 top-14 z-30 w-56 rounded-xl border border-slate-100 bg-white shadow-xl p-1.5">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 bg-blue-50"
+                  >
+                    {currentUser.name}
+                    <Check className="w-3.5 h-3.5 text-blue-600" />
+                  </button>
+                  {resources
+                    .filter((r) => (r.role || '').toLowerCase().includes('project manager') && r.name !== currentUser.name)
+                    .map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        disabled
+                        title="Switching boards between PMs isn't available yet — the backend has no reliable way to map a PM to their board data."
+                        className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-400 cursor-not-allowed"
+                      >
+                        {r.name}
+                        <span className="text-[10px] font-medium text-slate-300">Coming soon</span>
+                      </button>
+                    ))}
+                </div>
+              )}
             </div>
 
-            <div className="relative" ref={roleDropdownRef}>
+            {/* <div className="relative" ref={roleDropdownRef}>
               <button
                 type="button"
                 onClick={() => setRoleDropdownOpen((v) => !v)}
@@ -1097,7 +1300,7 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
                   ))}
                 </div>
               )}
-            </div>
+            </div> */}
 
             <div className="flex min-w-45 flex-1 items-center rounded-xl border border-slate-200 bg-white px-3 transition focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 sm:flex-none sm:w-64">
               <Search className="h-4 w-4 shrink-0 text-slate-400" />
@@ -1334,8 +1537,8 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
                     <TaskCard
                       key={task.id}
                       task={task}
-                      extras={getExtras(task.boardId)}
                       columns={columns}
+                      labelPalette={labelPalette}
                       isDragging={draggingTaskId === task.id}
                       isDropTargetAbove={isStatusMode && dropTarget?.columnId === column.id && dropTarget?.beforeTaskId === task.id}
                       resources={resources}
@@ -1355,11 +1558,11 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
                 )}
               </div>
 
-              {/* Add Task — only on the "To Do" column specifically (not just
-                  "leftmost" — In Discussion sits before it in column order),
-                  and only in Status grouping. New work starts in To Do and
-                  moves right via drag/"Move to". */}
-              {isStatusMode && column.statusKey === 'to_do' && (
+              {/* Add Task — always on the "In Discussion" column specifically
+                  (the leftmost column), and only in Status grouping. New
+                  work starts in In Discussion and moves right via drag/
+                  "Move to". */}
+              {isStatusMode && column.statusKey === 'in_discussion' && (
                 <div className="mt-auto pt-2">
                   {activeColumnForAdd === column.id ? (
                     <div className="bg-white p-3 rounded-xl border border-blue-200 shadow-sm flex flex-col gap-2">
@@ -1474,17 +1677,12 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
           resources={resources}
           resourcesLoading={resourcesLoading}
           labelPalette={labelPalette}
-          extras={getExtras(selectedTask.boardId)}
           currentUserName={getCurrentUserName()}
           onClose={() => setSelectedTaskId(null)}
           onSaveField={(field, value) => handleSaveField(selectedTask, field, value)}
-          onToggleLabel={(label) => toggleLabel(selectedTask.boardId, label)}
-          onAddSubtask={(text) => addSubtask(selectedTask.boardId, text)}
-          onToggleSubtask={(id) => toggleSubtask(selectedTask.boardId, id)}
-          onDeleteSubtask={(id) => deleteSubtask(selectedTask.boardId, id)}
-          onAddComment={(text, author) => addComment(selectedTask.boardId, text, author)}
-          onAddAttachment={(name, url) => addAttachment(selectedTask.boardId, name, url)}
-          onDeleteAttachment={(id) => deleteAttachment(selectedTask.boardId, id)}
+          onUploadAttachment={(file) => handleUploadAttachment(selectedTask, file)}
+          onRemoveAttachment={() => handleRemoveAttachment(selectedTask)}
+          isUploadingAttachment={uploadingAttachmentId === selectedTask.id}
           onDelete={() => { handleDeleteTask(selectedTask); setSelectedTaskId(null); }}
           onDuplicate={() => { handleDuplicateTask(selectedTask); setSelectedTaskId(null); }}
         />

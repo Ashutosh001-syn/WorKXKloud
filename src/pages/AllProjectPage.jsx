@@ -30,11 +30,11 @@ function ViewProjectModal({ project, onClose }) {
   const startDate = project.start_date || project.plannedStartDate || 'N/A'
   const deadline = project.end_date || project.deadline || 'N/A'
   const scope = project.project_scope || project.description || project.scope || 'No description provided.'
-  
+
   const companyName = project.company_name || project.clientName || 'N/A'
   const location = project.location || 'N/A'
   const contacts = project.contacts || project.persons || []
-  
+
   const billing = project.no_billing || project.billing || 'N/A'
   const budget = project.budget || 'N/A'
   const cost = project.cost || 'N/A' // Cost isn't in payload but kept as fallback
@@ -43,7 +43,7 @@ function ViewProjectModal({ project, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-5">
           <div className="flex items-center gap-4">
@@ -52,7 +52,7 @@ function ViewProjectModal({ project, onClose }) {
             )}
             <div>
               <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                {pName} 
+                {pName}
                 <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">{pCode}</span>
               </h2>
               <p className="text-sm text-slate-500 mt-0.5">Project Details</p>
@@ -69,7 +69,7 @@ function ViewProjectModal({ project, onClose }) {
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar bg-slate-50">
           <div className="space-y-8">
-            
+
             {/* Status & Priority Badge row */}
             <div className="flex items-center gap-3">
               <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider shadow-sm ${getStatusTone(pStatus)}`}>
@@ -89,7 +89,7 @@ function ViewProjectModal({ project, onClose }) {
             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">Project Details</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-5 gap-x-6">
-                
+
                 <div className="space-y-1">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Project Manager</p>
                   <p className="text-[13px] font-semibold text-slate-700">{pm}</p>
@@ -131,7 +131,7 @@ function ViewProjectModal({ project, onClose }) {
             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">Customer Details</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-6">
-                
+
                 <div className="space-y-1">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Company Name</p>
                   <p className="text-[13px] font-semibold text-slate-700">{companyName}</p>
@@ -176,7 +176,7 @@ function ViewProjectModal({ project, onClose }) {
             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">Financials & Milestones</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-6">
-                
+
                 <div className="space-y-1">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Billing Type</p>
                   <p className="text-[13px] font-semibold text-slate-700">{billing}</p>
@@ -515,11 +515,11 @@ function AllProjectPage() {
           </div>
         </div>
       </section>
-      
+
       {viewProject && (
-        <ViewProjectModal 
-          project={viewProject} 
-          onClose={() => setViewProject(null)} 
+        <ViewProjectModal
+          project={viewProject}
+          onClose={() => setViewProject(null)}
         />
       )}
     </div>
