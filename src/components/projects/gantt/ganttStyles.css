@@ -140,21 +140,21 @@
   height: 22px !important; line-height: 22px !important;
 }
 
-.gantt-bar-dark-green  { background-color: #2d6a4f !important; border-radius: 4px !important; }
+.gantt-bar-dark-green  { background: linear-gradient(135deg, #4f9470, #2d6a4f) !important; border-radius: 6px !important; }
 .gantt-bar-dark-green .gantt_task_progress { background-color: #1b4332 !important; }
-.gantt-bar-green       { background-color: #52b788 !important; border-radius: 4px !important; }
+.gantt-bar-green       { background: linear-gradient(135deg, #8fd6ae, #52b788) !important; border-radius: 6px !important; }
 .gantt-bar-green .gantt_task_progress { background-color: #40916c !important; }
-.gantt-bar-dark-blue   { background-color: #1565c0 !important; border-radius: 4px !important; }
+.gantt-bar-dark-blue   { background: linear-gradient(135deg, #4f95e0, #1565c0) !important; border-radius: 6px !important; }
 .gantt-bar-dark-blue .gantt_task_progress { background-color: #0d47a1 !important; }
-.gantt-bar-blue        { background-color: #42a5f5 !important; border-radius: 4px !important; }
+.gantt-bar-blue        { background: linear-gradient(135deg, #7cc2ff, #42a5f5) !important; border-radius: 6px !important; }
 .gantt-bar-blue .gantt_task_progress { background-color: #1e88e5 !important; }
-.gantt-bar-dark-purple { background-color: #6a0dad !important; border-radius: 4px !important; }
+.gantt-bar-dark-purple { background: linear-gradient(135deg, #9b4fd9, #6a0dad) !important; border-radius: 6px !important; }
 .gantt-bar-dark-purple .gantt_task_progress { background-color: #4a0e4e !important; }
-.gantt-bar-purple      { background-color: #bb96ff !important; border-radius: 4px !important; }
+.gantt-bar-purple      { background: linear-gradient(135deg, #d9c7ff, #bb96ff) !important; border-radius: 6px !important; }
 .gantt-bar-purple .gantt_task_progress { background-color: #9d4edd !important; }
-.gantt-bar-dark-pink   { background-color: #d81b60 !important; border-radius: 4px !important; }
+.gantt-bar-dark-pink   { background: linear-gradient(135deg, #ea4a80, #d81b60) !important; border-radius: 6px !important; }
 .gantt-bar-dark-pink .gantt_task_progress { background-color: #880e4f !important; }
-.gantt-bar-pink        { background-color: #ff85a1 !important; border-radius: 4px !important; }
+.gantt-bar-pink        { background: linear-gradient(135deg, #ffb3c6, #ff85a1) !important; border-radius: 6px !important; }
 .gantt-bar-pink .gantt_task_progress { background-color: #f72585 !important; }
 
 .gantt-assignees-label {

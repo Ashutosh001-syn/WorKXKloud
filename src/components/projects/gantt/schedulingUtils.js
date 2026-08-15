@@ -151,22 +151,14 @@ export function propagateScheduling(changedTaskId, visited = new Set()) {
   })
 }
 
-// Keeps a parent task's start/end spanning the earliest-start/latest-end
-// of its children, walking up the tree so a grandparent also gets updated
-// when a leaf task moves.
-export function rollUpParentDates(taskId, visited = new Set()) {
-  if (visited.has(taskId)) return
-  visited.add(taskId)
-
-  let parentId
-  try { parentId = gantt.getParent(taskId) } catch { return }
-  if (!parentId || !gantt.isTaskExists(parentId)) return
-
-  let parentTask
-  try { parentTask = gantt.getTask(parentId) } catch { return }
-
+// Pure summary calculation for one parent: spans its *direct* children's
+// earliest start / latest end (a summary task's own dates, per standard
+// Gantt convention — MS Project, Smartsheet, etc. all compute a parent bar
+// this way). Returns null when the task has no children, i.e. isn't
+// actually acting as a parent/summary row.
+export function calculateSummaryDates(parentId) {
   const children = gantt.getChildren(parentId)
-  if (!children || children.length === 0) return
+  if (!children || children.length === 0) return null
 
   let earliestStart = null
   let latestEnd = null
@@ -181,18 +173,72 @@ export function rollUpParentDates(taskId, visited = new Set()) {
     } catch { /* skip invalid children */ }
   })
 
-  if (!earliestStart || !latestEnd) return
+  if (!earliestStart || !latestEnd) return null
 
-  const startChanged = earliestStart.getTime() !== new Date(parentTask.start_date).getTime()
-  const endChanged = latestEnd.getTime() !== new Date(parentTask.end_date).getTime()
+  return {
+    start_date: earliestStart,
+    end_date: latestEnd,
+    duration: gantt.calculateDuration({ start_date: earliestStart, end_date: latestEnd }),
+  }
+}
 
-  if (startChanged || endChanged) {
-    parentTask.start_date = earliestStart
-    parentTask.end_date = latestEnd
-    parentTask.duration = gantt.calculateDuration({
-      start_date: earliestStart,
-      end_date: latestEnd,
-    })
+// Pure summary calculation: a parent's percent-complete as the
+// duration-weighted average of its direct children's progress (0-1) —
+// the same convention calculateSummaryDates follows for dates. Returns
+// null when the task has no children.
+export function calculateSummaryProgress(parentId) {
+  const children = gantt.getChildren(parentId)
+  if (!children || children.length === 0) return null
+
+  let totalDuration = 0
+  let weightedProgress = 0
+
+  children.forEach(childId => {
+    try {
+      const child = gantt.getTask(childId)
+      const duration = Number(child.duration) || 0
+      const progress = Number(child.progress) || 0
+      totalDuration += duration
+      weightedProgress += duration * progress
+    } catch { /* skip invalid children */ }
+  })
+
+  if (totalDuration === 0) return 0
+  return weightedProgress / totalDuration
+}
+
+// Keeps a parent task's dates and progress in sync with its children,
+// walking up the tree so a grandparent also gets updated when a leaf task
+// moves. Resource/status aren't rolled up here — this schedule's task
+// model has no per-task status field, and a parent/summary row
+// deliberately carries no resource assignment of its own (same convention
+// every mainstream Gantt tool uses), so there's nothing meaningful to
+// aggregate for either.
+export function rollUpParentDates(taskId, visited = new Set()) {
+  if (visited.has(taskId)) return
+  visited.add(taskId)
+
+  let parentId
+  try { parentId = gantt.getParent(taskId) } catch { return }
+  if (!parentId || !gantt.isTaskExists(parentId)) return
+
+  let parentTask
+  try { parentTask = gantt.getTask(parentId) } catch { return }
+
+  const summary = calculateSummaryDates(parentId)
+  if (!summary) return
+
+  const newProgress = calculateSummaryProgress(parentId)
+
+  const startChanged = summary.start_date.getTime() !== new Date(parentTask.start_date).getTime()
+  const endChanged = summary.end_date.getTime() !== new Date(parentTask.end_date).getTime()
+  const progressChanged = newProgress !== null && Math.abs(newProgress - (parentTask.progress || 0)) > 0.0001
+
+  if (startChanged || endChanged || progressChanged) {
+    parentTask.start_date = summary.start_date
+    parentTask.end_date = summary.end_date
+    parentTask.duration = summary.duration
+    if (newProgress !== null) parentTask.progress = newProgress
     gantt.updateTask(parentId)
     rollUpParentDates(parentId, visited)
   }

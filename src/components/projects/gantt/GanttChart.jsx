@@ -37,6 +37,8 @@ import {
   propagateScheduling,
   rollUpParentDates,
   topologicalSchedule,
+  calculateSummaryDates,
+  calculateSummaryProgress,
 } from './schedulingUtils'
 import {
   isSubTask,
@@ -171,6 +173,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   const [selectedTaskId, setSelectedTaskId] = useState(null)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [taskToDelete, setTaskToDelete] = useState(null)
+  const [deleteChildCount, setDeleteChildCount] = useState(0)
   const [deleteText, setDeleteText] = useState('')
   const [linkMenu, setLinkMenu] = useState(null)
 
@@ -294,6 +297,54 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     fetchHolidays()
   }, [])
 
+  // 5b. Apply Calendar / Work-time Settings
+  // The Calendar dropdown (Standard/All Day/Custom) and its working-days
+  // checkboxes are only meaningful if something actually applies them to
+  // dhtmlx's work-time calendar — without this effect they're inert UI:
+  // gantt.config.work_time defaults to false (every day, including
+  // weekends, counts as a working day), which silently skews every
+  // duration/end-date calculation for a "Standard (Mon-Fri + Holidays)"
+  // schedule. topologicalSchedule() re-resolves all existing links'
+  // constrained dates after the calendar changes, since a Fri->Mon
+  // weekend-skipping link can shift once weekends stop counting.
+  useEffect(() => {
+    if (!isGanttInitialized.current) return
+
+    if (calendarType === 'alldays') {
+      gantt.config.work_time = false
+    } else if (calendarType === 'standard') {
+      gantt.config.work_time = true
+      gantt.setWorkTime({ day: 0, hours: false }) // Sun
+      gantt.setWorkTime({ day: 6, hours: false }) // Sat
+      for (let i = 1; i <= 5; i++) gantt.setWorkTime({ day: i, hours: true })
+
+      holidaysData.forEach(h => {
+        if (!h.holiday_date) return
+        try {
+          gantt.setWorkTime({ date: new Date(h.holiday_date), hours: false })
+        } catch { /* skip unparsable holiday date */ }
+      })
+    } else if (calendarType === 'custom') {
+      gantt.config.work_time = true
+      for (let i = 0; i <= 6; i++) {
+        gantt.setWorkTime({ day: i, hours: customWorkingDays.includes(i) })
+      }
+      if (includeHolidays) {
+        holidaysData.forEach(h => {
+          if (!h.holiday_date) return
+          try {
+            gantt.setWorkTime({ date: new Date(h.holiday_date), hours: false })
+          } catch { /* skip unparsable holiday date */ }
+        })
+      }
+    }
+
+    try {
+      topologicalSchedule()
+      gantt.render()
+    } catch { /* gantt not ready yet */ }
+  }, [calendarType, holidaysData, customWorkingDays, includeHolidays])
+
   // 6. Search Filter
   useEffect(() => {
     scheduleSearchRef.current = scheduleSearch
@@ -321,7 +372,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     }
   }, [])
 
-  // Helpers
+  // Formatting helpers
   const getLinkTypeLabel = (type) => {
     const t = parseInt(type, 10)
     return t === LINK_SS ? 'SS' : t === LINK_FF ? 'FF' : t === LINK_SF ? 'SF' : 'FS'
@@ -406,7 +457,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     }
   }
 
-  // 7. INITIALIZE GANTT ONCE (Mount Only - DOM Node Stays Persistent)
+  // 7. INITIALIZE GANTT ONCE (Mount Only)
   useEffect(() => {
     if (!containerRef.current) return
 
@@ -452,6 +503,19 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         },
         { view: 'scrollbar', id: 'gridVerScroll', width: 14 },
       ],
+    }
+
+    if (gantt.addMarker) {
+      const today = new Date()
+      try {
+        gantt.addMarker({
+          id: 'today_marker',
+          start_date: today,
+          css: 'today',
+          text: 'Today',
+          title: `Today: ${today.toLocaleDateString()}`,
+        })
+      } catch { /* ignore */ }
     }
 
     const events = []
@@ -561,6 +625,130 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       }
     }))
 
+    events.push(gantt.attachEvent('onAfterTaskAdd', (id, task) => {
+      if (schedulingRef.current) return
+      schedulingRef.current = true
+      try {
+        rollUpParentDates(id)
+        gantt.refreshData()
+      } finally {
+        schedulingRef.current = false
+      }
+      syncTaskWithAPI(task)
+    }))
+
+    events.push(gantt.attachEvent('onAfterTaskDelete', (id, task) => {
+      if (schedulingRef.current) return
+      if (task.parent && gantt.isTaskExists(task.parent)) {
+        schedulingRef.current = true
+        try {
+          const siblings = gantt.getChildren(task.parent)
+          if (siblings && siblings.length > 0) rollUpParentDates(siblings[0])
+          gantt.refreshData()
+        } finally {
+          schedulingRef.current = false
+        }
+      }
+    }))
+
+    // Predecessor links drive auto-scheduling — without recomputing the
+    // target task's constrained dates here, adding/editing a link changes
+    // the dependency relationship but never actually moves the target
+    // task's start/end to obey it.
+    events.push(gantt.attachEvent('onAfterLinkAdd', (id, link) => {
+      if (schedulingRef.current) return
+      schedulingRef.current = true
+      try {
+        if (gantt.isTaskExists(link.target)) {
+          const targetTask = gantt.getTask(link.target)
+          const newDates = computeConstrainedDates(link.target)
+          if (newDates) {
+            targetTask.start_date = newDates.start_date
+            targetTask.end_date = newDates.end_date
+            targetTask.duration = gantt.calculateDuration({
+              start_date: newDates.start_date,
+              end_date: newDates.end_date,
+            })
+            gantt.updateTask(link.target)
+            propagateScheduling(link.target)
+            rollUpParentDates(link.target)
+          }
+        }
+        gantt.refreshData()
+      } finally {
+        schedulingRef.current = false
+      }
+    }))
+
+    events.push(gantt.attachEvent('onAfterLinkUpdate', (id, link) => {
+      if (schedulingRef.current) return
+      schedulingRef.current = true
+      try {
+        if (gantt.isTaskExists(link.target)) {
+          const targetTask = gantt.getTask(link.target)
+          const newDates = computeConstrainedDates(link.target)
+          if (newDates) {
+            targetTask.start_date = newDates.start_date
+            targetTask.end_date = newDates.end_date
+            targetTask.duration = gantt.calculateDuration({
+              start_date: newDates.start_date,
+              end_date: newDates.end_date,
+            })
+            gantt.updateTask(link.target)
+            propagateScheduling(link.target)
+            rollUpParentDates(link.target)
+          }
+        }
+        gantt.refreshData()
+      } finally {
+        schedulingRef.current = false
+      }
+    }))
+
+    // Opens the link-type context menu (GanttLinkMenu) — clicking either a
+    // predecessor badge in the grid or a dependency line in the timeline.
+    // Without these two handlers the menu component never receives a
+    // linkMenu value, so it's rendered but permanently inert.
+    events.push(gantt.attachEvent('onTaskClick', (id, e) => {
+      const target = e.target || e.srcElement
+      if (target && target.classList && target.classList.contains('pred-badge')) {
+        const linkId = target.getAttribute('data-link-id')
+        if (linkId) {
+          try {
+            const link = gantt.getLink(linkId)
+            if (link) {
+              setLinkMenu({
+                x: e.clientX,
+                y: e.clientY,
+                linkId,
+                currentType: parseInt(link.type, 10),
+                sourceId: link.source,
+                targetId: link.target,
+              })
+            }
+          } catch { /* ignore */ }
+          return false
+        }
+      }
+      return true
+    }))
+
+    events.push(gantt.attachEvent('onLinkClick', (id, e) => {
+      try {
+        const link = gantt.getLink(id)
+        if (!link) return false
+        setLinkMenu({
+          x: e.clientX,
+          y: e.clientY,
+          linkId: id,
+          currentType: parseInt(link.type, 10),
+          sourceId: link.source,
+          targetId: link.target,
+        })
+      } catch { /* ignore */ }
+      return false
+    }))
+
     events.push(gantt.attachEvent('onTaskSelect', (id) => { setSelectedTaskId(id); return true }))
     events.push(gantt.attachEvent('onTaskUnselect', () => { setSelectedTaskId(null); return true }))
 
@@ -580,10 +768,59 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     }
   }, [])
 
-  // 8. Grid Columns & Dynamic View Layout (No '*' width, full reliable rendering)
+  // 8. Custom Templates (Restores original task box colors, borders, and tooltips)
   useEffect(() => {
     if (!isGanttInitialized.current) return
 
+    // 🎨 Custom Box Colors Template
+    gantt.templates.task_class = (s, e, task) => {
+      const classes = []
+      if (task.barClass) classes.push(task.barClass)
+      if (criticalPath && gantt.isCriticalTask?.(task)) classes.push('gantt_critical_task')
+      return classes.join(' ')
+    }
+
+    // Grid row and cell styling
+    gantt.templates.grid_row_class = (s, e, task) => {
+      if (criticalPath && gantt.isCriticalTask?.(task)) return 'critical-row'
+      return ''
+    }
+
+    gantt.templates.grid_cell_class = (col, task) =>
+      col.name === 'wbs_code' ? (task.borderClass || 'border-left-none') : ''
+
+    gantt.templates.rightside_text = (s, e, task) => {
+      if (isMobile) return ''
+      const assignee = getAssigneeLabel(task) || task.resource || task.assignees
+      return assignee ? `<span class="gantt-assignees-label">${assignee}</span>` : ''
+    }
+
+    gantt.templates.timeline_cell_class = (item, date) =>
+      (date.getDay() === 0 || date.getDay() === 6) ? 'weekend-cell' : ''
+
+    gantt.templates.tooltip_text = (start, end, task) => {
+      const links = gantt.getLinks() || []
+      const taskLinks = links.filter(l => String(l.target) === String(task.id))
+      const predStr = taskLinks.map(link => {
+        if (!gantt.isTaskExists(link.source)) return ''
+        const src = gantt.getTask(link.source)
+        const wbs = gantt.getWBSCode(src) || ''
+        const label = getLinkTypeLabel(link.type)
+        return `${wbs} (${label})`
+      }).filter(Boolean).join(', ')
+
+      const taskAssignee = getAssigneeLabel(task) || task.resource || task.assignees
+      const resourceLine = taskAssignee ? `<br/><b>Resource:</b> ${taskAssignee}` : ''
+
+      return `<b>${task.text}</b>
+              <br/><b>Start:</b> ${formatDateShort(task.start_date)}
+              <br/><b>End:</b> ${formatDateShort(getInclusiveEndDate(task.end_date))}
+              <br/><b>Duration:</b> ${task.duration || 0} days
+              ${resourceLine}
+              ${predStr ? `<br/><b>Predecessors:</b> ${predStr}` : ''}`
+    }
+
+    // Columns Configuration
     const textEditor = { type: 'text', map_to: 'text' }
     const dateEditor = { type: 'date', map_to: 'start_date' }
     const endEditor = { type: 'date', map_to: 'end_date' }
@@ -641,6 +878,11 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
           const res = getAssigneeLabel(task) || task.resource || task.assignees || task.resourceName
           return res ? `<span style="color:#1e293b;font-weight:500;">${res}</span>` : '<span style="color:#94a3b8;">—</span>'
         },
+        onrender: (task, node) => {
+          if (isSubTask(task, projectId)) {
+            node.style.background = 'rgba(219,234,254,0.25)'
+          }
+        },
       },
       {
         name: 'predecessors', label: 'Pred', width: 75, min_width: 70, align: 'center', resize: true,
@@ -659,19 +901,11 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     gantt.config.highlight_critical_path = criticalPath
     gantt.config.show_chart = showGantt
 
-    // Dynamic width calculation based on selected View Mode
     let targetGridWidth = getGridWidth(false)
     if (isMobile) {
-      if (mobileViewMode === 'grid') {
-        // Table mode: Grid takes 100% full screen with internal horizontal scroll for all columns
-        targetGridWidth = Math.max(containerWidth, 340)
-      } else if (mobileViewMode === 'timeline') {
-        // Timeline mode: Hide grid, show 100% Gantt visual bars
-        targetGridWidth = 0
-      } else {
-        // Split mode
-        targetGridWidth = Math.round(containerWidth * 0.5)
-      }
+      if (mobileViewMode === 'grid') targetGridWidth = Math.max(containerWidth, 340)
+      else if (mobileViewMode === 'timeline') targetGridWidth = 0
+      else targetGridWidth = Math.round(containerWidth * 0.5)
     }
 
     gantt.config.grid_width = targetGridWidth
@@ -685,13 +919,52 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     } catch { /* ignore */ }
   }, [isMobile, mobileViewMode, criticalPath, showGantt, containerWidth, projectResourceNames, getPredecessorsText])
 
-  // 9. Parse Schedule Data
+  // 9. Parse Schedule Data (With Parent Summary Rollup)
+  // A full clearAll()+parse() is required to pick up server-canonical ids/
+  // WBS numbers after a mutation (create/delete/reload), but dhtmlx
+  // doesn't preserve scroll position, expanded/collapsed rows, or the
+  // current selection across that reset on its own — every task/sub-task
+  // create was silently jumping the view back to the top, fully expanded,
+  // deselected. Snapshotting these three before the reset and restoring
+  // them after keeps the view stable across a mutation instead.
   useEffect(() => {
     if (!isGanttInitialized.current || !scheduleTasks) return
     try {
+      const scrollState = gantt.getScrollState()
+      const selectedId = gantt.getSelectedId()
+      const collapsedIds = []
+      gantt.eachTask(task => {
+        if (task.$open === false) collapsedIds.push(task.id)
+      })
+
       gantt.clearAll()
       gantt.parse(scheduleTasks)
+
+      // Parent/summary rows: dates + progress derived from children,
+      // computed once right after parse so a freshly-loaded schedule
+      // already reflects any rollup a prior session's edits produced —
+      // same calculateSummaryDates/calculateSummaryProgress utilities
+      // rollUpParentDates uses for a single-task edit, just applied to
+      // every parent up front instead of duplicating the loop here.
+      gantt.eachTask(task => {
+        const summary = calculateSummaryDates(task.id)
+        if (!summary) return
+        task.start_date = summary.start_date
+        task.end_date = summary.end_date
+        task.duration = summary.duration
+        const progress = calculateSummaryProgress(task.id)
+        if (progress !== null) task.progress = progress
+      })
+
+      collapsedIds.forEach(id => {
+        if (gantt.isTaskExists(id)) gantt.close(id)
+      })
+      if (selectedId && gantt.isTaskExists(selectedId)) {
+        gantt.selectTask(selectedId)
+      }
+
       gantt.render()
+      gantt.scrollTo(scrollState.x, scrollState.y)
     } catch (e) {
       console.error('Data parse error:', e)
     }
@@ -756,10 +1029,16 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       return
     }
 
+    let parentName = ''
+    if (isSubTaskFlag && parentId && gantt.isTaskExists(parentId)) {
+      parentName = gantt.getTask(parentId).text || ''
+    }
+
     setTaskModalData({
       type,
       isSubTaskFlag,
       parentId,
+      parentName,
       text: '',
       start_date: formatToAPIDateOnly(new Date()),
       duration: type === 'milestone' ? 0 : 5,
@@ -799,7 +1078,16 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     try {
       const startDateObj = parseDateOnlyLocal(start_date) || new Date()
       const durationNum = Math.max(1, Number(duration) || 1)
-      const endDateObj = gantt.calculateEndDate({ start_date: startDateObj, duration: durationNum })
+      // calculateEndDate returns dhtmlx's exclusive boundary (the day
+      // *after* the last working day) — getInclusiveEndDate converts that
+      // to the calendar date a user actually typed/expects as "End", the
+      // same conversion syncTaskWithAPI and every grid End-column cell
+      // already apply. Skipping it here (as this line previously did) sent
+      // a planned_end one day later than intended on every task/sub-task
+      // creation, which is what surfaced as "duration off after reload".
+      const endDateObj = getInclusiveEndDate(
+        gantt.calculateEndDate({ start_date: startDateObj, duration: durationNum })
+      )
 
       const payload = {
         pm_id: pmId,
@@ -860,6 +1148,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       const task = gantt.getTask(selectedId)
       if (!task) return
       setTaskToDelete(task)
+      setDeleteChildCount((gantt.getChildren(selectedId) || []).length)
       setDeleteText('')
       setDeleteConfirmOpen(true)
     } catch (err) {
@@ -895,6 +1184,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       gantt.deleteTask(taskToDelete.id)
       setDeleteConfirmOpen(false)
       setTaskToDelete(null)
+      setDeleteChildCount(0)
       setSelectedTaskId(null)
       setDeleteText('')
     } catch (err) {
@@ -913,8 +1203,8 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       const exportName = (projectName || 'gantt-chart').replace(/[^\w-]+/g, '_')
       if (fmt === 'pdf') gantt.exportToPDF({ name: `${exportName}.pdf` })
       else if (fmt === 'png') gantt.exportToPNG({ name: `${exportName}.png` })
-    } catch (err) {
-      setAlertMessage('Export failed.')
+    } catch {
+      setAlertMessage('Export failed. Please check your internet connection and try again.')
     }
   }
 
@@ -1082,7 +1372,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         </div>
       )}
 
-      {/* Persistent Gantt Container (Never unmounted) */}
+      {/* Persistent Gantt Container */}
       <div style={{ flex: 1, position: 'relative', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
         {ganttError ? (
           <div style={{ padding: 20, color: '#ef4444', fontWeight: 'bold', fontSize: 13 }}>
@@ -1178,9 +1468,10 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       <GanttDeleteModal
         open={deleteConfirmOpen}
         task={taskToDelete}
+        childCount={deleteChildCount}
         deleteText={deleteText}
         onDeleteTextChange={setDeleteText}
-        onCancel={() => { setDeleteConfirmOpen(false); setTaskToDelete(null); setDeleteText('') }}
+        onCancel={() => { setDeleteConfirmOpen(false); setTaskToDelete(null); setDeleteChildCount(0); setDeleteText('') }}
         onConfirm={handleConfirmDeleteTask}
       />
 

@@ -1,9 +1,7 @@
 import { createPortal } from 'react-dom'
 
-// Type-to-confirm delete dialog for a task/sub-task. The Delete button
-// stays disabled until the user types "delete" exactly, matching the
-// destructive-action confirmation pattern used elsewhere in the app.
-function GanttDeleteModal({ open, task, deleteText, onDeleteTextChange, onCancel, onConfirm }) {
+
+function GanttDeleteModal({ open, task, childCount = 0, deleteText, onDeleteTextChange, onCancel, onConfirm }) {
   if (!open) return null
 
   const isConfirmed = deleteText.trim().toLowerCase() === 'delete'
@@ -43,6 +41,16 @@ function GanttDeleteModal({ open, task, deleteText, onDeleteTextChange, onCancel
           <p style={{ margin: '8px 0 0 0', fontSize: 13, color: '#64748b', lineHeight: '1.5' }}>
             Are you sure you want to delete <strong>{task?.text}</strong>? This action cannot be undone.
           </p>
+          {childCount > 0 && (
+            <p style={{
+              margin: '10px 0 0 0', fontSize: 12.5, lineHeight: '1.5',
+              color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a',
+              borderRadius: 8, padding: '8px 10px',
+            }}>
+              This task has <strong>{childCount}</strong> sub-task{childCount > 1 ? 's' : ''} under it —
+              {childCount > 1 ? ' they' : ' it'} will be removed along with it.
+            </p>
+          )}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
