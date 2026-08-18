@@ -8,11 +8,6 @@ import { WORKFLOW_STATUS } from '../../../utils/scheduleWorkflow'
 
 const stopProp = (e) => e.stopPropagation()
 
-// Row 1 (title + search + calendar + zoom) and Row 2 (add/delete/indent/
-// baseline/more/nav/toggles/settings) of the Gantt header. Kept as one
-// component since the two rows share dropdown-close-each-other state
-// (opening one menu closes the others) — splitting them further would
-// just thread the same state through two files instead of one.
 function GanttToolbar({
   isMobile,
   projectName,
@@ -208,11 +203,6 @@ function GanttToolbar({
         </div>
       </div>
 
-      {/* ROW 2 — Actions + Nav + Toggles */}
-      {/* On mobile this row scrolls horizontally as one strip instead of
-          wrapping into 3-4 lines and pushing the gantt area down/out of
-          view — that vertical squeeze was the other big contributor to
-          the "everything gets cut off" complaint. */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: isMobile ? 'flex-start' : 'space-between',
         flexWrap: isMobile ? 'nowrap' : 'wrap', gap: isMobile ? 8 : 12,
@@ -224,10 +214,6 @@ function GanttToolbar({
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
 
-          {/* Workflow status + Freeze — PM Schedule -> Freeze -> PMO Review
-              -> Approve/Reject. Approve/Reject happens on the PMO Review
-              page; this side only shows status and can Freeze (draft/
-              rejected) to send it there. */}
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
             padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700,

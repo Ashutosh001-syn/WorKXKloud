@@ -55,6 +55,31 @@ export const sidebarMenu = [
     highlights: ['3 active projects', 'PM role assigned'],
   },
   {
+    type: 'group',
+    key: 'pending-resource-requests',
+    icon: 'resourceChange',
+    label: 'Pending Resource Req...',
+    badgeKey: 'pmo_pending_resource_requests_badge',
+    children: [
+      {
+        label: 'Change Requests',
+        to: '/pmo/resource-requests',
+        eyebrow: 'PMO Review',
+        title: 'Resource Change Requests',
+        description: 'Review and approve resource change requests submitted by Project Managers.',
+        highlights: ['Side-by-side allocation delta', 'Instant approve/reject/clarify'],
+      },
+      {
+        label: 'Resource Approval Queue',
+        to: '/pmo/resource-approval-queue',
+        eyebrow: 'PMO Review',
+        title: 'Resource Approval Queue',
+        description: 'Queue of all pending resource requests awaiting PMO review.',
+        highlights: ['Prioritized approval queue', 'Audit log tracking'],
+      },
+    ],
+  },
+  {
     type: 'link',
     key: 'pmo-review',
     icon: 'allProjects',

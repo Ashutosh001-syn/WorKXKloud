@@ -93,4 +93,11 @@ export const API_ENDPOINTS = {
   MARK_ALL_NOTIFICATIONS_READ: `${API_ROOT_URL}/users/mark_all_notifications_read`,
   CLEAR_ALL_NOTIFICATIONS: `${API_ROOT_URL}/users/clear_all_notifications`,
   DELETE_NOTIFICATION: `${API_ROOT_URL}/users/delete_notification`,
+
+  // PMO Resource Change Requests
+  GET_RESOURCE_CHANGE_REQUESTS: `${API_BASE_URL}/resource_change_requests`,
+  GET_RESOURCE_CHANGE_REQUEST_DETAIL: `${API_BASE_URL}/resource_change_request_detail`,
+  APPROVE_RESOURCE_CHANGE_REQUEST: `${API_BASE_URL}/approve_resource_change`,
+  REJECT_RESOURCE_CHANGE_REQUEST: `${API_BASE_URL}/reject_resource_change`,
+  CLARIFY_RESOURCE_CHANGE_REQUEST: `${API_BASE_URL}/clarify_resource_change`,
 };

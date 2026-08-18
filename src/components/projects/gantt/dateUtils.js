@@ -20,9 +20,7 @@ export function formatDateShort(date) {
   }
 }
 
-// dhtmlx stores a task's end_date as exclusive (the day after the last
-// working day) — this converts it back to the inclusive date a user
-// actually expects to see/enter as "End".
+
 export function getInclusiveEndDate(date) {
   if (!date) return null
   const d = new Date(date)
@@ -53,10 +51,6 @@ export function parseDateOnlyLocal(dateOnlyStr) {
   return new Date(y, m - 1, d)
 }
 
-// Walks backward from endDate, counting only working days (per the gantt
-// instance's current work-time calendar) until `duration` days have been
-// consumed — used to derive a Start date from a Finish-to-Finish /
-// Start-to-Finish constraint where only the end is directly determined.
 export function calculateStartDateFromEnd(endDate, duration) {
   if (!duration || duration <= 0) return new Date(endDate)
   let current = new Date(endDate)

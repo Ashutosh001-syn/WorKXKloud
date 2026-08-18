@@ -1,9 +1,6 @@
 import { createPortal } from 'react-dom'
 
-// Add Task / Sub-task / Work Stream / Milestone form. `data` and `onChange`
-// mirror a raw useState pair (onChange receives the full next object, same
-// as calling setTaskModalData directly) so field updates stay a single
-// merge-and-set per keystroke, matching the original inline behavior.
+
 function GanttTaskModal({ open, data, onChange, onClose, onSubmit, isSaving, projectResourceNames }) {
   if (!open || !data) return null
 

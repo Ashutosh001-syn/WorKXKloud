@@ -191,3 +191,17 @@ Open questions for the backend team:
 2. Can daily-level hours be provided? The frontend currently approximates the daily view from `weekdayHours` with a small generated variance; real data would replace that.
 3. What condition should set an `exceptions` flag on a given month?
 4. Should resource list pagination (currently 5 per page, handled in the browser) move to the server?
+
+---
+
+## 4. PMO Resource Change Requests
+
+Full detailed specification is documented in [BACKEND_RESOURCE_CHANGE_REQUEST_API.md](./BACKEND_RESOURCE_CHANGE_REQUEST_API.md).
+
+### Summary of Endpoints:
+- `POST /admin/resource_change_requests` — List all requests with filters (Status, Priority, Search, Pagination).
+- `POST /admin/resource_change_request_detail` — Get complete current vs requested allocations, PM note, attachments, and audit log.
+- `POST /admin/approve_resource_change` — Approve changes and apply new allocation directly to project.
+- `POST /admin/reject_resource_change` — Reject changes with mandatory reason.
+- `POST /admin/clarify_resource_change` — Send query/clarification note to Project Manager.
+- `POST /projectManager/create_resource_change_request` — PM side submission.

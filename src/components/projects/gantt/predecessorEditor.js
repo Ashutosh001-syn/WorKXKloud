@@ -1,14 +1,6 @@
 import { gantt } from 'dhtmlx-gantt'
 import { LINK_FS, LINK_SS, LINK_FF, LINK_SF } from './ganttConstants'
 import { hasCircularDependency } from './schedulingUtils'
-
-// dhtmlx-gantt custom inline-editor for the Predecessor grid column: a
-// hand-built WBS-node input + FS/SS/FF/SF type dropdown + lag-days input,
-// wired directly through dhtmlx's editor_types API (show/hide/get_value/
-// save/focus lifecycle methods) rather than React, since dhtmlx owns this
-// DOM node's lifecycle entirely. `setAlertMessage` is threaded through so
-// validation failures (unknown node, self-reference, circular dependency)
-// surface in the same alert modal as everything else in the chart.
 export function createPredecessorEditorConfig(setAlertMessage) {
   return {
     show: function (id, column, config, placeholder) {

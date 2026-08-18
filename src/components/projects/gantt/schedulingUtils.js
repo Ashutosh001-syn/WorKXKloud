@@ -2,9 +2,6 @@ import { gantt } from 'dhtmlx-gantt'
 import { LINK_FS, LINK_SS, LINK_FF, LINK_SF } from './ganttConstants'
 import { calculateStartDateFromEnd } from './dateUtils'
 
-// Given a link and its source/target tasks, computes what the target's
-// start/end should become to satisfy that single link's constraint (FS/SS/
-// FF/SF + lag), respecting the working-time calendar.
 export function computeAutoScheduledDates(link, sourceTask, targetTask) {
   if (!sourceTask || !targetTask) return null
 
@@ -58,9 +55,6 @@ export function computeAutoScheduledDates(link, sourceTask, targetTask) {
   return { start_date: newStart, end_date: newEnd }
 }
 
-// A task can have multiple incoming links — this resolves all of them into
-// the single latest-wins start/end the task must obey (the most
-// restrictive predecessor constraint).
 export function computeConstrainedDates(targetId) {
   let targetTask
   try { targetTask = gantt.getTask(targetId) } catch { return null }
@@ -116,9 +110,7 @@ export function hasCircularDependency(sourceId, targetId) {
   return false
 }
 
-// Cascades a changed task's dates forward through its outgoing links,
-// recomputing each downstream task's constrained dates in dependency
-// order (BFS via recursion + a visited guard against cycles).
+
 export function propagateScheduling(changedTaskId, visited = new Set()) {
   if (visited.has(String(changedTaskId))) return
   visited.add(String(changedTaskId))
@@ -151,11 +143,6 @@ export function propagateScheduling(changedTaskId, visited = new Set()) {
   })
 }
 
-// Pure summary calculation for one parent: spans its *direct* children's
-// earliest start / latest end (a summary task's own dates, per standard
-// Gantt convention — MS Project, Smartsheet, etc. all compute a parent bar
-// this way). Returns null when the task has no children, i.e. isn't
-// actually acting as a parent/summary row.
 export function calculateSummaryDates(parentId) {
   const children = gantt.getChildren(parentId)
   if (!children || children.length === 0) return null
@@ -182,10 +169,7 @@ export function calculateSummaryDates(parentId) {
   }
 }
 
-// Pure summary calculation: a parent's percent-complete as the
-// duration-weighted average of its direct children's progress (0-1) —
-// the same convention calculateSummaryDates follows for dates. Returns
-// null when the task has no children.
+
 export function calculateSummaryProgress(parentId) {
   const children = gantt.getChildren(parentId)
   if (!children || children.length === 0) return null
@@ -207,13 +191,7 @@ export function calculateSummaryProgress(parentId) {
   return weightedProgress / totalDuration
 }
 
-// Keeps a parent task's dates and progress in sync with its children,
-// walking up the tree so a grandparent also gets updated when a leaf task
-// moves. Resource/status aren't rolled up here — this schedule's task
-// model has no per-task status field, and a parent/summary row
-// deliberately carries no resource assignment of its own (same convention
-// every mainstream Gantt tool uses), so there's nothing meaningful to
-// aggregate for either.
+
 export function rollUpParentDates(taskId, visited = new Set()) {
   if (visited.has(taskId)) return
   visited.add(taskId)
@@ -244,10 +222,7 @@ export function rollUpParentDates(taskId, visited = new Set()) {
   }
 }
 
-// Resolves every task's constrained dates in dependency order (Kahn's
-// algorithm topological sort over the link graph) — used once after
-// changing the working-time calendar, since that can shift every
-// constrained task's dates at once rather than just one at a time.
+
 export function topologicalSchedule() {
   const allLinks = gantt.getLinks()
   if (!allLinks || allLinks.length === 0) return

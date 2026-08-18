@@ -10,10 +10,7 @@ const LINK_TYPES = [
 
 const stopProp = (e) => e.stopPropagation()
 
-// Context menu shown after clicking a link line or a predecessor-type
-// badge — lets the user change a link's FS/SS/FF/SF type or delete it.
-// Not portaled (matches the original): position:fixed already escapes any
-// clipping ancestor, and it's simple enough to stay in the normal tree.
+
 function GanttLinkMenu({ linkMenu, onChangeType, onDeleteLink }) {
   if (!linkMenu) return null
 

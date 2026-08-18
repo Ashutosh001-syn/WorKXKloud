@@ -17,6 +17,8 @@ import NewAssignedProjectPage from './pages/NewAssignedProjectPage'
 import MyProjectsPage from './pages/MyProjectsPage'
 import PMOReviewPage from './pages/PMOReviewPage'
 import WorkloadPage from './pages/Workload/WorkloadPage'
+import ResourceChangeRequestDetailPage from './pages/ResourceChangeRequestDetailPage'
+import ResourceChangeRequestsListPage from './pages/ResourceChangeRequestsListPage'
 import { hasPermission } from './utils/permissions'
 
 function ProtectedLayout() {
@@ -96,6 +98,10 @@ function App() {
           <Route path="/" element={<RoleBasedHome />} />
           <Route path="/profile" element={<ProfilePage />} />
 
+          <Route path="/pmo/resource-requests/:requestId" element={<ResourceChangeRequestDetailPage />} />
+          <Route path="/pmo/resource-change-request" element={<ResourceChangeRequestDetailPage />} />
+          <Route path="/resource-change-request" element={<ResourceChangeRequestDetailPage />} />
+
           {allWorkspaceRoutes.map((route) => {
             let allowedRoles = []
 
@@ -125,6 +131,10 @@ function App() {
                         <MyProjectsPage />
                       ) : route.to === '/pmo-review' ? (
                         <PMOReviewPage />
+                      ) : route.to === '/pmo/resource-requests' ? (
+                        <ResourceChangeRequestsListPage />
+                      ) : route.to === '/pmo/resource-approval-queue' ? (
+                        <ResourceChangeRequestsListPage />
                       ) : route.to === '/project-management/create-project' ? (
                         <CreateProjectPage />
                       ) : route.to === '/resource/resource-master' ? (

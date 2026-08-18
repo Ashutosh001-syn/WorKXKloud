@@ -8,6 +8,7 @@ import {
   SquareChartGantt,
   ReceiptText,
   UserRoundPlus,
+  UserCheck,
   X,
   Calendar,
 } from 'lucide-react'
@@ -25,6 +26,7 @@ const iconMap = {
   users: UserRoundPlus,
   calendar: Calendar,
   workload: Gauge,
+  resourceChange: UserCheck,
 }
 
 function matchesPath(pathname, to) {
@@ -139,6 +141,7 @@ function Sidebar() {
                   isActive={isActive}
                   isOpen={isOpen}
                   title={item.label}
+                  badgeKey={item.badgeKey}
                   onClick={() =>
                     setOpenMenu((current) =>
                       current === item.key ? null : item.key,
@@ -212,7 +215,7 @@ function MenuItem({ icon, label, onNavigate, to, badgeKey }) {
       </span>
       <span className="flex-1">{label}</span>
       {badgeKey && badgeCount > 0 && (
-        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[10px] font-bold text-white shadow-sm">
           {badgeCount}
         </span>
       )}
@@ -220,8 +223,20 @@ function MenuItem({ icon, label, onNavigate, to, badgeKey }) {
   )
 }
 
-function Dropdown({ children, icon, isActive, isOpen, onClick, title }) {
+function Dropdown({ children, icon, isActive, isOpen, onClick, title, badgeKey }) {
   const Icon = iconMap[icon]
+  const [badgeCount, setBadgeCount] = useState(0)
+
+  useEffect(() => {
+    if (!badgeKey) return
+    const update = () => {
+      const val = parseInt(localStorage.getItem(badgeKey) || '0', 10)
+      setBadgeCount(val)
+    }
+    update()
+    window.addEventListener('badge-update', update)
+    return () => window.removeEventListener('badge-update', update)
+  }, [badgeKey])
 
   if (!Icon) {
     return null
@@ -246,10 +261,17 @@ function Dropdown({ children, icon, isActive, isOpen, onClick, title }) {
           <span>{title}</span>
         </span>
 
-        <ChevronDown
-          size={16}
-          className={isOpen ? 'rotate-180 transition-transform' : 'transition-transform'}
-        />
+        <span className="flex items-center gap-2">
+          {badgeKey && badgeCount > 0 && (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#0052ff] px-1.5 text-[10px] font-bold text-white shadow-sm">
+              {badgeCount}
+            </span>
+          )}
+          <ChevronDown
+            size={16}
+            className={isOpen ? 'rotate-180 transition-transform' : 'transition-transform'}
+          />
+        </span>
       </button>
 
       <div

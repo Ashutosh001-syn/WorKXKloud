@@ -37,7 +37,7 @@ function ViewProjectModal({ project, onClose }) {
 
   const billing = project.no_billing || project.billing || 'N/A'
   const budget = project.budget || 'N/A'
-  const cost = project.cost || 'N/A' // Cost isn't in payload but kept as fallback
+  const cost = project.cost || 'N/A'
   const milestones = project.milestones || []
 
   return (

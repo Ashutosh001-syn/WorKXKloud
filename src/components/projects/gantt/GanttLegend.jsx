@@ -1,5 +1,4 @@
-// Footer strip: color-key legend (Task/Milestone/Baseline/Critical Path/
-// link-type badges) plus the "Showing N of M tasks" summary.
+
 function GanttLegend({ isMobile, totalTasks, totalMilestones }) {
   return (
     <div style={{

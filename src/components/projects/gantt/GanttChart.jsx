@@ -35,10 +35,7 @@ import {
   computeConstrainedDates,
   hasCircularDependency,
   propagateScheduling,
-  rollUpParentDates,
   topologicalSchedule,
-  calculateSummaryDates,
-  calculateSummaryProgress,
 } from './schedulingUtils'
 import {
   isSubTask,
@@ -568,8 +565,13 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       if (isLockedRef.current) return false
       try {
         const task = gantt.getTask(taskId)
-        const hasChildren = (gantt.getChildren(taskId) || []).length > 0
-        if ((task.type === 'project' || hasChildren) && (columnName === 'duration' || columnName === 'start_date' || columnName === 'end_date')) {
+        // Parent tasks keep their own independently-set dates/duration —
+        // they are NOT recalculated from their children's dates (see the
+        // removed rollUpParentDates calls below), so there's no reason to
+        // block editing them here anymore. Work Streams (type: 'project')
+        // stay locked since they're local-only groupings with no backend
+        // row to persist an edit to.
+        if (task.type === 'project' && (columnName === 'duration' || columnName === 'start_date' || columnName === 'end_date')) {
           return false
         }
         if (columnName === 'duration' || columnName === 'start_date' || columnName === 'end_date') {
@@ -603,7 +605,10 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       try {
         gantt.refreshData()
         propagateScheduling(id)
-        rollUpParentDates(id)
+        // Parent tasks are independent — a child's edit only propagates
+        // forward through its own predecessor links, it never rolls up
+        // into its parent's dates/duration (see the note in
+        // onBeforeEditorOpen above).
       } finally {
         schedulingRef.current = false
       }
@@ -616,7 +621,6 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         schedulingRef.current = true
         try {
           propagateScheduling(id)
-          rollUpParentDates(id)
           gantt.refreshData()
         } finally {
           schedulingRef.current = false
@@ -629,26 +633,11 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       if (schedulingRef.current) return
       schedulingRef.current = true
       try {
-        rollUpParentDates(id)
         gantt.refreshData()
       } finally {
         schedulingRef.current = false
       }
       syncTaskWithAPI(task)
-    }))
-
-    events.push(gantt.attachEvent('onAfterTaskDelete', (id, task) => {
-      if (schedulingRef.current) return
-      if (task.parent && gantt.isTaskExists(task.parent)) {
-        schedulingRef.current = true
-        try {
-          const siblings = gantt.getChildren(task.parent)
-          if (siblings && siblings.length > 0) rollUpParentDates(siblings[0])
-          gantt.refreshData()
-        } finally {
-          schedulingRef.current = false
-        }
-      }
     }))
 
     // Predecessor links drive auto-scheduling — without recomputing the
@@ -671,7 +660,6 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             })
             gantt.updateTask(link.target)
             propagateScheduling(link.target)
-            rollUpParentDates(link.target)
           }
         }
         gantt.refreshData()
@@ -696,7 +684,6 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
             })
             gantt.updateTask(link.target)
             propagateScheduling(link.target)
-            rollUpParentDates(link.target)
           }
         }
         gantt.refreshData()
@@ -919,7 +906,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     } catch { /* ignore */ }
   }, [isMobile, mobileViewMode, criticalPath, showGantt, containerWidth, projectResourceNames, getPredecessorsText])
 
-  // 9. Parse Schedule Data (With Parent Summary Rollup)
+  // 9. Parse Schedule Data
   // A full clearAll()+parse() is required to pick up server-canonical ids/
   // WBS numbers after a mutation (create/delete/reload), but dhtmlx
   // doesn't preserve scroll position, expanded/collapsed rows, or the
@@ -927,6 +914,10 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   // create was silently jumping the view back to the top, fully expanded,
   // deselected. Snapshotting these three before the reset and restoring
   // them after keeps the view stable across a mutation instead.
+  //
+  // Parent tasks are independent: their start/end/duration come straight
+  // from the API's own row for that task (see transformScheduleToGanttData)
+  // and are never recalculated from their children's dates here.
   useEffect(() => {
     if (!isGanttInitialized.current || !scheduleTasks) return
     try {
@@ -939,22 +930,6 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
 
       gantt.clearAll()
       gantt.parse(scheduleTasks)
-
-      // Parent/summary rows: dates + progress derived from children,
-      // computed once right after parse so a freshly-loaded schedule
-      // already reflects any rollup a prior session's edits produced —
-      // same calculateSummaryDates/calculateSummaryProgress utilities
-      // rollUpParentDates uses for a single-task edit, just applied to
-      // every parent up front instead of duplicating the loop here.
-      gantt.eachTask(task => {
-        const summary = calculateSummaryDates(task.id)
-        if (!summary) return
-        task.start_date = summary.start_date
-        task.end_date = summary.end_date
-        task.duration = summary.duration
-        const progress = calculateSummaryProgress(task.id)
-        if (progress !== null) task.progress = progress
-      })
 
       collapsedIds.forEach(id => {
         if (gantt.isTaskExists(id)) gantt.close(id)
@@ -1218,7 +1193,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     gantt.moveTask(selectedId, gantt.getChildren(prevSibling).length, prevSibling)
     gantt.open(prevSibling)
     schedulingRef.current = true
-    try { rollUpParentDates(selectedId); gantt.refreshData() } finally { schedulingRef.current = false }
+    try { gantt.refreshData() } finally { schedulingRef.current = false }
   }
 
   const handleOutdent = () => {
@@ -1230,7 +1205,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     const parentIndex = gantt.getTaskIndex(parentId)
     gantt.moveTask(selectedId, parentIndex + 1, grandParentId || 0)
     schedulingRef.current = true
-    try { rollUpParentDates(selectedId); gantt.refreshData() } finally { schedulingRef.current = false }
+    try { gantt.refreshData() } finally { schedulingRef.current = false }
   }
 
   const totalTasks = tasks?.data?.length || 0

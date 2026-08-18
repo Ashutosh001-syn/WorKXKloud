@@ -1,7 +1,5 @@
 import { createPortal } from 'react-dom'
 
-// Simple single-button notice dialog — used for validation messages and
-// error surfacing throughout the Gantt (e.g. "cannot create this link").
 function GanttAlertModal({ message, onClose }) {
   if (!message) return null
 

@@ -21,10 +21,7 @@ export function cleanResourceValue(value) {
   return String(value).trim()
 }
 
-// API schedule response (tasks with nested sub_tasks) -> flat dhtmlx-gantt
-// {data, links} shape. Predecessor text on each item is resolved against
-// task/sub-task names first, falling back to a 1-based row index if the
-// name doesn't match anything (some older records reference by position).
+
 export function transformScheduleToGanttData(scheduleItems) {
   const data = []
   const nameToGanttId = new Map()

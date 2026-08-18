@@ -1,21 +1,10 @@
-// Link type constants
-// dhtmlx-gantt: 0 = FS, 1 = SS, 2 = FF, 3 = SF
+
 export const LINK_FS = 0
 export const LINK_SS = 1
 export const LINK_FF = 2
 export const LINK_SF = 3
 
-// Per-column *minimum* widths, sized to what each column's own content
-// actually needs (a date like "31 Dec '26", a duration like "999 d", a
-// WBS index) rather than an arbitrary round number. `text` (Task Name) is
-// the one column that isn't fixed at all — it's registered with
-// width: '*' so dhtmlx gives it whatever space is left over in the grid
-// pane, growing and shrinking as the pane is resized. These minimums are
-// still what stand between a usable grid and dhtmlx silently rendering a
-// column's cells blank (see getGridWidth below) — dhtmlx doesn't
-// gracefully reflow column content below its configured min_width, it
-// just fails to draw it, so the grid pane must never be asked to be
-// narrower than the sum of whatever columns are actually visible.
+
 export const COLUMN_WIDTHS = {
   wbs_code: 38,
   text: 130, // minimum only — the column itself flexes (width: '*')
@@ -27,25 +16,15 @@ export const COLUMN_WIDTHS = {
   dependency_type: 68,
 }
 
-// Columns shown on narrow (phone-width) screens. Resource/Predecessor/
-// Dependency info isn't lost when hidden here — it's already surfaced by
-// the row tooltip (gantt.templates.tooltip_text) and the assignee label
-// already rendered next to each task bar (rightside_text); this just
-// keeps the always-visible grid from claiming more of a phone screen than
-// the timeline it's supposed to sit beside.
 export const MOBILE_COLUMN_KEYS = ['wbs_code', 'text', 'start_date', 'end_date', 'duration']
 
-// Sums the *visible* columns' minimum widths for the given viewport —
-// mobile only counts its reduced column set, so the grid pane's floor
-// shrinks along with what's actually on screen instead of always
-// reserving room for all 8 desktop columns.
+
 export function getGridWidth(isMobile) {
   const keys = isMobile ? MOBILE_COLUMN_KEYS : Object.keys(COLUMN_WIDTHS)
   return keys.reduce((sum, key) => sum + COLUMN_WIDTHS[key], 0)
 }
 
-// Smallest the timeline pane can be while still showing a usable slice of
-// dates + task bars, once the grid has already claimed its width.
+
 export const CHART_MIN_WIDTH = 320
 export const CHART_MIN_WIDTH_MOBILE = 200
 
