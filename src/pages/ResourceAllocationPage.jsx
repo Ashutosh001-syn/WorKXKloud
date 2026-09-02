@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { API_ENDPOINTS } from "../config/api";
+import BackButton from "../components/ui/BackButton";
 
 /* ================= ROLE COLORS (SOFT + PREMIUM) ================= */
 
@@ -118,12 +119,17 @@ function ResourceAllocationPage() {
       <section className="rounded-xl bg-[#f8fafc] px-5 py-6 shadow-[0_20px_50px_rgba(2,12,28,0.2)]">
 
         {/* HEADER */}
-        <h1 className="text-[2rem] font-semibold text-[#0f172a]">
-          Resource Allocation
-        </h1>
-        <p className="mt-1 text-sm text-[#64748b]">
-          Staffing plans submitted per project, across the organization.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-[2rem] font-semibold text-[#0f172a]">
+              Resource Allocation
+            </h1>
+            <p className="mt-1 text-sm text-[#64748b]">
+              Staffing plans submitted per project, across the organization.
+            </p>
+          </div>
+          <BackButton fallbackUrl="/dashboard" label="Back to Dashboard" />
+        </div>
 
         {loading && (
           <div className="mt-16 flex flex-col items-center justify-center py-20 text-center">

@@ -1,15 +1,27 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Search, Filter, MoreHorizontal, Calendar, GripVertical,
-  ArrowUp, Minus, CheckCircle2, Plus, Loader2, X, Copy, Trash2,
+  ArrowUp, ArrowDown, Minus, CheckCircle2, Plus, Loader2, X, Copy, Trash2,
   ArrowRightLeft, Pencil, Tag, CheckSquare, MessageSquare, Paperclip, Settings2,
-  ChevronDown, Check, ListFilter, User
+  ChevronDown, Check, ListFilter, User, Kanban, Inbox, Columns3, MoveRight, Layers, Sparkles, Play, RefreshCw
 } from 'lucide-react';
 import { API_ENDPOINTS } from '../../config/api';
 import { useToast } from '../../hooks/useToast';
 import { useBoardExtras } from '../../hooks/useBoardExtras';
 import ToastStack from '../ui/ToastStack';
 import TaskDetailModal from './board/TaskDetailModel';
+
+const SelectField = ({ children, className = '', ...props }) => (
+  <div className="relative inline-flex items-center">
+    <select
+      {...props}
+      className={`appearance-none rounded-xl border border-slate-200 bg-white pl-3.5 pr-8 h-9 text-slate-700 text-xs font-semibold outline-none hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 cursor-pointer shadow-2xs transition ${className}`}
+    >
+      {children}
+    </select>
+    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+  </div>
+);
 
 const PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 };
 const PRIORITY_GROUPS = [
@@ -45,17 +57,25 @@ function boardItemToTask(item, statusKey, scheduleMap, resourceMap) {
 
 // --- Small presentational helpers ---
 const PriorityBadge = ({ level }) => {
-  if (level === 'High') {
+  const p = (level || 'Medium').toLowerCase();
+  if (p === 'high') {
     return (
-      <div className="flex items-center text-red-500 text-xs font-medium gap-1">
-        <ArrowUp className="w-3 h-3" /> {level}
-      </div>
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 border border-rose-200/80 text-[10px] font-bold text-rose-700 shadow-2xs">
+        <ArrowUp className="w-2.5 h-2.5 stroke-[2.5]" /> High
+      </span>
+    );
+  }
+  if (p === 'low') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200/80 text-[10px] font-bold text-blue-700 shadow-2xs">
+        <ArrowDown className="w-2.5 h-2.5 stroke-[2.5]" /> Low
+      </span>
     );
   }
   return (
-    <div className="flex items-center text-orange-400 text-xs font-medium gap-1">
-      <Minus className="w-3 h-3" /> {level}
-    </div>
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200/80 text-[10px] font-bold text-amber-700 shadow-2xs">
+      <Minus className="w-2.5 h-2.5 stroke-[2.5]" /> Medium
+    </span>
   );
 };
 
@@ -344,87 +364,91 @@ const TaskCard = ({
   const cardSubtasks = safeParseJsonArray(task.rawApiData?.checklist);
   const cardComments = safeParseJsonArray(task.rawApiData?.comments);
   return (
-  <div className="relative">
-    {isDropTargetAbove && <div className="absolute -top-1.5 left-0 right-0 h-0.5 rounded-full bg-blue-500" />}
-    <div
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={onDragOverCard}
-      onClick={onOpen}
-      className={`bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col gap-3 hover:shadow-md cursor-grab active:cursor-grabbing transition-all ${isDragging ? 'opacity-40' : ''
-        }`}
-    >
-      <div className="flex justify-between items-start">
-        <div className="flex flex-col min-w-0">
-          {task.projectName && (
-            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">
-              {task.projectName}
-            </span>
-          )}
-          <h4 className="text-sm font-semibold text-slate-800 leading-snug capitalize truncate">
-            {task.title}
-          </h4>
-        </div>
-        <CardMenu
-          onEdit={onEdit}
-          onDuplicate={onDuplicate}
-          onDelete={onDelete}
-          onMoveTo={onMoveTo}
-          columns={columns}
-          currentStatusKey={task.statusKey}
-          currentCustomColumnId={task.customColumnId}
-        />
-      </div>
-
-      <LabelChips labels={parseTaskLabels(task.rawApiData?.labels, labelPalette)} />
-
-      <div className="flex items-center justify-between mt-1">
-        <span className="text-xs text-slate-500 font-medium">#{task.id}</span>
-        <PriorityBadge level={task.priority || 'Medium'} />
-      </div>
-
-      {(cardSubtasks.length > 0 || cardComments.length > 0 || task.rawApiData?.attachments) && (
-        <div className="flex items-center gap-3 text-slate-400 text-[11px] font-medium">
-          {cardSubtasks.length > 0 && (
-            <span className="flex items-center gap-1">
-              <CheckSquare size={12} />
-              {cardSubtasks.filter((s) => s.done).length}/{cardSubtasks.length}
-            </span>
-          )}
-          {cardComments.length > 0 && (
-            <span className="flex items-center gap-1"><MessageSquare size={12} />{cardComments.length}</span>
-          )}
-          {task.rawApiData?.attachments && (
-            <span className="flex items-center gap-1"><Paperclip size={12} />1</span>
-          )}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between mt-2">
-        <AssigneePicker
-          resources={resources}
-          resourcesLoading={resourcesLoading}
-          currentResourceId={task.rawApiData?.resource_id}
-          currentResourceName={task.rawApiData?.resource_name}
-          onRequestResources={onEnsureResources}
-          onSelect={onAssigneeChange}
-        />
-        {task.isCompleted ? (
-          <CheckCircle2 className="w-5 h-5 text-green-500" />
-        ) : (
-          <DueDatePicker
-            isoDate={task.rawApiData?.due_date?.slice(0, 10)}
-            displayDate={task.date}
-            onChange={onDateChange}
+    <div className="relative">
+      {isDropTargetAbove && <div className="absolute -top-1.5 left-0 right-0 h-1 rounded-full bg-blue-600 shadow-[0_0_8px_rgba(37,99,235,0.6)]" />}
+      <div
+        draggable
+        onDragStart={onDragStart}
+        onDragOver={onDragOverCard}
+        onClick={onOpen}
+        className={`bg-white rounded-2xl p-4 border border-slate-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col gap-3 hover:shadow-[0_8px_22px_rgba(15,23,42,0.07)] hover:-translate-y-0.5 cursor-grab active:cursor-grabbing transition-all duration-150 ${isDragging ? 'opacity-30 scale-95 ring-2 ring-blue-400' : ''
+          }`}
+      >
+        <div className="flex justify-between items-start gap-2">
+          <div className="flex flex-col min-w-0 flex-1">
+            {task.projectName && (
+              <span className="text-[10px] uppercase tracking-wider text-slate-400 font-extrabold mb-0.5">
+                {task.projectName}
+              </span>
+            )}
+            <h4 className="text-[13px] font-bold text-slate-900 leading-snug tracking-tight capitalize truncate hover:text-blue-600 transition">
+              {task.title}
+            </h4>
+          </div>
+          <CardMenu
+            onEdit={onEdit}
+            onDuplicate={onDuplicate}
+            onDelete={onDelete}
+            onMoveTo={onMoveTo}
+            columns={columns}
+            currentStatusKey={task.statusKey}
+            currentCustomColumnId={task.customColumnId}
           />
+        </div>
+
+        <LabelChips labels={parseTaskLabels(task.rawApiData?.labels, labelPalette)} />
+
+        <div className="flex items-center justify-between mt-0.5">
+          <span className="text-[11px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+            #{task.id}
+          </span>
+          <PriorityBadge level={task.priority || 'Medium'} />
+        </div>
+
+        {(cardSubtasks.length > 0 || cardComments.length > 0 || task.rawApiData?.attachments) && (
+          <div className="flex items-center gap-3 text-slate-400 text-[11px] font-medium pt-1 border-t border-slate-50">
+            {cardSubtasks.length > 0 && (
+              <span className="flex items-center gap-1">
+                <CheckSquare size={12} className="text-slate-400" />
+                {cardSubtasks.filter((s) => s.done).length}/{cardSubtasks.length}
+              </span>
+            )}
+            {cardComments.length > 0 && (
+              <span className="flex items-center gap-1"><MessageSquare size={12} />{cardComments.length}</span>
+            )}
+            {task.rawApiData?.attachments && (
+              <span className="flex items-center gap-1"><Paperclip size={12} />1</span>
+            )}
+          </div>
         )}
+
+        <div className="flex items-center justify-between mt-1 pt-2 border-t border-slate-100/80">
+          <AssigneePicker
+            resources={resources}
+            resourcesLoading={resourcesLoading}
+            currentResourceId={task.rawApiData?.resource_id}
+            currentResourceName={task.rawApiData?.resource_name}
+            onRequestResources={onEnsureResources}
+            onSelect={onAssigneeChange}
+          />
+          {task.isCompleted ? (
+            <div className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 text-[11px] font-bold">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Done
+            </div>
+          ) : (
+            <DueDatePicker
+              isoDate={task.rawApiData?.due_date?.slice(0, 10)}
+              displayDate={task.date}
+              onChange={onDateChange}
+            />
+          )}
+        </div>
       </div>
     </div>
-  </div>
   );
 };
 
-export default function ProjectBoardSection({ projectId, pmId, projectName }) {
+export default function ProjectBoardSection({ projectId, pmId, projectName, initialViewMode = 'board', readOnly = false }) {
   const { toasts, showToast, dismissToast } = useToast();
   const {
     columns, labelPalette,
@@ -432,6 +456,7 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
     deleteColumn, setColumnWipLimit, reorderColumns, removeExtras,
   } = useBoardExtras(projectId);
 
+  const [viewMode, setViewMode] = useState(initialViewMode || 'board');
   const [tasks, setTasks] = useState([]);
   const [uploadingAttachmentId, setUploadingAttachmentId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -439,6 +464,17 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
   const [draggingTaskId, setDraggingTaskId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null); // { columnId, beforeTaskId | null }
   const [draggingColumnIndex, setDraggingColumnIndex] = useState(null);
+
+  // Backlog state
+  const [backlogTasks, setBacklogTasks] = useState([]);
+  const [backlogLoading, setBacklogLoading] = useState(false);
+  const [backlogSearch, setBacklogSearch] = useState('');
+  const [backlogMemberFilter, setBacklogMemberFilter] = useState('All Members');
+  const [backlogRoleFilter, setBacklogRoleFilter] = useState('All Roles');
+
+  useEffect(() => {
+    if (initialViewMode) setViewMode(initialViewMode);
+  }, [initialViewMode]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
@@ -450,21 +486,12 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const roleDropdownRef = useRef(null);
 
-  // TODO(backend): switching boards between PMs needs a way to map a PM's
-  // name to the pm_id get_projectsByPm/getBoard actually expect — neither
-  // USER_LIST nor RESOURCE_LIST's `id` matches that space (verified: real
-  // pm_ids 1-4 return inconsistent project_manager names, and USER_LIST's
-  // "Project manager"-role ids return 0 projects). So this only lists PM
-  // resources for now; picking one is a no-op until that mapping exists.
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const userDropdownRef = useRef(null);
 
   const [groupBy, setGroupBy] = useState('Status'); // 'Status' | 'Assignee' | 'Priority'
   const [groupByOpen, setGroupByOpen] = useState(false);
   const groupByRef = useRef(null);
-  // Only used when groupBy !== 'Status' — those groups don't support the
-  // "insert before this card" tracking that dropTarget gives Status mode,
-  // just a simple "you're hovering this group" highlight.
   const [hoveredGroupId, setHoveredGroupId] = useState(null);
 
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -474,9 +501,6 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef(null);
 
-  // CREATE_BOARD links a board card to an existing schedule task (task_id),
-  // it doesn't accept a free-text title — so "Add Task" picks from the
-  // project's schedule instead of typing a new name.
   const [scheduleTaskOptions, setScheduleTaskOptions] = useState([]);
   const [scheduleTasksLoading, setScheduleTasksLoading] = useState(false);
   const [scheduleTasksFetched, setScheduleTasksFetched] = useState(false);
@@ -504,6 +528,211 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
     }
     return { id: null, role: null };
   };
+
+  const getPmId = () => {
+    const userStr = localStorage.getItem('auth_user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        return user.id || user.user_id || null;
+      } catch (e) {
+        console.error('Error parsing auth_user:', e);
+      }
+    }
+    return null;
+  };
+
+  const getMovedBacklogKeys = useCallback(() => {
+    const pmIdToUse = pmId || getPmId();
+    if (!pmIdToUse) return new Set();
+    try {
+      const stored = localStorage.getItem(`moved_backlog_keys_${pmIdToUse}`);
+      return new Set(stored ? JSON.parse(stored) : []);
+    } catch {
+      return new Set();
+    }
+  }, [pmId]);
+
+  const saveMovedBacklogKey = useCallback((key) => {
+    const pmIdToUse = pmId || getPmId();
+    if (!pmIdToUse || !key) return;
+    try {
+      const existing = getMovedBacklogKeys();
+      existing.add(key);
+      localStorage.setItem(`moved_backlog_keys_${pmIdToUse}`, JSON.stringify([...existing]));
+    } catch (e) {
+      console.error('Error saving moved backlog key:', e);
+    }
+  }, [pmId, getMovedBacklogKeys]);
+
+  // Rollback counterpart to saveMovedBacklogKey — used when CREATE_BOARD
+  // fails, so a backlog item that didn't actually make it to the board
+  // isn't permanently hidden from the backlog either.
+  const unmarkMovedBacklogKey = useCallback((key) => {
+    const pmIdToUse = pmId || getPmId();
+    if (!pmIdToUse || !key) return;
+    try {
+      const existing = getMovedBacklogKeys();
+      existing.delete(key);
+      localStorage.setItem(`moved_backlog_keys_${pmIdToUse}`, JSON.stringify([...existing]));
+    } catch (e) {
+      console.error('Error unmarking moved backlog key:', e);
+    }
+  }, [pmId, getMovedBacklogKeys]);
+
+  const fetchBacklogs = useCallback(async () => {
+    const pmIdToUse = pmId || getPmId();
+    if (!pmIdToUse) return;
+    setBacklogLoading(true);
+    try {
+      const response = await fetch(API_ENDPOINTS.GET_PM_BACKLOG, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pm_id: pmIdToUse }),
+      });
+      const result = await response.json();
+      if (result.success && Array.isArray(result.data)) {
+        const movedKeys = getMovedBacklogKeys();
+        const unMovedBacklog = result.data.filter((item) => {
+          const itemKey = getBacklogItemKey(item);
+          return !movedKeys.has(itemKey);
+        });
+        setBacklogTasks(unMovedBacklog);
+      }
+    } catch (err) {
+      console.error('Error fetching backlog in Board:', err);
+    } finally {
+      setBacklogLoading(false);
+    }
+  }, [pmId, getMovedBacklogKeys]);
+
+  useEffect(() => {
+    fetchBacklogs();
+  }, [fetchBacklogs]);
+
+  function getBacklogItemKey(item) {
+    if (!item) return '';
+    return String(
+      item.task_id ||
+      item.id ||
+      item._id ||
+      item.sub_project_id ||
+      `${item.resource_id}_${item.sub_project_name || ''}_${item.project_name || ''}`
+    );
+  }
+
+  const handleMoveBacklogToBoard = async (backlogItem, targetStatusKey = 'to_do') => {
+    const title = backlogItem.sub_project_name || backlogItem.project_name || `Backlog Task #${backlogItem.task_id || backlogItem.id || 1}`;
+    const targetKey = getBacklogItemKey(backlogItem);
+
+    // Save moved key permanently so it never reappears in backlog on refresh
+    saveMovedBacklogKey(targetKey);
+
+    // Remove only the target item from local backlog state
+    setBacklogTasks((prev) => prev.filter((b) => getBacklogItemKey(b) !== targetKey));
+
+    const pmIdToUse = Number(pmId || getPmId() || backlogItem.pm_id || 1);
+    const projIdToUse = Number(backlogItem.project_id || projectId || 1);
+    const taskIdToUse = Number(backlogItem.task_id || backlogItem.id || backlogItem.sub_project_id || 1);
+    const currentRes = getResourceId();
+    const resIdToUse = backlogItem.resource_id ? Number(backlogItem.resource_id) : (currentRes.id ? Number(currentRes.id) : null);
+
+    // Optimistically insert card into board state
+    const newCard = {
+      id: `WR-${taskIdToUse || Date.now()}`,
+      boardId: taskIdToUse || Date.now(),
+      title,
+      priority: backlogItem.priority || 'Medium',
+      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      isCompleted: targetStatusKey === 'completed',
+      statusKey: targetStatusKey,
+      customColumnId: null,
+      rawApiData: {
+        ...backlogItem,
+        project_id: projIdToUse,
+        task_id: taskIdToUse,
+        resource_name: backlogItem.resource_name,
+        resource_id: resIdToUse,
+        status: targetStatusKey,
+        pm_id: pmIdToUse,
+      },
+    };
+
+    // Optimistic insert only — refetchBoard() below replaces this with the
+    // server-confirmed row on success, so it's never persisted to
+    // localStorage (that was the source of a duplicate-card bug: the
+    // locally-cached card's boardId was the schedule task_id, which never
+    // matches the real board row's own id, so it kept showing up alongside
+    // the real card on every future load instead of being deduped away).
+    setTasks((prev) => [newCard, ...prev]);
+
+    try {
+      const payload = {
+        project_id: projIdToUse,
+        task_id: taskIdToUse,
+        status: targetStatusKey,
+        resource_id: resIdToUse,
+        pm_id: pmIdToUse,
+      };
+
+      const response = await fetch(API_ENDPOINTS.CREATE_BOARD, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.message || 'Failed to move task to board');
+
+      await refetchBoard();
+      showToast(`Moved "${title}" to Active Board (${targetStatusKey.replace('_', ' ')})`, { type: 'success' });
+    } catch (err) {
+      console.error('Error persisting backlog task to board:', err);
+      // Roll back: this never actually reached the board, so put it back
+      // in the backlog and remove the optimistic card instead of leaving
+      // the UI claiming success on something that didn't persist.
+      unmarkMovedBacklogKey(targetKey);
+      setBacklogTasks((prev) => [backlogItem, ...prev]);
+      setTasks((prev) => prev.filter((t) => t.id !== newCard.id));
+      showToast(err.message || 'Could not move the task to the board. Please try again.', { type: 'error' });
+    }
+  };
+
+  const backlogMemberOptions = useMemo(
+    () => [...new Set(backlogTasks.map((t) => t.resource_name).filter(Boolean))],
+    [backlogTasks]
+  );
+  const backlogRoleOptions = useMemo(
+    () => [...new Set(backlogTasks.map((t) => t.resource_role).filter(Boolean))],
+    [backlogTasks]
+  );
+
+  const filteredBacklogTasks = useMemo(() => {
+    const term = backlogSearch.trim().toLowerCase();
+    return backlogTasks.filter((task) => {
+      if (backlogMemberFilter !== 'All Members' && task.resource_name !== backlogMemberFilter) return false;
+      if (backlogRoleFilter !== 'All Roles' && task.resource_role !== backlogRoleFilter) return false;
+      if (term) {
+        const haystack = `${task.sub_project_name || ''} ${task.project_name || ''}`.toLowerCase();
+        if (!haystack.includes(term)) return false;
+      }
+      return true;
+    });
+  }, [backlogTasks, backlogSearch, backlogMemberFilter, backlogRoleFilter]);
+
+  const groupedBacklogTasks = useMemo(() => {
+    return filteredBacklogTasks.reduce((acc, task) => {
+      const key = task.resource_id || 'unassigned';
+      if (!acc[key]) {
+        acc[key] = {
+          name: task.resource_name || 'Unassigned / General',
+          role: task.resource_role || 'Team Member',
+          tasks: [],
+        };
+      }
+      acc[key].tasks.push(task);
+      return acc;
+    }, {});
+  }, [filteredBacklogTasks]);
 
   const getCurrentUserName = () => {
     const saved = localStorage.getItem('user_profile');
@@ -602,6 +831,7 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
       const resourceMap = new Map(resourceRows.map((r) => [String(r.id), r.name]));
 
       const flattened = [];
+
       Object.entries(boardData.data).forEach(([statusKey, items]) => {
         (items || []).forEach((item) => {
           const task = boardItemToTask(item, statusKey, scheduleMap, resourceMap);
@@ -609,6 +839,7 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
           flattened.push(task);
         });
       });
+
       setTasks(flattened);
 
       // The board load already pulls the full resource list — reuse it for
@@ -692,7 +923,7 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
       });
       const result = await response.json();
       if (!result.success) throw new Error(result.message || 'Failed to load schedule tasks');
-      const options = (result.data || []).map((task) => ({ id: task.id, label: task.task_name }));
+      const options = (result.data || []).map((task) => ({ id: task.id, name: task.task_name }));
       setScheduleTaskOptions(options);
     } catch (error) {
       console.error('Error fetching schedule tasks for board:', error);
@@ -1065,6 +1296,18 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
 
   const handleColumnDrop = async (e, column) => {
     e.preventDefault();
+    const rawBacklogJson = e.dataTransfer.getData('application/json');
+    if (rawBacklogJson) {
+      try {
+        const parsed = JSON.parse(rawBacklogJson);
+        if (parsed.isBacklogItem && parsed.backlogData) {
+          await handleMoveBacklogToBoard(parsed.backlogData, column.statusKey || 'to_do');
+          return;
+        }
+      } catch (err) {
+        console.error('Error parsing dropped backlog task:', err);
+      }
+    }
     const taskId = e.dataTransfer.getData('application/x-task');
     setDraggingTaskId(null);
     const target = dropTarget?.columnId === column.id ? dropTarget : { columnId: column.id, beforeTaskId: null };
@@ -1225,450 +1468,573 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
 
       <div className="mb-6 flex flex-col gap-4">
-        <h1 className="text-xl font-bold text-slate-900">Kanban Board</h1>
-
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          {/* Left cluster: current user, role filter, search */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="relative pr-3 border-r border-slate-200" ref={userDropdownRef}>
+            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Project Workspace</h1>
+
+            {/* Jira-Style View Switcher — this is the single Board/Backlog/
+                Split view for both PM and resource contexts (the separate
+                standalone Backlog tab in MyTaskProjectDetailPage was
+                removed to avoid showing Backlog twice). */}
+            <div className="inline-flex items-center p-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-semibold shadow-2xs">
               <button
                 type="button"
-                onClick={() => { setUserDropdownOpen((v) => !v); ensureResourcesLoaded(); }}
-                className="flex items-center gap-2.5 rounded-lg px-1 py-0.5 hover:bg-slate-50 transition"
+                onClick={() => setViewMode('board')}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  viewMode === 'board'
+                    ? 'bg-white text-slate-900 font-bold shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
               >
-                <img
-                  src={currentUser.avatar}
-                  alt={currentUser.name}
-                  className="w-9 h-9 rounded-full border border-slate-200 object-cover"
-                />
-                <div className="leading-tight text-left">
-                  <p className="text-sm font-semibold text-slate-800">{currentUser.name}</p>
-                  <p className="text-xs text-slate-400">{currentUser.role}</p>
-                </div>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                <Kanban size={13} /> Active Board
               </button>
-
-              {userDropdownOpen && (
-                <div className="absolute left-0 top-14 z-30 w-56 rounded-xl border border-slate-100 bg-white shadow-xl p-1.5">
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 bg-blue-50"
-                  >
-                    {currentUser.name}
-                    <Check className="w-3.5 h-3.5 text-blue-600" />
-                  </button>
-                  {resources
-                    .filter((r) => (r.role || '').toLowerCase().includes('project manager') && r.name !== currentUser.name)
-                    .map((r) => (
-                      <button
-                        key={r.id}
-                        type="button"
-                        disabled
-                        title="Switching boards between PMs isn't available yet — the backend has no reliable way to map a PM to their board data."
-                        className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-400 cursor-not-allowed"
-                      >
-                        {r.name}
-                        <span className="text-[10px] font-medium text-slate-300">Coming soon</span>
-                      </button>
-                    ))}
-                </div>
-              )}
-            </div>
-
-            {/* <div className="relative" ref={roleDropdownRef}>
               <button
                 type="button"
-                onClick={() => setRoleDropdownOpen((v) => !v)}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"
+                onClick={() => setViewMode('backlog')}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  viewMode === 'backlog'
+                    ? 'bg-white text-blue-600 font-bold shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
               >
-                {selectedRole}
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                <Inbox size={13} /> Backlog
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                  viewMode === 'backlog' ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600'
+                }`}>
+                  {filteredBacklogTasks.length}
+                </span>
               </button>
-
-              {roleDropdownOpen && (
-                <div className="absolute left-0 top-11 z-30 w-48 rounded-xl border border-slate-100 bg-white shadow-xl p-1.5">
-                  {availableRoles.map((role) => (
-                    <button
-                      key={role}
-                      type="button"
-                      onClick={() => { setSelectedRole(role); setRoleDropdownOpen(false); }}
-                      className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-600 hover:bg-slate-50"
-                    >
-                      {role}
-                      {selectedRole === role && <Check className="w-3.5 h-3.5 text-blue-600" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div> */}
-
-            <div className="flex min-w-45 flex-1 items-center rounded-xl border border-slate-200 bg-white px-3 transition focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 sm:flex-none sm:w-64">
-              <Search className="h-4 w-4 shrink-0 text-slate-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search tasks..."
-                className="h-auto w-full border-none bg-transparent py-2 pl-2 pr-1 text-sm outline-none placeholder:text-slate-400 focus:ring-0"
-              />
-            </div>
-          </div>
-
-          {/* Right cluster: group by, filters, board menu */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative" ref={groupByRef}>
               <button
                 type="button"
-                onClick={() => setGroupByOpen((v) => !v)}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 transition"
+                onClick={() => setViewMode('split')}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  viewMode === 'split'
+                    ? 'bg-white text-slate-900 font-bold shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
               >
-                <ListFilter className="w-3.5 h-3.5 text-slate-400" />
-                Group by <span className="font-semibold text-slate-700">{groupBy}</span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                <Columns3 size={13} /> Split View
               </button>
-
-              {groupByOpen && (
-                <div className="absolute right-0 top-11 z-30 w-40 rounded-xl border border-slate-100 bg-white shadow-xl p-1.5">
-                  {['Status', 'Assignee', 'Priority'].map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => { setGroupBy(option); setGroupByOpen(false); }}
-                      className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-600 hover:bg-slate-50"
-                    >
-                      {option}
-                      {groupBy === option && <Check className="w-3.5 h-3.5 text-blue-600" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="relative" ref={filterRef}>
-              <button
-                type="button"
-                onClick={() => setFilterOpen((v) => !v)}
-                className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition ${activeFilterCount > 0
-                  ? 'border-blue-300 bg-blue-50 text-blue-600'
-                  : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
-                  }`}
-              >
-                <Filter className="w-4 h-4" /> Filters
-                {activeFilterCount > 0 && (
-                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
-
-              {filterOpen && (
-                <div className="absolute right-0 top-11 z-30 w-56 rounded-xl border border-slate-100 bg-white shadow-xl p-3">
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Priority</p>
-                  <div className="flex flex-col gap-1 mb-3">
-                    {['High', 'Medium', 'Low'].map((p) => (
-                      <label key={p} className="flex items-center gap-2 text-[13px] text-slate-600">
-                        <input
-                          type="checkbox"
-                          checked={selectedPriorities.has(p)}
-                          onChange={() => toggleSetValue(setSelectedPriorities)(p)}
-                          className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600"
-                        />
-                        {p}
-                      </label>
-                    ))}
-                  </div>
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Assignee</p>
-                  <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
-                    {availableAssignees.map((name) => (
-                      <label key={name} className="flex items-center gap-2 text-[13px] text-slate-600">
-                        <input
-                          type="checkbox"
-                          checked={selectedAssignees.has(name)}
-                          onChange={() => toggleSetValue(setSelectedAssignees)(name)}
-                          className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600"
-                        />
-                        {name}
-                      </label>
-                    ))}
-                  </div>
-                  {activeFilterCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => { setSelectedPriorities(new Set()); setSelectedAssignees(new Set()); }}
-                      className="mt-3 text-[12px] font-semibold text-blue-600 hover:text-blue-700"
-                    >
-                      Clear filters
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="relative" ref={moreMenuRef}>
-              <button
-                type="button"
-                onClick={() => setMoreMenuOpen((v) => !v)}
-                className="flex items-center justify-center rounded-xl border border-slate-200 bg-white p-2.5 text-slate-500 hover:bg-slate-50 transition"
-              >
-                <MoreHorizontal className="w-4 h-4" />
-              </button>
-
-              {moreMenuOpen && (
-                <div className="absolute right-0 top-11 z-30 w-44 rounded-xl border border-slate-100 bg-white shadow-xl py-1.5">
-                  <button
-                    type="button"
-                    onClick={() => { setAddingColumn(true); setMoreMenuOpen(false); }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-[13px] text-slate-600 hover:bg-slate-50"
-                  >
-                    <Plus size={13} /> Add Column
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="flex gap-6 overflow-x-auto pb-4">
-        {displayGroups.map((column, index) => {
-          const isStatusMode = groupBy === 'Status';
-          const columnTasks = getGroupTasks(column);
-          const overLimit = column.wipLimit && columnTasks.length > column.wipLimit;
-          const isHighlighted = isStatusMode
-            ? dropTarget?.columnId === column.id
-            : hoveredGroupId === column.id;
-
-          return (
-            <div
-              key={column.id}
-              className={`shrink-0 w-75 flex flex-col bg-slate-50/50 rounded-2xl p-4 border transition-colors ${isHighlighted ? 'border-blue-300 bg-blue-50/40' : 'border-slate-100/50'
-                } ${draggingColumnIndex === index ? 'opacity-50' : ''}`}
-              onDragOver={(e) => isStatusMode ? handleColumnDragOver(e, column.id) : handleGroupDragOver(e, column.id)}
-              onDragLeave={() => { if (!isStatusMode) setHoveredGroupId((v) => (v === column.id ? null : v)); }}
-              onDrop={(e) => {
-                if (isStatusMode) {
-                  handleColumnDrop(e, column);
-                  handleColumnHeaderDrop(e, index);
-                } else {
-                  handleGroupDrop(e, column);
-                }
-              }}
-            >
-              {/* Column Header */}
-              <div className="flex items-center justify-between mb-3 px-1">
-                <div
-                  className="flex items-center gap-2 flex-1 min-w-0"
-                  draggable={isStatusMode}
-                  onDragStart={isStatusMode ? (e) => handleColumnHeaderDragStart(e, index) : undefined}
-                  onDragEnd={isStatusMode ? handleColumnHeaderDragEnd : undefined}
-                >
-                  {isStatusMode && <GripVertical size={14} className="text-slate-300 cursor-grab shrink-0" />}
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${column.color}`}></span>
-                  {isStatusMode && editingColumnId === column.id ? (
-                    <input
-                      autoFocus
-                      defaultValue={column.title}
-                      onBlur={(e) => { renameColumn(column.id, e.target.value.trim() || column.title); setEditingColumnId(null); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                      className="h-auto w-full rounded border border-blue-300 bg-white px-1 text-sm font-semibold text-slate-800 outline-none"
+        {/* Top Controls Toolbar (Shown when Board or Split View is active) */}
+        {viewMode !== 'backlog' && (
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            {/* Left cluster: current user, search — the PM-switcher dropdown
+                is a PM-only tool (it lists other PMs' boards to switch to,
+                which isn't a concept a resource/team-member viewer needs
+                or should see) so it's hidden entirely in readOnly. */}
+            <div className="flex flex-wrap items-center gap-3">
+              {!readOnly && (
+                <div className="relative pr-3 border-r border-slate-200" ref={userDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => { setUserDropdownOpen((v) => !v); ensureResourcesLoaded(); }}
+                    className="flex items-center gap-2.5 rounded-xl px-2 py-1 bg-white border border-slate-200/80 hover:bg-slate-50 shadow-2xs transition"
+                  >
+                    <img
+                      src={currentUser.avatar}
+                      alt={currentUser.name}
+                      className="w-8 h-8 rounded-full border border-slate-200 object-cover"
                     />
-                  ) : (
-                    <h3
-                      className="font-semibold text-slate-800 text-sm truncate cursor-text"
-                      onDoubleClick={isStatusMode ? () => setEditingColumnId(column.id) : undefined}
-                      title={isStatusMode ? 'Double-click to rename' : undefined}
-                    >
-                      {column.title}
-                    </h3>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className={`text-sm font-semibold ${overLimit ? 'text-rose-500' : 'text-slate-500'}`}>
-                    {columnTasks.length}{column.wipLimit ? `/${column.wipLimit}` : ''}
-                  </span>
-                  {isStatusMode && (
-                    <button
-                      type="button"
-                      onClick={() => setColumnSettingsId((v) => v === column.id ? null : column.id)}
-                      className="text-slate-300 hover:text-slate-500"
-                    >
-                      <Settings2 size={14} />
-                    </button>
-                  )}
-                </div>
-              </div>
+                    <div className="leading-tight text-left">
+                      <p className="text-xs font-bold text-slate-800">{currentUser.name}</p>
+                      <p className="text-[10px] text-slate-400 font-medium">{currentUser.role}</p>
+                    </div>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
 
-              {isStatusMode && columnSettingsId === column.id && (
-                <div className="mb-3 rounded-lg border border-slate-200 bg-white p-2.5 flex flex-col gap-2">
-                  <label className="text-[11px] font-semibold text-slate-500">WIP limit</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={0}
-                      defaultValue={column.wipLimit || ''}
-                      placeholder="No limit"
-                      onBlur={(e) => setColumnWipLimit(column.id, e.target.value ? Number(e.target.value) : null)}
-                      className="h-auto w-20 rounded-md border border-slate-200 px-2 py-1 text-[12px] outline-none focus:border-blue-400"
-                    />
-                    {columnTasks.length === 0 && (
+                  {userDropdownOpen && (
+                    <div className="absolute left-0 top-12 z-30 w-56 rounded-2xl border border-slate-100 bg-white shadow-xl p-1.5">
                       <button
                         type="button"
-                        onClick={() => { if (window.confirm(`Delete column "${column.title}"?`)) deleteColumn(column.id); }}
-                        className="ml-auto flex items-center gap-1 text-[12px] font-semibold text-rose-500 hover:text-rose-600"
+                        className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 bg-blue-50"
                       >
-                        <Trash2 size={12} /> Delete column
+                        {currentUser.name}
+                        <Check className="w-3.5 h-3.5 text-blue-600" />
                       </button>
-                    )}
-                  </div>
-                  {columnTasks.length > 0 && (
-                    <p className="text-[11px] text-slate-400">Column must be empty to delete.</p>
+                      {resources
+                        .filter((r) => (r.role || '').toLowerCase().includes('project manager') && r.name !== currentUser.name)
+                        .map((r) => (
+                          <button
+                            key={r.id}
+                            type="button"
+                            disabled
+                            title="Switching boards between PMs isn't available yet"
+                            className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-400 cursor-not-allowed"
+                          >
+                            {r.name}
+                            <span className="text-[10px] font-medium text-slate-300">Coming soon</span>
+                          </button>
+                        ))}
+                    </div>
                   )}
                 </div>
               )}
 
-              {/* Task List */}
-              <div className="flex flex-col gap-3 min-h-12.5 mb-3">
-                {columnTasks.length === 0 ? (
-                  <div className="text-center text-xs text-slate-400 py-6 border border-dashed border-slate-200 rounded-xl">
-                    No tasks yet
+              {/* Single Clean Search Input */}
+              <div className="relative flex items-center w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search board tasks..."
+                  className="w-full h-9 bg-white border border-slate-200 rounded-xl pl-9 pr-3 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-2xs"
+                />
+              </div>
+            </div>
+
+            {/* Right cluster: group by, filters, board menu */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative" ref={groupByRef}>
+                <button
+                  type="button"
+                  onClick={() => setGroupByOpen((v) => !v)}
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  <ListFilter className="w-3.5 h-3.5 text-slate-400" />
+                  Group by <span className="font-semibold text-slate-700">{groupBy}</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                </button>
+
+                {groupByOpen && (
+                  <div className="absolute right-0 top-11 z-30 w-40 rounded-xl border border-slate-100 bg-white shadow-xl p-1.5">
+                    {['Status', 'Assignee', 'Priority'].map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => { setGroupBy(option); setGroupByOpen(false); }}
+                        className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-600 hover:bg-slate-50 cursor-pointer"
+                      >
+                        {option}
+                        {groupBy === option && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                      </button>
+                    ))}
                   </div>
-                ) : (
-                  columnTasks.map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      columns={columns}
-                      labelPalette={labelPalette}
-                      isDragging={draggingTaskId === task.id}
-                      isDropTargetAbove={isStatusMode && dropTarget?.columnId === column.id && dropTarget?.beforeTaskId === task.id}
-                      resources={resources}
-                      resourcesLoading={resourcesLoading}
-                      onDragStart={(e) => handleTaskDragStart(e, task.id)}
-                      onDragOverCard={isStatusMode ? (e) => handleCardDragOver(e, column.id, task.id) : undefined}
-                      onOpen={() => { setSelectedTaskId(task.id); ensureResourcesLoaded(); }}
-                      onEdit={() => { setSelectedTaskId(task.id); ensureResourcesLoaded(); }}
-                      onDuplicate={() => handleDuplicateTask(task)}
-                      onDelete={() => handleDeleteTask(task)}
-                      onMoveTo={(targetColumn) => moveTask(task.id, targetColumn, null)}
-                      onEnsureResources={ensureResourcesLoaded}
-                      onAssigneeChange={(value) => handleQuickAssigneeChange(task, value)}
-                      onDateChange={(value) => handleQuickDateChange(task, value)}
-                    />
-                  ))
                 )}
               </div>
 
-              {/* Add Task — always on the "In Discussion" column specifically
-                  (the leftmost column), and only in Status grouping. New
-                  work starts in In Discussion and moves right via drag/
-                  "Move to". */}
-              {isStatusMode && column.statusKey === 'in_discussion' && (
-                <div className="mt-auto pt-2">
-                  {activeColumnForAdd === column.id ? (
-                    <div className="bg-white p-3 rounded-xl border border-blue-200 shadow-sm flex flex-col gap-2">
-                      <select
-                        ref={inputRef}
-                        value={selectedScheduleTaskId}
-                        onChange={(e) => setSelectedScheduleTaskId(e.target.value)}
-                        disabled={isSubmitting || scheduleTasksLoading}
-                        className="h-auto w-full border-none bg-transparent p-0 text-sm outline-none disabled:text-slate-400"
+              <div className="relative" ref={filterRef}>
+                <button
+                  type="button"
+                  onClick={() => setFilterOpen((v) => !v)}
+                  className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition cursor-pointer ${activeFilterCount > 0
+                    ? 'border-blue-300 bg-blue-50 text-blue-600'
+                    : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                    }`}
+                >
+                  <Filter className="w-4 h-4" /> Filters
+                  {activeFilterCount > 0 && (
+                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+
+                {filterOpen && (
+                  <div className="absolute right-0 top-11 z-30 w-56 rounded-xl border border-slate-100 bg-white shadow-xl p-3">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Priority</p>
+                    <div className="flex flex-col gap-1 mb-3">
+                      {['High', 'Medium', 'Low'].map((p) => (
+                        <label key={p} className="flex items-center gap-2 text-[13px] text-slate-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedPriorities.has(p)}
+                            onChange={() => toggleSetValue(setSelectedPriorities)(p)}
+                            className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600"
+                          />
+                          {p}
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Assignee</p>
+                    <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
+                      {availableAssignees.map((name) => (
+                        <label key={name} className="flex items-center gap-2 text-[13px] text-slate-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedAssignees.has(name)}
+                            onChange={() => toggleSetValue(setSelectedAssignees)(name)}
+                            className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600"
+                          />
+                          {name}
+                        </label>
+                      ))}
+                    </div>
+                    {activeFilterCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedPriorities(new Set()); setSelectedAssignees(new Set()); }}
+                        className="mt-3 text-[12px] font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
                       >
-                        <option value="" disabled>
-                          {scheduleTasksLoading ? 'Loading tasks…' : 'Select a task from Schedule…'}
-                        </option>
-                        {scheduleTaskOptions.map((option) => (
-                          <option key={option.id} value={option.id}>{option.label}</option>
-                        ))}
-                      </select>
-                      {!scheduleTasksLoading && scheduleTaskOptions.length === 0 && (
-                        <p className="text-[11px] text-slate-400">
-                          No tasks in this project's Schedule yet — add one there first.
-                        </p>
+                        Clear filters
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* This menu's only item today is "Add Column" — a PM-only
+                  action, so the whole button is hidden for readOnly rather
+                  than left open on an empty menu. */}
+              {!readOnly && (
+                <div className="relative" ref={moreMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setMoreMenuOpen((v) => !v)}
+                    className="flex items-center justify-center rounded-xl border border-slate-200 bg-white p-2.5 text-slate-500 hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
+
+                  {moreMenuOpen && (
+                    <div className="absolute right-0 top-11 z-30 w-44 rounded-xl border border-slate-100 bg-white shadow-xl py-1.5">
+                      <button
+                        type="button"
+                        onClick={() => { setAddingColumn(true); setMoreMenuOpen(false); }}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-[13px] text-slate-600 hover:bg-slate-50 cursor-pointer"
+                      >
+                        <Plus size={13} /> Add Column
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* VIEW 1: DEDICATED FULL BACKLOG VIEW */}
+      {viewMode === 'backlog' && (
+        <BacklogWorkspace
+          tasks={filteredBacklogTasks}
+          loading={backlogLoading}
+          searchTerm={backlogSearch}
+          onSearchChange={setBacklogSearch}
+          memberFilter={backlogMemberFilter}
+          onMemberFilterChange={setBacklogMemberFilter}
+          roleFilter={backlogRoleFilter}
+          onRoleFilterChange={setBacklogRoleFilter}
+          memberOptions={backlogMemberOptions}
+          roleOptions={backlogRoleOptions}
+          groupedTasks={groupedBacklogTasks}
+          onMoveToBoard={handleMoveBacklogToBoard}
+          onRefresh={fetchBacklogs}
+          isSplit={false}
+        />
+      )}
+
+      {/* VIEW 2 & 3: ACTIVE BOARD VIEW OR SPLIT VIEW */}
+      {viewMode !== 'backlog' && (
+        <div className={`flex gap-6 items-start ${viewMode === 'split' ? 'flex-col xl:flex-row' : ''}`}>
+          {/* In Split View: Left Collapsible Backlog Drawer */}
+          {viewMode === 'split' && (
+            <div className="w-full xl:w-96 shrink-0 bg-white/80 p-4 rounded-3xl border border-slate-200 shadow-sm max-h-[85vh] overflow-y-auto">
+              <BacklogWorkspace
+                tasks={filteredBacklogTasks}
+                loading={backlogLoading}
+                searchTerm={backlogSearch}
+                onSearchChange={setBacklogSearch}
+                memberFilter={backlogMemberFilter}
+                onMemberFilterChange={setBacklogMemberFilter}
+                roleFilter={backlogRoleFilter}
+                onRoleFilterChange={setBacklogRoleFilter}
+                memberOptions={backlogMemberOptions}
+                roleOptions={backlogRoleOptions}
+                groupedTasks={groupedBacklogTasks}
+                onMoveToBoard={handleMoveBacklogToBoard}
+                onRefresh={fetchBacklogs}
+                isSplit={true}
+              />
+            </div>
+          )}
+
+          {/* Kanban Columns */}
+          <div className="flex-1 min-w-0 overflow-x-auto pb-4">
+            <div className="flex gap-6 min-w-max">
+              {displayGroups.map((column, index) => {
+                const isStatusMode = groupBy === 'Status';
+                const columnTasks = getGroupTasks(column);
+                const overLimit = column.wipLimit && columnTasks.length > column.wipLimit;
+                const isHighlighted = isStatusMode
+                  ? dropTarget?.columnId === column.id
+                  : hoveredGroupId === column.id;
+
+                return (
+                  <div
+                    key={column.id}
+                    className={`shrink-0 w-75 flex flex-col bg-slate-50/50 rounded-2xl p-4 border transition-colors ${isHighlighted ? 'border-blue-300 bg-blue-50/40' : 'border-slate-100/50'
+                      } ${draggingColumnIndex === index ? 'opacity-50' : ''}`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (isStatusMode) handleColumnDragOver(e, column.id);
+                      else handleGroupDragOver(e, column.id);
+                    }}
+                    onDragLeave={() => { if (!isStatusMode) setHoveredGroupId((v) => (v === column.id ? null : v)); }}
+                    onDrop={(e) => {
+                      // Check for dragged backlog card
+                      try {
+                        const raw = e.dataTransfer.getData('application/json');
+                        if (raw) {
+                          const parsed = JSON.parse(raw);
+                          if (parsed?.isBacklogItem && parsed.backlogData) {
+                            handleMoveBacklogToBoard(parsed.backlogData, column.statusKey || 'to_do');
+                            return;
+                          }
+                        }
+                      } catch { /* ignore */ }
+
+                      if (isStatusMode) {
+                        handleColumnDrop(e, column);
+                        handleColumnHeaderDrop(e, index);
+                      } else {
+                        handleGroupDrop(e, column);
+                      }
+                    }}
+                  >
+                    {/* Column Header */}
+                    <div className="flex items-center justify-between mb-3 px-1">
+                      <div
+                        className="flex items-center gap-2 flex-1 min-w-0"
+                        draggable={isStatusMode && !readOnly}
+                        onDragStart={isStatusMode && !readOnly ? (e) => handleColumnHeaderDragStart(e, index) : undefined}
+                        onDragEnd={isStatusMode && !readOnly ? handleColumnHeaderDragEnd : undefined}
+                      >
+                        {isStatusMode && !readOnly && <GripVertical size={14} className="text-slate-300 cursor-grab shrink-0" />}
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${column.color}`}></span>
+                        {isStatusMode && !readOnly && editingColumnId === column.id ? (
+                          <input
+                            autoFocus
+                            defaultValue={column.title}
+                            onBlur={(e) => { renameColumn(column.id, e.target.value.trim() || column.title); setEditingColumnId(null); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                            className="h-auto w-full rounded border border-blue-300 bg-white px-1 text-sm font-semibold text-slate-800 outline-none"
+                          />
+                        ) : (
+                          <h3
+                            className="font-semibold text-slate-800 text-sm truncate cursor-text"
+                            onDoubleClick={isStatusMode && !readOnly ? () => setEditingColumnId(column.id) : undefined}
+                            title={isStatusMode && !readOnly ? 'Double-click to rename' : undefined}
+                          >
+                            {column.title}
+                          </h3>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className={`text-sm font-semibold ${overLimit ? 'text-rose-500' : 'text-slate-500'}`}>
+                          {columnTasks.length}{column.wipLimit ? `/${column.wipLimit}` : ''}
+                        </span>
+                        {/* Column rename/delete/WIP-settings are PM-only —
+                            a resource/team-member viewer only drags cards
+                            to change status, everything else stays read-only. */}
+                        {!readOnly && isStatusMode && columnTasks.length === 0 && (
+                          <button
+                            type="button"
+                            onClick={() => { if (window.confirm(`Delete column "${column.title}"?`)) deleteColumn(column.id); }}
+                            className="rounded p-1 text-rose-400 hover:bg-rose-50 hover:text-rose-600 transition cursor-pointer"
+                            title="Delete column"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                        {!readOnly && isStatusMode && (
+                          <button
+                            type="button"
+                            onClick={() => setColumnSettingsId((v) => (v === column.id ? null : column.id))}
+                            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition cursor-pointer"
+                            title="Column settings"
+                          >
+                            <Settings2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Column settings flyout */}
+                    {!readOnly && isStatusMode && columnSettingsId === column.id && (
+                      <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3 shadow-md flex flex-col gap-2">
+                        <div className="flex items-center justify-between text-[12px] font-semibold text-slate-700">
+                          <span>WIP Limit</span>
+                          <button type="button" onClick={() => setColumnSettingsId(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                            <X size={12} />
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            defaultValue={column.wipLimit ?? ''}
+                            placeholder="No limit"
+                            onBlur={(e) => setColumnWipLimit(column.id, e.target.value ? Number(e.target.value) : null)}
+                            className="h-auto w-20 rounded-md border border-slate-200 px-2 py-1 text-[12px] outline-none focus:border-blue-400"
+                          />
+                          {columnTasks.length === 0 && (
+                            <button
+                              type="button"
+                              onClick={() => { if (window.confirm(`Delete column "${column.title}"?`)) deleteColumn(column.id); }}
+                              className="ml-auto flex items-center gap-1 text-[12px] font-semibold text-rose-500 hover:text-rose-600 cursor-pointer"
+                            >
+                              <Trash2 size={12} /> Delete column
+                            </button>
+                          )}
+                        </div>
+                        {columnTasks.length > 0 && (
+                          <p className="text-[11px] text-slate-400">Column must be empty to delete.</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Task List */}
+                    <div className="flex flex-col gap-3 min-h-12.5 mb-3">
+                      {columnTasks.length === 0 ? (
+                        <div className="text-center text-xs text-slate-400 py-6 border border-dashed border-slate-200 rounded-xl">
+                          No tasks yet
+                        </div>
+                      ) : (
+                        columnTasks.map((task) => (
+                          <TaskCard
+                            key={task.id}
+                            task={task}
+                            columns={columns}
+                            labelPalette={labelPalette}
+                            isDragging={draggingTaskId === task.id}
+                            isDropTargetAbove={isStatusMode && dropTarget?.columnId === column.id && dropTarget?.beforeTaskId === task.id}
+                            resources={resources}
+                            resourcesLoading={resourcesLoading}
+                            onDragStart={(e) => handleTaskDragStart(e, task.id)}
+                            onDragOverCard={isStatusMode ? (e) => handleCardDragOver(e, column.id, task.id) : undefined}
+                            onOpen={() => { setSelectedTaskId(task.id); ensureResourcesLoaded(); }}
+                            onEdit={() => { setSelectedTaskId(task.id); ensureResourcesLoaded(); }}
+                            onDuplicate={() => handleDuplicateTask(task)}
+                            onDelete={() => handleDeleteTask(task)}
+                            onMoveTo={(targetColumn) => moveTask(task.id, targetColumn, null)}
+                            onEnsureResources={ensureResourcesLoaded}
+                            onAssigneeChange={(value) => handleQuickAssigneeChange(task, value)}
+                            onDateChange={(value) => handleQuickDateChange(task, value)}
+                          />
+                        ))
                       )}
-                      <div className="flex items-center justify-end gap-2 mt-2">
+                    </div>
+
+                    {/* Add Task — creating a board card from Schedule is a
+                        PM action; hidden entirely for a resource/team-member
+                        viewer (readOnly) */}
+                    {!readOnly && isStatusMode && column.statusKey === 'in_discussion' && (
+                      <div className="mt-auto pt-2">
+                        {activeColumnForAdd === column.id ? (
+                          <div className="bg-white p-3 rounded-xl border border-blue-200 shadow-sm flex flex-col gap-2">
+                            <select
+                              ref={inputRef}
+                              value={selectedScheduleTaskId}
+                              onChange={(e) => setSelectedScheduleTaskId(e.target.value)}
+                              disabled={isSubmitting || scheduleTasksLoading}
+                              className="h-auto w-full border-none bg-transparent p-0 text-sm outline-none disabled:text-slate-400 cursor-pointer"
+                            >
+                              <option value="" disabled>
+                                {scheduleTasksLoading ? 'Loading tasks…' : 'Select a task from Schedule…'}
+                              </option>
+                              {scheduleTaskOptions.map((option) => (
+                                <option key={option.id} value={option.id}>
+                                  {option.name}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="flex items-center justify-end gap-2 mt-1">
+                              <button
+                                type="button"
+                                onClick={() => { setActiveColumnForAdd(null); setSelectedScheduleTaskId(''); }}
+                                className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-700 cursor-pointer"
+                              >
+                                <X className="w-3.5 h-3.5" /> Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCreateTaskAPI(column)}
+                                disabled={isSubmitting || !selectedScheduleTaskId}
+                                className="bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+                              >
+                                {isSubmitting ? <Loader2 size={12} className="animate-spin" /> : 'Add'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveColumnForAdd(column.id);
+                              setSelectedScheduleTaskId('');
+                              ensureScheduleTasksLoaded();
+                            }}
+                            className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-slate-500 hover:text-blue-600 hover:bg-slate-100/60 rounded-xl transition-colors cursor-pointer"
+                          >
+                            <Plus className="w-4 h-4" /> Add task
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Add Column — PM-only */}
+              {!readOnly && groupBy === 'Status' && (
+                <div className="shrink-0 w-65">
+                  {addingColumn ? (
+                    <div className="bg-white p-3 rounded-xl border border-blue-200 shadow-sm flex flex-col gap-2">
+                      <input
+                        autoFocus
+                        type="text"
+                        placeholder="Column name..."
+                        value={newColumnTitle}
+                        onChange={(e) => setNewColumnTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newColumnTitle.trim()) {
+                            addColumn(newColumnTitle.trim());
+                            setNewColumnTitle('');
+                            setAddingColumn(false);
+                          }
+                          if (e.key === 'Escape') { setAddingColumn(false); setNewColumnTitle(''); }
+                        }}
+                        className="w-full text-sm outline-none placeholder:text-slate-400"
+                      />
+                      <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => { setActiveColumnForAdd(null); setSelectedScheduleTaskId(''); }}
-                          className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-700"
-                          disabled={isSubmitting}
+                          onClick={() => { setAddingColumn(false); setNewColumnTitle(''); }}
+                          className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-700 cursor-pointer"
                         >
                           <X className="w-3.5 h-3.5" /> Cancel
                         </button>
                         <button
-                          onClick={() => handleCreateTaskAPI(column)}
-                          disabled={isSubmitting || !selectedScheduleTaskId}
-                          className="bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                          onClick={() => {
+                            if (!newColumnTitle.trim()) return;
+                            addColumn(newColumnTitle.trim());
+                            setNewColumnTitle('');
+                            setAddingColumn(false);
+                          }}
+                          className="bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-700 cursor-pointer"
                         >
-                          {isSubmitting ? 'Saving...' : 'Add'}
+                          Add
                         </button>
                       </div>
                     </div>
                   ) : (
                     <button
-                      onClick={() => { setActiveColumnForAdd(column.id); ensureScheduleTasksLoaded(); }}
-                      className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-slate-500 hover:bg-slate-200/50 rounded-xl transition-colors"
+                      onClick={() => setAddingColumn(true)}
+                      className="w-full flex items-center justify-center gap-2 py-3 text-sm font-medium text-slate-400 hover:text-slate-600 hover:bg-slate-100/60 rounded-2xl border border-dashed border-slate-200 transition-colors cursor-pointer"
                     >
-                      <Plus className="w-4 h-4" /> Add Task
+                      <Plus className="w-4 h-4" /> Add Column
                     </button>
                   )}
                 </div>
               )}
             </div>
-          );
-        })}
-
-        {/* Add Column — only in Status mode; Assignee/Priority groups are
-            derived, not user-defined, so there's nothing to add here. */}
-        {groupBy === 'Status' && (
-          <div className="shrink-0 w-65">
-            {addingColumn ? (
-              <div className="bg-white p-3 rounded-xl border border-blue-200 shadow-sm flex flex-col gap-2">
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="Column name..."
-                  value={newColumnTitle}
-                  onChange={(e) => setNewColumnTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newColumnTitle.trim()) {
-                      addColumn(newColumnTitle.trim());
-                      setNewColumnTitle('');
-                      setAddingColumn(false);
-                    }
-                    if (e.key === 'Escape') { setAddingColumn(false); setNewColumnTitle(''); }
-                  }}
-                  className="w-full text-sm outline-none placeholder:text-slate-400"
-                />
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    onClick={() => { setAddingColumn(false); setNewColumnTitle(''); }}
-                    className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-700"
-                  >
-                    <X className="w-3.5 h-3.5" /> Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!newColumnTitle.trim()) return;
-                      addColumn(newColumnTitle.trim());
-                      setNewColumnTitle('');
-                      setAddingColumn(false);
-                    }}
-                    className="bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-700"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setAddingColumn(true)}
-                className="w-full flex items-center justify-center gap-2 py-3 text-sm font-medium text-slate-400 hover:text-slate-600 hover:bg-slate-100/60 rounded-2xl border border-dashed border-slate-200 transition-colors"
-              >
-                <Plus className="w-4 h-4" /> Add Column
-              </button>
-            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {selectedTask && (
         <TaskDetailModal
@@ -1686,6 +2052,213 @@ export default function ProjectBoardSection({ projectId, pmId, projectName }) {
           onDelete={() => { handleDeleteTask(selectedTask); setSelectedTaskId(null); }}
           onDuplicate={() => { handleDuplicateTask(selectedTask); setSelectedTaskId(null); }}
         />
+      )}
+    </div>
+  );
+}
+
+{/* --- BacklogWorkspace Component --- */}
+function BacklogWorkspace({
+  tasks,
+  loading,
+  searchTerm,
+  onSearchChange,
+  memberFilter,
+  onMemberFilterChange,
+  roleFilter,
+  onRoleFilterChange,
+  memberOptions,
+  roleOptions,
+  groupedTasks,
+  onMoveToBoard,
+  onRefresh,
+  isSplit = false,
+}) {
+  const highPriorityCount = tasks.filter((t) => (t.priority || '').toLowerCase() === 'high').length;
+  const resourceCount = Object.keys(groupedTasks).length;
+
+  return (
+    <div className={`flex flex-col gap-4 ${isSplit ? 'h-full' : 'w-full'}`}>
+      {/* Sleek Modern Light Backlog Header */}
+      {!isSplit && (
+        <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 font-bold border border-blue-100/80 shadow-2xs">
+              <Inbox size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-black text-slate-900 tracking-tight">Project Backlog</h2>
+                <span className="rounded-full bg-blue-100 text-blue-700 px-2 py-0.5 text-xs font-black">
+                  {tasks.length}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Unscheduled tasks pool — drag or move items directly onto the Active Kanban Board.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
+              <span className="text-slate-500 font-semibold">Total:</span>
+              <span className="font-extrabold text-slate-900">{tasks.length}</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 border border-rose-200/80 text-xs">
+              <span className="text-rose-600 font-semibold">High Priority:</span>
+              <span className="font-extrabold text-rose-700">{highPriorityCount}</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200/80 text-xs">
+              <span className="text-blue-600 font-semibold">Assignees:</span>
+              <span className="font-extrabold text-blue-700">{resourceCount}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Backlog Search & Filter Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+          {/* Single Clean Search Box */}
+          <div className="relative flex items-center w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Search backlog tasks..."
+              className="w-full h-9 bg-white border border-slate-200 rounded-xl pl-9 pr-3 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-2xs"
+            />
+          </div>
+
+          {/* Filters */}
+          {!isSplit && (
+            <div className="flex flex-wrap items-center gap-2.5">
+              <SelectField value={memberFilter} onChange={(e) => onMemberFilterChange(e.target.value)}>
+                <option>All Members</option>
+                {memberOptions.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </SelectField>
+              <SelectField value={roleFilter} onChange={(e) => onRoleFilterChange(e.target.value)}>
+                <option>All Roles</option>
+                {roleOptions.map((role) => (
+                  <option key={role} value={role}>{role}</option>
+                ))}
+              </SelectField>
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="flex items-center gap-1.5 h-9 text-xs font-bold text-slate-600 hover:text-blue-600 px-3.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 transition cursor-pointer shadow-2xs"
+          title="Refresh Backlog"
+        >
+          <RefreshCw size={13} className={loading ? 'animate-spin text-blue-600' : ''} />
+          <span>Refresh</span>
+        </button>
+      </div>
+
+      {/* Loading state */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 bg-white/70 rounded-3xl border border-slate-200 text-slate-400 text-xs font-bold gap-3">
+          <Loader2 size={24} className="animate-spin text-blue-600" />
+          <span>Loading Backlog Tasks...</span>
+        </div>
+      ) : tasks.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 px-4 rounded-3xl border border-dashed border-slate-300 bg-white/80 text-center shadow-xs">
+          <div className="h-14 w-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-3 shadow-2xs">
+            <Inbox size={26} />
+          </div>
+          <p className="font-extrabold text-sm text-slate-800">No Backlog Items</p>
+          <p className="text-xs text-slate-400 max-w-sm mt-1 leading-relaxed">
+            All backlog tasks are currently scheduled on the active board or no new items match the current filters.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {Object.entries(groupedTasks).map(([key, group]) => (
+            <div key={key} className="rounded-2xl border border-slate-200/90 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.03)] overflow-hidden transition hover:shadow-md">
+              {/* Group Header */}
+              <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <AssigneeAvatar name={group.name} size={28} />
+                  <div>
+                    <span className="font-extrabold text-xs text-slate-900 block">{group.name}</span>
+                    <span className="text-[10px] text-slate-400 font-semibold">{group.role}</span>
+                  </div>
+                </div>
+                <span className="text-[11px] font-bold text-slate-600 bg-white px-2.5 py-0.5 rounded-full border border-slate-200 shadow-2xs">
+                  {group.tasks.length} {group.tasks.length === 1 ? 'task' : 'tasks'}
+                </span>
+              </div>
+
+              {/* Task Items in Group */}
+              <div className="divide-y divide-slate-100">
+                {group.tasks.map((task) => {
+                  const title = task.sub_project_name || task.project_name || `Backlog Task #${task.id || task.task_id}`;
+                  const priority = task.priority || 'Medium';
+
+                  return (
+                    <div
+                      key={task.id || task.task_id}
+                      draggable={true}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('application/json', JSON.stringify({ isBacklogItem: true, backlogData: task }));
+                        e.dataTransfer.effectAllowed = 'copyMove';
+                      }}
+                      className="group flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 hover:bg-blue-50/30 transition gap-3 cursor-grab active:cursor-grabbing"
+                    >
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <GripVertical size={15} className="text-slate-300 mt-1 shrink-0 group-hover:text-slate-500 transition" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <span className="font-extrabold text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60 font-mono">
+                              WR-{task.id || task.task_id}
+                            </span>
+                            <span className="font-bold text-[13px] text-slate-900 tracking-tight hover:text-blue-600 transition">
+                              {title}
+                            </span>
+                            {task.project_name && (
+                              <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/80">
+                                {task.project_name}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 mt-1.5 text-[11px] text-slate-400 font-medium">
+                            <PriorityBadge level={priority} />
+                            {task.status && (
+                              <>
+                                <span>•</span>
+                                <span className="capitalize font-semibold text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100 text-[10px]">
+                                  {task.status.replace('_', ' ')}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                        <button
+                          type="button"
+                          onClick={() => onMoveToBoard(task, 'to_do')}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-blue-600 text-white text-xs font-bold shadow-xs hover:shadow-md active:scale-95 transition-all cursor-pointer"
+                          title="Move to Active Board (To Do)"
+                        >
+                          <Play size={11} />
+                          Move to Board
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

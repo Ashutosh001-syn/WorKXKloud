@@ -16,6 +16,9 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom'
 import CreateProjectWizardModal from '../components/projects/CreateProjectWizardModal'
 import { API_ENDPOINTS } from '../config/api'
+import BackButton from '../components/ui/BackButton'
+import SelectProjectToCopyModal from '../components/projects/SelectProjectToCopyModal'
+import StatusPopupModal from '../components/ui/StatusPopupModal'
 
 const PROJECT_STORAGE_KEY = 'workxkloud_projects_create_mock_v2'
 
@@ -466,6 +469,13 @@ function CreateProjectPage() {
 
   // ── NEW: History modal state ──
   const [showHistoryModal, setShowHistoryModal] = useState(false)
+  const [statusModal, setStatusModal] = useState({
+    isOpen: false,
+    type: 'success',
+    title: '',
+    message: '',
+    primaryButtonText: 'Done',
+  })
 
   useEffect(() => {
     if (isModalOpen || showHistoryModal || viewModal.isOpen || confirmModal.isOpen) {
@@ -551,6 +561,8 @@ function CreateProjectPage() {
     window.localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(projects))
   }, [projects])
 
+  const [showSelectProjectToCopyModal, setShowSelectProjectToCopyModal] = useState(false)
+
   async function handleCreateProjectAction(mode) {
     if (mode === 'new') {
       try {
@@ -570,16 +582,27 @@ function CreateProjectPage() {
         setEditingId(null)
         setFormValues({ ...getDefaultFormValues(), projectCode: `P-${Date.now()}` })
       }
+      setFormError('')
+      setActiveTab('basic')
+      setIsModalOpen(true)
     } else {
-      const latestProject = [...projects].sort((l, r) => r.id - l.id)[0]
-      setModalMode('copy')
-      setEditingId(null)
-      setFormValues(
-        latestProject
-          ? { ...mapProjectToFormValues(latestProject), name: latestProject.name ? `${latestProject.name} Copy` : '' }
-          : getDefaultFormValues(),
-      )
+      setShowSelectProjectToCopyModal(true)
     }
+  }
+
+  function handleConfirmCopyProject(chosenProject) {
+    setShowSelectProjectToCopyModal(false)
+    setModalMode('copy')
+    setEditingId(null)
+    setFormValues(
+      chosenProject
+        ? {
+            ...mapProjectToFormValues(chosenProject),
+            name: chosenProject.name ? `${chosenProject.name} (Copy)` : `${chosenProject.project_name || 'Project'} (Copy)`,
+            projectCode: '',
+          }
+        : getDefaultFormValues(),
+    )
     setFormError('')
     setActiveTab('basic')
     setIsModalOpen(true)
@@ -597,12 +620,16 @@ function CreateProjectPage() {
     if (!launcherState?.openWizard) return
     startTransition(() => {
       if (launcherState.mode === 'copy') {
-        const latestProject = [...projects].sort((l, r) => r.id - l.id)[0]
+        const projectToCopy = launcherState.selectedProject || [...projects].sort((l, r) => r.id - l.id)[0]
         setModalMode('copy')
         setEditingId(null)
         setFormValues(
-          latestProject
-            ? { ...mapProjectToFormValues(latestProject), name: latestProject.name ? `${latestProject.name} Copy` : '' }
+          projectToCopy
+            ? {
+                ...mapProjectToFormValues(projectToCopy),
+                name: projectToCopy.name ? `${projectToCopy.name} (Copy)` : `${projectToCopy.project_name || 'Project'} (Copy)`,
+                projectCode: '',
+              }
             : getDefaultFormValues(),
         )
       } else {
@@ -683,9 +710,22 @@ function CreateProjectPage() {
         )
       )
       fetchProjects()
+      setStatusModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Project Re-allocated',
+        message: `Project has been successfully re-allocated to ${pm}.`,
+        primaryButtonText: 'Done',
+      })
     } catch (error) {
       console.error('Re-allocation failed:', error)
-      alert(error.message || 'Failed to re-allocate project')
+      setStatusModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Re-allocation Failed',
+        message: error.message || 'Failed to re-allocate project. Please try again.',
+        primaryButtonText: 'Dismiss',
+      })
     } finally {
       setConfirmModal({ isOpen: false, pm: null, projectId: null })
       setViewModal({ isOpen: false, project: null })
@@ -779,11 +819,15 @@ function CreateProjectPage() {
     <div className="relative min-h-screen bg-[#0d2646] p-3 sm:p-4">
       <section className="rounded-[10px] bg-white p-4 shadow-[0_16px_40px_rgba(3,10,24,0.16)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-[2rem] font-semibold tracking-[-0.04em] text-[#161616]">
-            Project Allocations
-          </h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-[2rem] font-semibold tracking-[-0.04em] text-[#161616]">
+              Project Allocations
+            </h1>
+          </div>
 
-          <div className="flex items-center gap-1.5 relative">
+          <div className="flex items-center gap-3">
+            <BackButton fallbackUrl="/dashboard" label="Back to Dashboard" />
+            <div className="flex items-center gap-1.5 relative">
             {/* Search */}
             <div className={`flex items-center transition-all duration-300 ${showSearch ? 'w-64' : 'w-8'}`}>
               {showSearch && (
@@ -964,6 +1008,7 @@ function CreateProjectPage() {
             </div>
           </div>
         </div>
+      </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-4">
           <ProjectMetric icon={BriefcaseBusiness} label="Total Projects" value={projects.length} />
@@ -1346,6 +1391,24 @@ function CreateProjectPage() {
           </div>
         </div>
       )}
+
+      {/* Select Project to Copy Modal */}
+      <SelectProjectToCopyModal
+        isOpen={showSelectProjectToCopyModal}
+        onClose={() => setShowSelectProjectToCopyModal(false)}
+        projects={projects}
+        onConfirmCopy={handleConfirmCopyProject}
+      />
+
+      {/* Global Status Popup Modal */}
+      <StatusPopupModal
+        isOpen={statusModal.isOpen}
+        type={statusModal.type}
+        title={statusModal.title}
+        message={statusModal.message}
+        primaryButtonText={statusModal.primaryButtonText}
+        onClose={() => setStatusModal((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   )
 }

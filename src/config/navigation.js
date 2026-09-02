@@ -8,16 +8,27 @@ export const sidebarMenu = [
   },
   {
     type: 'link',
-    key: 'create-user',
-    icon: 'users',
-    label: 'User Management',
-    to: '/create-user',
-    eyebrow: 'Users',
-    title: 'User Management',
-    description:
-      'Add new team members, assign permissions, and keep account setup aligned with workspace roles.',
-    highlights: ['14 pending invites', '6 role templates', '2 approval steps'],
+    key: 'my-tasks',
+    icon: 'myProjects',
+    label: 'My Tasks',
+    to: '/my-tasks',
+    eyebrow: 'Tasks',
+    title: 'My Tasks',
+    description: 'Everything assigned to you across every project.',
   },
+  // Hidden from PMO sidebar for now — re-enable when ready.
+  // {
+  //   type: 'link',
+  //   key: 'create-user',
+  //   icon: 'users',
+  //   label: 'User Management',
+  //   to: '/create-user',
+  //   eyebrow: 'Users',
+  //   title: 'User Management',
+  //   description:
+  //     'Add new team members, assign permissions, and keep account setup aligned with workspace roles.',
+  //   highlights: ['14 pending invites', '6 role templates', '2 approval steps'],
+  // },
   {
     type: 'link',
     key: 'all-project',

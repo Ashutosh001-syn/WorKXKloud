@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { API_ENDPOINTS } from '../config/api'
+import BackButton from '../components/ui/BackButton'
 import {
   ClipboardList,
   CheckCircle2,
@@ -488,18 +489,21 @@ const getPmId = () => {
         {!selectedProjectId ? (
           /* Cards View */
           <div className="rounded-[28px] bg-white p-4 sm:p-6 md:p-8 shadow-[0_24px_60px_rgba(3,10,24,0.14)]">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 border-b border-slate-100 pb-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 flex-shrink-0">
-                <ClipboardList size={24} strokeWidth={2} />
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-6">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 flex-shrink-0 shadow-2xs border border-blue-100/80">
+                  <ClipboardList size={24} strokeWidth={2} />
+                </div>
+                <div>
+                  <h1 className="text-2xl sm:text-[1.8rem] font-bold tracking-tight text-slate-900 leading-tight sm:leading-none">
+                    New Assigned Projects
+                  </h1>
+                  <p className="mt-1.5 text-sm font-medium text-slate-500">
+                    You have <span className="font-semibold text-blue-600">{projects.filter(p => !p.isAccepted).length}</span> new projects assigned by PMO.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-2xl sm:text-[1.8rem] font-bold tracking-tight text-slate-900 leading-tight sm:leading-none">
-                  New Assigned Projects
-                </h1>
-                <p className="mt-2 text-sm font-medium text-slate-500">
-                  You have <span className="font-semibold text-blue-600">{projects.filter(p => !p.isAccepted).length}</span> new projects assigned by PMO.
-                </p>
-              </div>
+              <BackButton fallbackUrl="/dashboard" label="Back to Dashboard" />
             </div>
 
             {/* Grid of Cards */}
@@ -616,7 +620,7 @@ const getPmId = () => {
 
                       {(project.status === 'In Progress' || project.isAccepted) && (
                         <button
-                          onClick={() => navigate('/all-project')}
+                          onClick={() => navigate(`/my-projects?project=${project.id}&tab=Overview`)}
                           className="w-full h-11 px-4 rounded-xl border border-blue-200 bg-white text-xs font-bold text-blue-600 hover:bg-blue-50 hover:border-blue-300 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
                         >
                           <Check size={14} />

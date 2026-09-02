@@ -1,8 +1,12 @@
 import { ArrowUpRight, CheckCircle2, CircleDashed, Sparkles } from 'lucide-react'
+import BackButton from '../components/ui/BackButton'
 
 function WorkspacePage({ description, eyebrow, highlights, title }) {
   return (
     <div className="min-h-screen bg-[#0d2646] p-4 sm:p-6 lg:p-8">
+      <div className="mb-6">
+        <BackButton variant="dark" fallbackUrl="/dashboard" label="Back to Dashboard" />
+      </div>
       <section className="rounded-[28px] bg-white p-6 shadow-[0_24px_60px_rgba(3,10,24,0.14)] sm:p-8">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="max-w-2xl">

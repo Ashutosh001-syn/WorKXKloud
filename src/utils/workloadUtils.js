@@ -20,6 +20,25 @@ export function getWorkloadStatus(value, capacity, isException = false) {
     return "optimal";
 }
 
+// Rounds to at most 2 decimals and drops a trailing ".00"/".x0" — real
+// allocation-derived hours (e.g. 9h shift x 25% = 2.25h) are exact, but
+// summing several of them back-to-back accumulates classic binary
+// floating-point drift (2.25 + 1.25 -> 3.4999999999999996 style errors)
+// that must never reach the screen.
+export function roundHours(value) {
+    if (value === null || value === undefined) return value;
+    return Math.round(value * 100) / 100;
+}
+
+export function formatWorkloadValue(value, capacity, unit = "hours") {
+    if (value === null || value === undefined) return "NW";
+    if (unit === "percentage") {
+        const pct = Math.round((value / capacity) * 100);
+        return `${pct}%`;
+    }
+    return `${roundHours(value)}h`;
+}
+
 export const STATUS_STYLES = {
     optimal: "bg-emerald-50 text-emerald-700",
     underallocated: "bg-sky-50 text-sky-700",
@@ -55,7 +74,8 @@ export function buildDayRange(startISO, endISO) {
 }
 
 export function sumHours(values) {
-    return values.reduce((total, value) => total + (value || 0), 0);
+    const total = values.reduce((sum, value) => sum + (value || 0), 0);
+    return roundHours(total);
 }
 
 export function formatDateLong(iso) {

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { API_ENDPOINTS } from '../config/api'
+import BackButton from '../components/ui/BackButton'
 import {
   ChevronLeft,
   ChevronRight,
@@ -555,34 +556,38 @@ export default function CalendarPage() {
           </p>
         </div>
 
-        {!isReadOnly && (
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => {
-                setPreviewHolidays([])
-                setIsUploadModalOpen(true)
-              }}
-              className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-95 cursor-pointer"
-            >
-              <Upload size={18} className="text-slate-500" />
-              <span>Import Excel/CSV</span>
-            </button>
-            
-            <button
-              onClick={() => {
-                const formattedDate = '2026-05-18'
-                setNewHolidayStartDate(formattedDate)
-                setNewHolidayEndDate(formattedDate)
-                setStagedHolidays([])
-                setIsModalOpen(true)
-              }}
-              className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white shadow-md transition-all hover:bg-blue-700 hover:shadow-lg active:scale-95 cursor-pointer"
-            >
-              <Plus size={18} />
-              <span>Add Holidays</span>
-            </button>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <BackButton fallbackUrl="/dashboard" label="Back to Dashboard" />
+
+          {!isReadOnly && (
+            <>
+              <button
+                onClick={() => {
+                  setPreviewHolidays([])
+                  setIsUploadModalOpen(true)
+                }}
+                className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 font-semibold text-slate-700 shadow-2xs transition-all hover:bg-slate-50 active:scale-95 cursor-pointer text-xs"
+              >
+                <Upload size={15} className="text-slate-500" />
+                <span>Import Excel/CSV</span>
+              </button>
+              
+              <button
+                onClick={() => {
+                  const formattedDate = '2026-05-18'
+                  setNewHolidayStartDate(formattedDate)
+                  setNewHolidayEndDate(formattedDate)
+                  setStagedHolidays([])
+                  setIsModalOpen(true)
+                }}
+                className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 font-bold text-white shadow-md shadow-blue-600/20 transition-all hover:bg-blue-700 active:scale-95 cursor-pointer text-xs"
+              >
+                <Plus size={15} />
+                <span>Add Holidays</span>
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Main Grid: Left is Calendar, Right is List of upcoming events */}

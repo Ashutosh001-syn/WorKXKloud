@@ -8,6 +8,7 @@ import {
   WORKFLOW_STATUS_META,
   getWorkflow,
   setWorkflow,
+  getLoggedInPmId,
   subscribeToWorkflowChanges,
   fetchWorkflowFromBackend,
 } from '../../../utils/scheduleWorkflow'
@@ -44,12 +45,21 @@ import {
   getApiTaskId,
 } from './dataUtils'
 import { createPredecessorEditorConfig } from './predecessorEditor'
+import { createResourceEditorConfig } from './resourceEditor'
 import GanttToolbar from './GanttToolbar'
 import GanttLegend from './GanttLegend'
 import GanttTaskModal from './GanttTaskModal'
 import GanttAlertModal from './GanttAlertModal'
 import GanttDeleteModal from './GanttDeleteModal'
 import GanttLinkMenu from './GanttLinkMenu'
+import GanttFreezeConfirmModal from './GanttFreezeConfirmModal'
+import { AlertTriangle, Info, X } from 'lucide-react'
+import {
+  fetchProjectAssignedResources,
+  validateResourceInProject,
+  parseMultiResourceString,
+  resolveResourceIds,
+} from '../../../services/projectResourceService'
 
 function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   const containerRef = useRef(null)
@@ -74,6 +84,8 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
 
   const [workflowStatus, setWorkflowStatus] = useState(WORKFLOW_STATUS.DRAFT)
   const [workflowNote, setWorkflowNote] = useState('')
+  const [showRejectionModal, setShowRejectionModal] = useState(false)
+  const [dismissRejectionBanner, setDismissRejectionBanner] = useState(false)
   const isLockedRef = useRef(false)
 
   // 1. Workflow Sync
@@ -89,6 +101,16 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     const loadRemote = async () => {
       const remote = await fetchWorkflowFromBackend(projectId)
       if (remote && !cancelled) {
+        const localWf = getWorkflow(projectId)
+        // If locally already frozen or decided, don't revert to draft if backend lags
+        if (
+          (localWf.status === WORKFLOW_STATUS.FROZEN_PENDING_REVIEW ||
+            localWf.status === WORKFLOW_STATUS.APPROVED ||
+            localWf.status === WORKFLOW_STATUS.REJECTED) &&
+          remote.status === WORKFLOW_STATUS.DRAFT
+        ) {
+          return
+        }
         setWorkflowStatus(remote.status)
         setWorkflowNote(remote.note)
       }
@@ -99,7 +121,6 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
 
     const unsubscribe = subscribeToWorkflowChanges(() => {
       loadLocal()
-      loadRemote()
     })
     return () => {
       cancelled = true
@@ -126,12 +147,28 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     } catch { /* ignore */ }
   }, [isScheduleLocked])
 
+  const [freezeConfirmOpen, setFreezeConfirmOpen] = useState(false)
+  const [isFreezing, setIsFreezing] = useState(false)
+
   const handleScheduleTaskToPMO = () => {
     if (!projectId) return
-    if (!window.confirm('Freeze this schedule and send it for PMO review? It will become read-only until PMO approves or rejects it.')) return
+    setFreezeConfirmOpen(true)
+  }
+
+  const handleConfirmFreeze = async () => {
+    if (!projectId) return
+    setIsFreezing(true)
     let snapshot = null
-    try { snapshot = gantt.serialize() } catch { /* ignore */ }
-    setWorkflow(projectId, WORKFLOW_STATUS.FROZEN_PENDING_REVIEW, '', pmId, snapshot)
+    try {
+      snapshot = gantt.serialize()
+    } catch {
+      /* ignore */
+    }
+    setWorkflowStatus(WORKFLOW_STATUS.FROZEN_PENDING_REVIEW)
+    setWorkflowNote('')
+    await setWorkflow(projectId, WORKFLOW_STATUS.FROZEN_PENDING_REVIEW, '', pmId || getLoggedInPmId(), snapshot)
+    setIsFreezing(false)
+    setFreezeConfirmOpen(false)
   }
 
   // Modals & Menu State
@@ -190,29 +227,18 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
   const [scheduleTasks, setScheduleTasks] = useState(null)
   const [scheduleReloadKey, setScheduleReloadKey] = useState(0)
   const [isSavingTask, setIsSavingTask] = useState(false)
+  const [projectResources, setProjectResources] = useState([])
   const [projectResourceNames, setProjectResourceNames] = useState([])
 
-  // 2. Load Resources
+  // 2. Load Resources strictly assigned to this project
   const loadProjectResources = useCallback(async () => {
     if (!projectId) return
     try {
-      const response = await fetch(API_ENDPOINTS.GET_PROJECT_LIST)
-      const data = await response.json()
-      if (!data?.success) return
-      const project = (data.data || []).find((p) => String(p.id) === String(projectId))
-      if (!project) return
-      const groups = Array.isArray(project.resource_allocations)
-        ? project.resource_allocations
-        : JSON.parse(project.resource_allocations || '[]')
-      const names = new Set()
-        ; (Array.isArray(groups) ? groups : []).forEach((group) => {
-          if (group.type === 'Cost') return
-            ; (group.rows || []).forEach((row) => {
-              if (row.resourceName) names.add(row.resourceName)
-            })
-        })
-      setProjectResourceNames([...names])
+      const resources = await fetchProjectAssignedResources(projectId)
+      setProjectResources(resources)
+      setProjectResourceNames(resources.map((r) => r.name))
     } catch {
+      setProjectResources([])
       setProjectResourceNames([])
     }
   }, [projectId])
@@ -401,6 +427,14 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       const predText = getPredecessorsText(task) || task.predecessor || ''
       const resText = getAssigneeLabel(task) || task.resource || task.assignees || ''
 
+      const resIdText = await resolveResourceIds(resText, projectResources)
+
+      if (resText && projectResources.length > 0 && !validateResourceInProject(resText, projectResources)) {
+        setAlertMessage(`Resource "${resText}" is not assigned to this project by PMO. Please select a valid assigned resource.`)
+        reloadSchedule()
+        return
+      }
+
       if (isSubTaskFlag) {
         const parentTask = gantt.getTask(task.parent)
         const payload = {
@@ -412,7 +446,9 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
           planned_start: formatToAPIDateOnly(task.start_date),
           planned_end: formatToAPIDateOnly(getInclusiveEndDate(task.end_date)),
           duration: Number(task.duration),
-          resource: resText,
+          resource: resIdText || '',
+          resource_id: resIdText || '',
+          percentage: resText || '',
           predecessor: predText,
         }
 
@@ -433,7 +469,9 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
           planned_start: formatToAPIDateOnly(task.start_date),
           planned_end: formatToAPIDateOnly(getInclusiveEndDate(task.end_date)),
           duration: Number(task.duration),
-          resource: resText,
+          resource: resIdText || '',
+          resource_id: resIdText || '',
+          percentage: resText || '',
           predecessor: predText,
         }
 
@@ -779,7 +817,14 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     gantt.templates.rightside_text = (s, e, task) => {
       if (isMobile) return ''
       const assignee = getAssigneeLabel(task) || task.resource || task.assignees
-      return assignee ? `<span class="gantt-assignees-label">${assignee}</span>` : ''
+      if (!assignee) return ''
+      const parsed = parseMultiResourceString(assignee)
+      if (parsed.length === 1) {
+        return `<span class="gantt-assignees-label">${parsed[0].name} (${parsed[0].percent}%)</span>`
+      } else if (parsed.length > 1) {
+        return `<span class="gantt-assignees-label" title="${assignee}">${parsed.map(p => `${p.name} (${p.percent}%)`).join(', ')}</span>`
+      }
+      return `<span class="gantt-assignees-label">${assignee}</span>`
     }
 
     gantt.templates.timeline_cell_class = (item, date) =>
@@ -797,7 +842,15 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
       }).filter(Boolean).join(', ')
 
       const taskAssignee = getAssigneeLabel(task) || task.resource || task.assignees
-      const resourceLine = taskAssignee ? `<br/><b>Resource:</b> ${taskAssignee}` : ''
+      let resourceLine = ''
+      if (taskAssignee) {
+        const parsed = parseMultiResourceString(taskAssignee)
+        if (parsed.length > 0) {
+          resourceLine = `<br/><b>Assigned Resources:</b> ${parsed.map(p => `${p.name} [${p.percent}%]`).join(', ')}`
+        } else {
+          resourceLine = `<br/><b>Resource:</b> ${taskAssignee}`
+        }
+      }
 
       return `<b>${task.text}</b>
               <br/><b>Start:</b> ${formatDateShort(task.start_date)}
@@ -812,14 +865,11 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
     const dateEditor = { type: 'date', map_to: 'start_date' }
     const endEditor = { type: 'date', map_to: 'end_date' }
     const durationEditor = { type: 'number', map_to: 'duration', min: 0, max: 1000 }
-    const resourceEditor = {
-      type: 'select',
-      map_to: 'assignees',
-      options: [
-        { key: '', label: '—' },
-        ...projectResourceNames.map((name) => ({ key: name, label: name })),
-      ],
-    }
+    gantt.config.editor_types.custom_resource = createResourceEditorConfig(
+      () => projectResources,
+      setAlertMessage
+    )
+    const resourceEditor = { type: 'custom_resource', map_to: 'assignees' }
 
     gantt.config.editor_types.custom_predecessor = createPredecessorEditorConfig(setAlertMessage)
     const predecessorEditor = { type: 'custom_predecessor', map_to: 'auto' }
@@ -858,12 +908,32 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         template: (task) => `${task.duration ?? 0} d`,
       },
       {
-        name: 'assignees', label: 'Resource', width: 110, min_width: 95, align: 'center', resize: true,
+        name: 'assignees', label: 'Resource', width: 135, min_width: 110, align: 'center', resize: true,
         editor: resourceEditor,
         header: [{ text: 'Resource', align: 'center' }],
         template: (task) => {
-          const res = getAssigneeLabel(task) || task.resource || task.assignees || task.resourceName
-          return res ? `<span style="color:#1e293b;font-weight:500;">${res}</span>` : '<span style="color:#94a3b8;">—</span>'
+          const raw = getAssigneeLabel(task) || task.percentage || task.resource || task.assignees || task.resourceName
+          if (!raw) return '<span style="color:#94a3b8;">—</span>'
+          const parsed = parseMultiResourceString(raw).map((item) => {
+            const match = projectResources.find(
+              (r) =>
+                String(r.id) === String(item.name).trim() ||
+                String(r.resource_id) === String(item.name).trim() ||
+                String(r.name || '').trim().toLowerCase() === String(item.name).trim().toLowerCase()
+            )
+            return {
+              ...item,
+              name: match ? match.name : item.name,
+            }
+          })
+          if (parsed.length === 0) {
+            return `<span style="color:#1e293b;font-weight:600;">${raw}</span>`
+          }
+          if (parsed.length === 1) {
+            return `<span style="color:#1d4ed8;font-weight:700;background:#eff6ff;padding:2px 6px;border-radius:5px;border:1px solid #dbeafe;font-size:11px;">${parsed[0].name} (${parsed[0].percent}%)</span>`
+          }
+          const total = parsed.reduce((s, i) => s + (Number(i.percent) || 0), 0)
+          return `<span style="color:#0f172a;font-weight:700;background:#f8fafc;padding:2px 6px;border-radius:5px;border:1px solid #cbd5e1;font-size:11px;" title="${raw}">${parsed.length} Res (${total}%)</span>`
         },
         onrender: (task, node) => {
           if (isSubTask(task, projectId)) {
@@ -1051,6 +1121,12 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
 
     setIsSavingTask(true)
     try {
+      if (assignees && projectResources.length > 0 && !validateResourceInProject(assignees, projectResources)) {
+        setAlertMessage(`Resource "${assignees}" is not assigned to this project by PMO. Please select a valid resource.`)
+        setIsSavingTask(false)
+        return
+      }
+
       const startDateObj = parseDateOnlyLocal(start_date) || new Date()
       const durationNum = Math.max(1, Number(duration) || 1)
       // calculateEndDate returns dhtmlx's exclusive boundary (the day
@@ -1064,13 +1140,17 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         gantt.calculateEndDate({ start_date: startDateObj, duration: durationNum })
       )
 
+      const assigneesResIdText = await resolveResourceIds(assignees || '', projectResources)
+
       const payload = {
         pm_id: pmId,
         project_id: projectId,
         planned_start: formatToAPI(startDateObj, false),
         planned_end: formatToAPI(endDateObj, true),
         duration: durationNum,
-        resource: assignees || '',
+        resource: assigneesResIdText || '',
+        resource_id: assigneesResIdText || '',
+        percentage: assignees || '',
         predecessor: predecessor || '',
       }
 
@@ -1250,6 +1330,7 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         onZoomChange={setZoomLevel}
         workflowStatus={workflowStatus}
         workflowStatusMeta={WORKFLOW_STATUS_META[workflowStatus]}
+        onOpenRejectionReason={() => setShowRejectionModal(true)}
         isScheduleLocked={isScheduleLocked}
         addOpen={addOpen}
         addWrapRef={addWrapRef}
@@ -1278,6 +1359,94 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         onOpenSettings={() => setAlertMessage('Opening settings...')}
         getMenuFixedStyle={getMenuFixedStyle}
       />
+
+      {/* Top PMO Rejection Alert Banner */}
+      {workflowStatus === WORKFLOW_STATUS.REJECTED && workflowNote && !dismissRejectionBanner && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            padding: isMobile ? '8px 12px' : '9px 18px',
+            background: 'linear-gradient(90deg, #fff1f2 0%, #fff5f5 50%, #ffffff 100%)',
+            borderBottom: '1px solid #fecaca',
+            flexShrink: 0,
+            fontSize: 12,
+            boxShadow: '0 1px 3px rgba(239,68,68,0.08)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 22,
+                height: 22,
+                borderRadius: '50%',
+                background: '#fee2e2',
+                color: '#b91c1c',
+                flexShrink: 0,
+              }}
+            >
+              <AlertTriangle size={13} />
+            </span>
+            <span style={{ fontWeight: 800, color: '#991b1b', flexShrink: 0 }}>
+              PMO Rejection:
+            </span>
+            <span
+              style={{
+                color: '#7f1d1d',
+                fontWeight: 500,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: isMobile ? 180 : 480,
+              }}
+              title={workflowNote}
+            >
+              {workflowNote}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => setShowRejectionModal(true)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#b91c1c',
+                fontSize: 11,
+                fontWeight: 800,
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                padding: 0,
+              }}
+            >
+              View Full Reason
+            </button>
+            <button
+              type="button"
+              onClick={() => setDismissRejectionBanner(true)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#f87171',
+                cursor: 'pointer',
+                padding: 2,
+                display: 'flex',
+                alignItems: 'center',
+                borderRadius: 4,
+              }}
+              title="Dismiss banner"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Mobile View Toggle Buttons */}
       {isMobile && (
@@ -1369,25 +1538,6 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         )}
       </div>
 
-      {/* PMO Rejection Warning */}
-      {workflowStatus === WORKFLOW_STATUS.REJECTED && workflowNote && (
-        <div
-          style={{
-            padding: isMobile ? '8px 12px' : '10px 20px',
-            background: '#fef2f2',
-            borderTop: '1px solid #fecaca',
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#b91c1c', marginBottom: 2 }}>
-            PMO rejected this schedule:
-          </div>
-          <div style={{ fontSize: 12, color: '#7f1d1d', lineHeight: 1.4 }}>
-            {workflowNote}
-          </div>
-        </div>
-      )}
-
       {/* Submit Button */}
       {(workflowStatus === WORKFLOW_STATUS.DRAFT || workflowStatus === WORKFLOW_STATUS.REJECTED) && (
         <div
@@ -1435,10 +1585,152 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
         onClose={() => setTaskModalOpen(false)}
         onSubmit={handleSubmitTaskModal}
         isSaving={isSavingTask}
-        projectResourceNames={projectResourceNames}
+        projectResourceNames={projectResources}
+        currentProjectId={projectId}
       />
 
       <GanttAlertModal message={alertMessage} onClose={() => setAlertMessage('')} />
+
+      {/* PMO Rejection Reason Modal */}
+      {showRejectionModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 999999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(4px)',
+            padding: 16,
+          }}
+          onClick={() => setShowRejectionModal(false)}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 480,
+              borderRadius: 24,
+              background: '#ffffff',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.3)',
+              border: '1px solid #fee2e2',
+              overflow: 'hidden',
+              fontFamily: 'Inter, system-ui, sans-serif',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                background: 'linear-gradient(135deg, #e11d48 0%, #be123c 100%)',
+                color: '#ffffff',
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 10,
+                    background: 'rgba(255,255,255,0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <AlertTriangle size={18} color="#ffffff" />
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800 }}>PMO Rejection Feedback</h4>
+                  <p style={{ margin: 0, fontSize: 11, color: '#fecdd3', fontWeight: 500 }}>
+                    Schedule Review Note
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRejectionModal(false)}
+                style={{
+                  background: 'rgba(255,255,255,0.15)',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: 6,
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  display: 'flex',
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <p style={{ margin: '0 0 6px 0', fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Reason from PMO Reviewer:
+                </p>
+                <div
+                  style={{
+                    background: '#fff1f2',
+                    border: '1.5px solid #fecdd3',
+                    borderRadius: 14,
+                    padding: '14px 16px',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: '#881337',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  &ldquo;{workflowNote}&rdquo;
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 14,
+                  padding: 12,
+                  fontSize: 11,
+                  color: '#475569',
+                }}
+              >
+                <p style={{ margin: '0 0 6px 0', fontWeight: 700, color: '#0f172a' }}>
+                  💡 Action Required from PM:
+                </p>
+                <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.6 }}>
+                  <li>Make required date or resource adjustments in the Gantt chart.</li>
+                  <li>Click <b>"Submit to PMO"</b> at the bottom to re-submit your revised schedule.</li>
+                </ul>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 4 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowRejectionModal(false)}
+                  style={{
+                    background: '#0f172a',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 12,
+                    padding: '9px 20px',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Got it, Let me Fix
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <GanttDeleteModal
         open={deleteConfirmOpen}
@@ -1466,6 +1758,16 @@ function GanttChart({ tasks, projectName, onClose, pmId, projectId }) {
           try { gantt.deleteLink(linkMenu.linkId) } catch { /* ignore */ }
           setLinkMenu(null)
         }}
+      />
+
+      <GanttFreezeConfirmModal
+        open={freezeConfirmOpen}
+        projectName={projectName}
+        onCancel={() => {
+          if (!isFreezing) setFreezeConfirmOpen(false)
+        }}
+        onConfirm={handleConfirmFreeze}
+        isSubmitting={isFreezing}
       />
     </div>
   )

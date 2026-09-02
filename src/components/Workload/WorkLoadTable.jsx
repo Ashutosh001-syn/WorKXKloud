@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import ResourceRow from "./ResourceRow";
-import { dailyValueFor } from "../../data/workloadDummyData";
 import {
     MONTH_LABELS,
     MONTHLY_CAPACITY,
@@ -12,13 +11,10 @@ import {
     buildDayRange,
     sumHours,
     formatDateLong,
+    roundHours,
 } from "../../utils/workloadUtils";
 
 const DAILY_WINDOW = 21;
-
-// TODO(backend): default to today's date (or the resource's active range)
-// once real data is wired up — this fixed date only matches the dummy set.
-const DEFAULT_START_DATE = "2024-05-20";
 
 function addDays(date, days) {
     const nextDate = new Date(date);
@@ -26,10 +22,17 @@ function addDays(date, days) {
     return nextDate.toISOString().slice(0, 10);
 }
 
-export default function WorkLoadTable({ resources, view }) {
+// Today's date, not a fixed placeholder — the old hardcoded "2024-05-20"
+// only ever matched the dummy dataset and left the daily/monthly views
+// stuck showing a stale year once real data replaced it.
+function todayISO() {
+    return new Date().toISOString().slice(0, 10);
+}
+
+export default function WorkLoadTable({ resources, view, unit = "hours" }) {
     const isDailyView = view === "daily";
 
-    const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
+    const [startDate, setStartDate] = useState(todayISO);
 
     const endDate = useMemo(
         () => addDays(startDate, DAILY_WINDOW - 1),
@@ -47,18 +50,18 @@ export default function WorkLoadTable({ resources, view }) {
 
     const getPeriodValues = (project) => {
         if (isDailyView) {
-            return days.map((day) =>
-                day.isWeekend
-                    ? null
-                    : dailyValueFor(
-                        project.weekdayHours,
-                        day.key,
-                        new Date(day.key).getDay()
-                    )
-            );
+            // weekdayHours is [Mon..Fri] — real allocation-derived hours,
+            // not demo data, so each weekday just shows that resource's
+            // actual daily figure for this project (no fabricated
+            // day-to-day jitter).
+            return days.map((day) => {
+                if (day.isWeekend) return null;
+                const dayOfWeek = new Date(day.key).getDay(); // 0=Sun..6=Sat
+                return roundHours(project.weekdayHours?.[dayOfWeek - 1] ?? 0);
+            });
         }
 
-        return project.monthly;
+        return (project.monthly || []).map(roundHours);
     };
 
     const isException = (project, columnIndex) =>
@@ -271,9 +274,7 @@ export default function WorkLoadTable({ resources, view }) {
                                     }
                                     className="bg-white text-center"
                                 >
-                                    {new Date(
-                                        DEFAULT_START_DATE
-                                    ).getFullYear()}
+                                    {new Date().getFullYear()}
                                 </th>
                             )}
 
@@ -378,6 +379,7 @@ export default function WorkLoadTable({ resources, view }) {
                                 }
                                 capacity={capacity}
                                 isException={isException}
+                                unit={unit}
                             />
                         ))}
 

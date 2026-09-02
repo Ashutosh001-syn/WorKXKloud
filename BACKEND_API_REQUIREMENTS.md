@@ -146,51 +146,27 @@ Currently paginated client-side, 6 per page. Server-side pagination would help o
 
 ---
 
-## 3. Workload Page
+## 3. Workload Page — ✅ RESOLVED, no backend endpoint needed
 
-### Get workload data
-No endpoint exists yet. Suggested: `POST /users/get_workload`
+No new endpoint is being requested for this anymore. Confirmed logic
+(2026-08-19): Workload is computed entirely client-side from two endpoints
+that already exist and are already live:
 
-```json
-{
-  "activeProject": {
-    "id": "proj-website-redesign",
-    "name": "Website Redesign",
-    "priority": "High",
-    "methodology": "Predictive",
-    "startDate": "2024-03-27",
-    "progress": 35
-  },
-  "resources": [
-    {
-      "id": "res-1",
-      "name": "Dianne Russell",
-      "role": "UI/UX Designer",
-      "projects": [
-        {
-          "id": "p-website-redesign",
-          "name": "Website Redesign",
-          "weekdayHours": [4, 4, 5, 5, 4],
-          "monthly": [133, 125, 147, 170, 176, 147, 155, 162, 170, 155, 147, 133],
-          "exceptions": { "6": true }
-        }
-      ]
-    }
-  ]
-}
-```
+- `GET /admin/resource_list` — each resource's `start_time`/`end_time`
+  (shift hours) and `monday`..`sunday` working-day flags.
+- `POST /admin/get_projectList` — each project's `resource_allocations`
+  JSON field (allocation % + workingDays per resource per project).
 
-Field notes:
-- `weekdayHours` — planned hours for Monday through Friday, per project, per resource.
-- `monthly` — twelve values, one hour total per month.
-- `exceptions` — month index mapped to a `true` flag (for example, a planned leave clash).
+Formula: `dailyAllocatedHours = (end_time − start_time) × (allocation% / 100)`.
+Implemented in `src/utils/workloadCalc.js` (`aggregateWorkload`), consumed by
+`src/pages/Workload/WorkloadPage.jsx`. Live-tested against real data —
+e.g. a 09:00–18:00 shift (9h capacity) at 25% allocation correctly computes
+2.25h/day.
 
-Open questions for the backend team:
-
-1. Should `monthly` be pre-calculated by the backend, or derived from `weekdayHours` on the frontend?
-2. Can daily-level hours be provided? The frontend currently approximates the daily view from `weekdayHours` with a small generated variance; real data would replace that.
-3. What condition should set an `exceptions` flag on a given month?
-4. Should resource list pagination (currently 5 per page, handled in the browser) move to the server?
+See `workload.todo` in the project root for the full audit trail, the
+per-resource weekly-capacity KPI logic, and remaining open product
+questions (none of which block backend work — they're UI/definition
+questions for whoever owns the Workload page design).
 
 ---
 
@@ -205,3 +181,127 @@ Full detailed specification is documented in [BACKEND_RESOURCE_CHANGE_REQUEST_AP
 - `POST /admin/reject_resource_change` — Reject changes with mandatory reason.
 - `POST /admin/clarify_resource_change` — Send query/clarification note to Project Manager.
 - `POST /projectManager/create_resource_change_request` — PM side submission.
+
+---
+
+## 5. Project-Resource Dependent Scheduling & Security Validation
+
+Task scheduling and assignment must strictly source from the PMO project-resource allocation (`resource_allocations`).
+
+### 1. Get Project Assigned Resources
+- **Endpoint**: `GET /api/projects/:projectId/resources` (or `POST /api/admin/get_project_resources`)
+- **Headers**:
+  ```http
+  Authorization: Bearer <JWT_TOKEN>
+  Content-Type: application/json
+  ```
+- **Request Body** (if POST):
+  ```json
+  {
+    "project_id": 4
+  }
+  ```
+- **Response Shape (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Assigned project resources fetched successfully",
+    "data": [
+      {
+        "id": "res-101",
+        "resource_id": 101,
+        "name": "Dhananjay",
+        "role": "Developer",
+        "allocation": 100,
+        "type": "In-house",
+        "workingDays": ["Mon", "Tue", "Wed", "Thu", "Fri"]
+      },
+      {
+        "id": "res-102",
+        "resource_id": 102,
+        "name": "Rahul",
+        "role": "UI/UX Designer",
+        "allocation": 80,
+        "type": "In-house",
+        "workingDays": ["Mon", "Tue", "Wed", "Thu", "Fri"]
+      }
+    ]
+  }
+  ```
+
+### 2. Backend Security & Data Integrity Validation
+When creating or updating schedule tasks (`/projectManager/schedule_project`, `/projectManager/subTask_schedule`, `/projectManager/editTaskScheduleProject`, `/projectManager/editSubTaskSchedule`):
+1. The backend **must validate** that the submitted `resource` / `resource_id` belongs to the project's PMO allocations for `project_id`.
+2. If `resource_id` is not assigned to `project_id`, reject the request with HTTP `400 Bad Request` or `403 Forbidden`:
+   ```json
+   {
+     "success": false,
+     "message": "Resource is not assigned to this project."
+   }
+   ```
+
+---
+
+## 6. Project Reallocation — 🆕 New
+
+`POST /admin/re-allocated` — route does not exist yet (confirmed 404,
+2026-08-20). Frontend call site already exists and is live-tested against
+what it sends today: `src/pages/CreateProjectPage.jsx`, `handleConfirmAssignPM()`.
+
+**Request** (multipart/form-data, not JSON):
+```
+id: <project_id>
+pm_id: <project_id>          // ⚠️ see note below
+project_manager: <string>    // the new PM's display name
+status: "re-allocated"
+```
+
+**Response expected**: `{ success, message }`
+
+⚠️ **Existing frontend bug to flag, not something backend should replicate**:
+the current code sends `pm_id` as the *project's* id (`payload.append('pm_id',
+String(projectId))`), not the newly-assigned PM's actual user/resource id —
+this looks like a copy-paste mistake in `CreateProjectPage.jsx` rather than
+an intentional contract. Backend should confirm with frontend what `pm_id`
+is actually supposed to identify before building around this exact payload,
+since implementing it as-is would silently reallocate to a numerically
+coincidental id rather than the intended PM.
+
+---
+
+## 7. Update Project Milestone — 🆕 New (no frontend call site yet)
+
+`POST /projectManager/update_project_milestone` — route does not exist yet
+(confirmed 404, 2026-08-20). Unlike every other endpoint in this document,
+**no frontend code calls this yet** — `API_ENDPOINTS.UPDATE_PROJECT_MILESTONE`
+is defined in `src/config/api.js` but unused. The shape below is inferred
+from the existing milestone schema (how milestones are created and read
+elsewhere), not confirmed against a real request/response pair — treat it
+as a starting proposal to align on, not a locked contract.
+
+Milestones are created via `CreateProjectWizardModal.jsx` as part of
+project creation (`milestones: [{ milestone, milestone_date, percentage }]`,
+sent inside the larger `create_project` form payload) and read back the
+same shape via `get_projectList`'s `milestones` array — but there is no
+per-milestone `id`, which is the main open question for an update endpoint:
+
+**Suggested request**:
+```json
+{
+  "project_id": 33,
+  "milestone": "BRD Sign-off",
+  "milestone_date": "2026-08-26",
+  "percentage": 100
+}
+```
+
+**Open question for backend team**: without a stable milestone `id`, how
+should an update target a specific milestone when a project can have
+several with the same `milestone` name (e.g. two "Sign-off" milestones on
+different phases)? Recommend adding an `id`/`milestone_id` column to
+whatever table stores these, returned in `get_projectList`'s `milestones`
+array, and required on this endpoint's request — matching how every other
+"update a specific row" endpoint in this app (`UPDATE_BOARD`, etc.) keys
+off a real row id rather than matching by name.
+
+**Response expected**: `{ success, message }`

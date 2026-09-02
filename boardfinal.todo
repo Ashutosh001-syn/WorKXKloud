@@ -1,0 +1,134 @@
+BOARD — CUSTOM COLUMN SUPPORT (backend fix needed)
+=====================================================
+
+PROBLEM
+-------
+Frontend lets a user add a custom column (e.g. "Review", "QA") via
+SAVE_BOARD_STATUS. That only saves the column NAME in a separate lookup
+table. When a card is moved into that custom column (via UPDATE_BOARD_STATUS
+/ editBoard, setting status = "review"), the write succeeds, but the card
+then disappears from GET_BOARD's response entirely. Confirmed live multiple
+times: getBoard only ever returns cards whose status is exactly one of these
+5 hardcoded values:
+
+    in_discussion, to_do, in_work, in_progress, completed
+
+Any other status value = card excluded from the response (not deleted in DB,
+just not returned). So custom columns can be created but never actually hold
+visible cards.
+
+
+ENDPOINTS INVOLVED (current, already live)
+-------------------------------------------
+
+1. GET_BOARD                 POST /projectManager/getBoard
+   *** THIS is the one that needs the fix. ***
+   Request:
+     { "project_id": 12 }
+   Response (today — only 5 fixed buckets, custom statuses missing):
+     {
+       "success": true,
+       "data": [
+         { "id": 101, "project_id": 12, "task_id": 55, "resource_id": 4,
+           "status": "to_do", "pm_id": 19 }
+       ]
+     }
+   NEEDED: same response shape, but "status" should be allowed to be ANY
+   value that exists in the statuses table (see SAVE_BOARD_STATUS below),
+   not just the 5 hardcoded ones.
+
+2. UPDATE_BOARD_STATUS        POST /users/editBoard   (aka UPDATE_BOARD)
+   [NO CHANGE NEEDED — already works correctly]
+   Request (FULL record required every call — partial body nulls out
+   omitted fields):
+     {
+       "id": 101,
+       "project_id": 12,
+       "task_id": 55,
+       "resource_id": 4,
+       "status": "review",
+       "pm_id": 19
+     }
+   Response:
+     { "success": true, "message": "Board updated" }
+   Already accepts any string in "status" without error — writes fine, the
+   problem is only that getBoard (#1) won't return it afterward.
+
+3. CREATE_BOARD               POST /users/create_board
+   [NO CHANGE NEEDED — already works correctly]
+   Request:
+     {
+       "project_id": 12,
+       "task_id": 55,
+       "resource_id": 4,
+       "status": "to_do",
+       "pm_id": 19
+     }
+   Response:
+     { "success": true, "message": "Board created" }
+   (Doesn't return the new row's id — caller must re-call getBoard to get it.)
+
+4. SAVE_BOARD_STATUS          POST /projectManager/saveBoardStatus
+   [NO CHANGE NEEDED — already works correctly]
+   Request:
+     { "status": "Review" }
+   Response:
+     { "success": true, "data": { "id": 6, "status": "Review" } }
+   Only registers a column NAME in a separate table — unrelated to getBoard.
+
+5. GET_BOARD_STATUS           GET  /projectManager/getBoardStatus
+   [NO CHANGE NEEDED — already works correctly]
+   Request: none (no body/params)
+   Response:
+     {
+       "success": true,
+       "count": 6,
+       "data": [
+         { "id": 1, "status": "in_discussion", "created_at": "2026-01-01" },
+         { "id": 6, "status": "Review", "created_at": "2026-08-20" }
+       ]
+     }
+
+6. RENAME_BOARD_STATUS        POST /projectManager/editBoardStatus
+   [NO CHANGE NEEDED — already works correctly]
+   Request:
+     { "id": 6, "status": "QA Review" }
+   Response:
+     { "success": true, "data": { "id": 6, "status": "QA Review" } }
+
+7. DELETE_BOARD_STATUS        POST /projectManager/deleteBoardStatus
+   [NO CHANGE NEEDED — already works correctly]
+   Request:
+     { "id": 6 }
+   Response:
+     { "success": true, "message": "Status deleted" }
+
+
+WHAT NEEDS TO CHANGE (backend)
+-------------------------------
+GET_BOARD (getBoard) must stop hardcoding the 5 statuses. It should return
+whatever status value is actually stored on each board row — dynamically,
+not filtered to a fixed list. Ideally getBoard's grouping should be driven
+off the same statuses table that saveBoardStatus/getBoardStatus writes to,
+so any column a user creates is automatically a valid bucket getBoard can
+return cards under.
+
+No new endpoint is required — this is a fix to existing getBoard logic, not
+a new API.
+
+
+HOW THE 7 ENDPOINTS CONNECT TO EACH OTHER
+------------------------------------------
+saveBoardStatus  --writes--> statuses table  <--reads-- getBoardStatus
+                                                 (used to populate column list)
+
+editBoard (status field) --writes--> board_cards.status
+getBoard  --reads--> board_cards, but filters to 5 fixed values (THE BUG)
+
+editBoardStatus / deleteBoardStatus --only affect statuses table--
+   (renaming/deleting a column name has ZERO effect on getBoard's card
+   filtering today — confirmed live)
+
+So today: column NAMES (statuses table) and column DATA (board_cards.status
+filter in getBoard) are two disconnected systems. Fix = make getBoard read
+from the same set of valid statuses instead of a fixed 5.

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { ChevronDown, Eye, Search, X } from 'lucide-react'
 import { API_ENDPOINTS } from '../config/api'
+import BackButton from '../components/ui/BackButton'
 
 function getStatusTone(status) {
   if (status === 'Approved') {
@@ -318,10 +320,50 @@ function ViewProjectModal({ project, onClose }) {
   )
 }
 
+function getAuthInfo() {
+  let role = ''
+  let pmId = null
+  let pmName = ''
+  try {
+    const userProfileStr = localStorage.getItem('user_profile')
+    if (userProfileStr) {
+      const profile = JSON.parse(userProfileStr)
+      role = (profile.role || '').toLowerCase()
+      pmId = profile.id || profile.user_id || null
+      pmName = `${profile.firstName || ''} ${profile.lastName || ''}`.trim().toLowerCase()
+    }
+  } catch (e) {}
+
+  try {
+    const authUserStr = localStorage.getItem('auth_user')
+    if (authUserStr) {
+      const user = JSON.parse(authUserStr)
+      if (!role) role = (user.role || '').toLowerCase()
+      if (!pmId) pmId = user.id || user.user_id || null
+      if (!pmName && user.name) pmName = user.name.trim().toLowerCase()
+    }
+  } catch (e) {}
+
+  const isPM = role === 'pm' || role === 'project manager'
+  return { isPM, pmId, pmName, role }
+}
+
 function AllProjectPage() {
+  const location = useLocation()
   const [rows, setRows] = useState([])
-  const [searchTerm, setSearchTerm] = useState('')
+  // Pre-filled from the header search box's ?search= deep link, if present.
+  const [searchTerm, setSearchTerm] = useState(
+    () => new URLSearchParams(location.search).get('search') || ''
+  )
   const [statusFilter, setStatusFilter] = useState('Status')
+
+  // Re-sync when the header search is used again while already on this
+  // page — the component doesn't remount for a query-string-only
+  // navigation, so the lazy initial state above wouldn't otherwise update.
+  useEffect(() => {
+    const q = new URLSearchParams(location.search).get('search')
+    if (q) setSearchTerm(q)
+  }, [location.search])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [viewProject, setViewProject] = useState(null)
@@ -342,27 +384,61 @@ function AllProjectPage() {
       setIsLoading(true)
       setError('')
 
+      const { isPM, pmId, pmName } = getAuthInfo()
+
       try {
-        const response = await fetch(API_ENDPOINTS.GET_PROJECT_LIST)
+        let response
+        if (isPM && pmId) {
+          const token = localStorage.getItem('token')
+          response = await fetch(API_ENDPOINTS.GET_PROJECTS_BY_PM, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ pm_id: pmId }),
+          })
+        } else {
+          response = await fetch(API_ENDPOINTS.GET_PROJECT_LIST)
+        }
+
         const data = await response.json()
 
         if (!response.ok || !data?.success) {
           throw new Error(data?.message || 'Failed to fetch projects')
         }
 
-        const mappedData = (Array.isArray(data.data) ? data.data : []).map(row => ({
+        let rawList = Array.isArray(data.data) ? data.data : []
+
+        // If PM and fetched via list, ensure only PM projects are displayed
+        if (isPM) {
+          if (pmId) {
+            rawList = rawList.filter(
+              (p) =>
+                !p.pm_id ||
+                String(p.pm_id) === String(pmId) ||
+                (pmName && (p.project_manager || p.pm || '').toLowerCase().includes(pmName))
+            )
+          } else if (pmName) {
+            rawList = rawList.filter((p) =>
+              (p.project_manager || p.pm || '').toLowerCase().includes(pmName)
+            )
+          }
+        }
+
+        const mappedData = rawList.map((row) => ({
           ...row,
           // Map properties for the table view
-          projectName: row.project_name || "-",
-          budget: row.budget ?? "-",
-          cost: row.budget ?? "-",
-          priority: row.priority || "-",
-          schedule: row.duration ? `${row.duration} days` : "-",
-          plannedStartDate: row.start_date || "-",
-          deadline: row.end_date || "-",
-          clientName: row.company_name || "-",
-          pm: row.project_manager || "-",
-          status: row.status || "Pending",
+          projectName: row.project_name || row.projectName || '-',
+          budget: row.budget ?? '-',
+          cost: row.budget ?? '-',
+          priority: row.priority || '-',
+          schedule: row.duration ? `${row.duration} days` : '-',
+          plannedStartDate: row.start_date || row.plannedStartDate || '-',
+          deadline: row.end_date || row.deadline || '-',
+          clientName: row.company_name || row.clientName || '-',
+          pm: row.project_manager || row.pm || '-',
+          status: row.status || 'Pending',
         }))
 
         setRows(mappedData)
@@ -394,10 +470,15 @@ function AllProjectPage() {
   return (
     <div className="min-h-screen bg-[#0d2646] px-2 py-4 sm:px-3">
       <section className="rounded-[8px] bg-[#fdfefe] px-3 pb-5 pt-4 shadow-[0_18px_40px_rgba(2,12,28,0.15)] sm:px-4">
-        <h1 className="text-[2.2rem] font-semibold tracking-[-0.03em] text-[#191919]">All Project</h1>
-        <p className="mt-1 text-[13px] text-[#8ea0b8]">
-          Manage and maintain all projects in the organization
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-[2.2rem] font-semibold tracking-[-0.03em] text-[#191919]">All Project</h1>
+            <p className="mt-1 text-[13px] text-[#8ea0b8]">
+              Manage and maintain all projects in the organization
+            </p>
+          </div>
+          <BackButton fallbackUrl="/dashboard" label="Back to Dashboard" />
+        </div>
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <label className="relative w-full max-w-[360px]">

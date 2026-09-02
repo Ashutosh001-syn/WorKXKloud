@@ -1,0 +1,208 @@
+WORKLOAD FEATURE — API AUDIT (A to Z)
+=======================================
+Audited: 2026-08-19 | Scope: src/pages/Workload/WorkloadPage.jsx + supporting components
+Implemented: 2026-08-19 — see section 4 for the logic; live-tested against
+real backend data (resource_list + get_projectList), verified correct
+(9h shift × 100% = 9h/day, 9h × 25% = 2.25h/day, etc.)
+
+STATUS: LIVE — no longer dummy data. Computed client-side from
+resource_list + get_projectList (no backend endpoint needed/requested).
+New file: src/utils/workloadCalc.js (aggregateWorkload + helpers).
+WorkloadPage.jsx now fetches RESOURCE_LIST + GET_PROJECT_LIST + HOLIDAYS
+directly and calls aggregateWorkload() instead of GET_WORKLOAD.
+Dummy data (workloadDummyData.js) is now ONLY the true-failure fallback
+(network/API error), not the default path.
+
+
+1. CURRENT STATE
+-----------------
+- Page: src/pages/Workload/WorkloadPage.jsx
+- On mount, calls API_ENDPOINTS.GET_WORKLOAD (POST /api/admin/get_workload)
+- LIVE-VERIFIED (curl, 2026-08-19): returns HTTP 404 — route does not exist on backend.
+- On failure (always, right now), silently falls back to:
+    src/data/workloadDummyData.js  → { activeProject, resources }
+  and shows an amber "Demo Preview (Awaiting Backend API)" banner (usingFallback flag).
+- Everything downstream (KPI cards, table, heatmap cells, search, role filter,
+  pagination, monthly/daily view toggle, hours/percentage unit toggle) already
+  works correctly against whatever shape it's given — no frontend changes
+  needed once real data arrives, PROVIDED the shape matches (see section 2).
+
+
+2. EXACT DATA SHAPE THE FRONTEND EXPECTS
+------------------------------------------
+Response contract (data.data must contain both keys):
+
+{
+  "success": true,
+  "data": {
+    "activeProject": {
+      "id": string,
+      "name": string,
+      "priority": "High" | "Medium" | "Low",
+      "methodology": string,       // e.g. "Predictive", "Agile Scrum"
+      "startDate": "YYYY-MM-DD",
+      "progress": number           // 0-100
+    },
+    "resources": [
+      {
+        "id": string,
+        "name": string,
+        "role": string,
+        "color": string,           // Tailwind classes e.g. "bg-blue-100 text-blue-700"
+                                    // (backend doesn't need to send this — frontend
+                                    // can derive a color from role/id if omitted;
+                                    // flag to backend team as optional)
+        "projects": [
+          {
+            "id": string,
+            "name": string,
+            "weekdayHours": [number, number, number, number, number], // Mon-Fri hours
+            "monthly": [number x 12],   // pre-aggregated hours per calendar month
+            "exceptions": { "<monthIndex 0-11>": true }  // e.g. planned leave clash
+          }
+        ]
+      }
+    ]
+  }
+}
+
+Notes:
+- weekdayHours is a 5-length array (Mon..Fri) — used for the "Daily" view's
+  per-weekday jitter/base value and for the overcapacity KPI calc (sum > 40h/week).
+- monthly is a 12-length array, ALREADY aggregated per month by backend/whoever
+  builds this — frontend does not recompute it from weekdayHours (see
+  workloadDummyData.js's buildMonthly() — that's demo-only math, not something
+  the real integration should replicate; backend should just send monthly totals).
+- exceptions is sparse — only include months that need the "Exception" heatmap
+  color (amber), e.g. approved leave, holiday clash.
+- capacity constants already exist client-side, no need from backend:
+    MONTHLY_CAPACITY = 176 (22 working days x 8h)
+    DAILY_CAPACITY = 8
+
+
+3. BACKEND ENDPOINT — NO LONGER THE PLAN (superseded by section 4)
+-----------------------------------------------
+API_ENDPOINTS.GET_WORKLOAD (POST /api/admin/get_workload) still exists in
+src/config/api.js and still 404s live — but per section 4, this is NOT being
+requested from backend anymore. Workload will be computed client-side from
+resource_list + get_projectList's resource_allocations instead. Leaving this
+entry in api.js as a documented dead-end (matches the file's own comment)
+rather than removing it, in case that decision changes later.
+
+
+4. CONFIRMED LOGIC — NO NEW BACKEND ENDPOINT NEEDED
+---------------------------------------------------------------
+CONFIRMED by product owner (2026-08-19): Workload does NOT need a dedicated
+get_workload endpoint. It's computed on the frontend from two EXISTING, LIVE
+data sources — same pattern already used for ResourceAllocationPage (reused
+GET_PROJECT_LIST's resource_allocations field instead of requesting a new API):
+
+  a) GET /api/admin/resource_list (GET method, live, verified)
+     Per resource: name, role, start_time, end_time, shift, and
+     monday..sunday boolean flags (which days that resource works).
+     → This is the resource's SHIFT / daily capacity, e.g. start_time
+       "09:00:00", end_time "17:00:00" = 8 working hours/day.
+
+  b) POST /api/admin/get_projectList → resource_allocations (JSON string field,
+     already used by ResourceAllocationPage.jsx)
+     Per project, per allocated resource: role, resourceName, allocation
+     (PERCENTAGE, not hours), workingDays (array of day names).
+     → This is how much of that daily capacity is committed to THIS project.
+
+THE CALCULATION (confirmed):
+  dailyCapacityHours = end_time − start_time   (from resource_list, per resource)
+  dailyAllocatedHours = dailyCapacityHours × (allocation% / 100)   (per project)
+
+  Worked example: shift 09:00–17:00 = 8h capacity. Allocation = 25%.
+  → dailyAllocatedHours = 8 × 0.25 = 2 hours/day on that project.
+
+  This applies to each day in that resource's workingDays for that project —
+  days NOT in workingDays get 0 (shows as "Non Working" / null in the heatmap,
+  same as weekends already do in workloadDummyData.js's dailyValueFor()).
+
+  weekdayHours[Mon..Fri] = dailyAllocatedHours if that weekday is in
+  workingDays, else 0 — this directly matches the shape frontend already
+  expects (see section 2), so ResourceRow/ProjectRow/WorkLoadTable need NO
+  changes once this is wired.
+
+  monthly[i] = sum of dailyAllocatedHours over however many of that
+  resource's working days fall in calendar month i (NOT the flat
+  weekTotal × 4.33 × MONTH_MULTIPLIER demo math in workloadDummyData.js —
+  that was only ever a placeholder to fake seasonal-looking variance; the
+  real version should count actual working days per month, which itself
+  needs a real calendar — reuse the existing HOLIDAYS endpoint + the
+  Standard/Custom working-day logic already built for the Gantt chart's
+  calendar feature, so weekends/holidays are excluded consistently across
+  the whole app instead of a second, separate calendar concept).
+
+MULTI-PROJECT RESOURCE:
+  A resource can appear in resource_allocations on MULTIPLE projects
+  simultaneously — sum each project's dailyAllocatedHours separately per
+  resource (matches resources[].projects[] shape already, one entry per
+  project) rather than collapsing into one number. The existing
+  "Overcapacity" KPI (sum > 40h/week across ALL of a resource's projects)
+  already assumes this multi-project structure — confirms this is the
+  right shape to build toward.
+
+  Edge case to watch: if a resource's allocations across all their projects
+  sum to over 100% of daily capacity (e.g. 70% + 60% = 130%), that IS a
+  real overallocation and should show as such (rose/"overallocated" status),
+  not be capped/normalized down — this is exactly the scenario the
+  Overcapacity Risk KPI card exists to catch.
+
+AGGREGATION WORK NEEDED (frontend, not backend):
+  resource_allocations is currently read ONE PROJECT AT A TIME
+  (ResourceAllocationPage fetches get_projectList and flattens allocations
+  per-project-row). Workload needs the INVERSE grouping: fetch get_projectList
+  (all projects), parse resource_allocations on each, then group by
+  resourceName/resource_id ACROSS all projects so one resource's card shows
+  every project they're staffed on. This cross-project grouping utility does
+  not exist yet — net-new frontend work, not present in ResourceAllocationPage
+  or anywhere else today.
+
+RESOURCE IDENTITY CAVEAT:
+  resource_allocations rows join resources by resourceName (string) in some
+  cases and resource_id/tl_id in others (seen inconsistently in
+  ResourceAllocationPage's flattenAllocations() — id: row.id ?? row.resource_id
+  ?? row.tl_id ?? "-"). Matching a resource_allocations row back to its
+  resource_list entry (to get start_time/end_time) needs a reliable key —
+  verify with live data whether resource_id is always populated and matches
+  resource_list.id, or whether name-matching is the only reliable join in
+  practice (name-matching is fragile if two resources share a name).
+
+
+5. OPEN QUESTIONS (mostly answered now — remaining ones only)
+--------------------------------------
+[x] Does "hours" mean planned/allocated hours? ANSWERED — yes, derived from
+    shift capacity × allocation%, not timesheet/logged hours. No timesheet
+    table needed.
+[ ] Scope: org-wide (all PMs' resources) or per-logged-in-PM? Current dummy
+    data + UI (KPI cards, table) assume org-wide — confirm this matches
+    intended PMO-level visibility, not filtered to one PM's team. Since
+    get_projectList already returns all projects (not PM-scoped), org-wide
+    is the natural default unless told otherwise.
+[ ] Which calendar defines "working day" for the monthly aggregation —
+    the resource's own workingDays (from resource_allocations, per project)
+    only, or should org holidays (HOLIDAYS endpoint) also zero out a day
+    even if it's in workingDays? Recommend: yes, subtract holidays too, for
+    consistency with how the Gantt "Standard (Mon-Fri + Holidays)" calendar
+    already works elsewhere in this app.
+[ ] activeProject header: with real data, a resource can be on N projects —
+    does the single "activeProject" banner at the top of the page still make
+    sense, or should it become "the project currently being filtered/viewed"
+    (i.e. a filter driving the table), or be removed in favor of just the
+    per-resource multi-project breakdown the table already shows? This is a
+    product/UX call, not a data-availability one — flag for whoever owns
+    the Workload page design.
+
+
+6. SUMMARY
+-----------
+Frontend: DONE, production-ready, waiting on the aggregation logic in
+section 4 to be implemented (client-side, no backend dependency).
+Backend:  NOTHING needed — resource_list + get_projectList already have
+what's required. get_workload endpoint is no longer being requested.
+Remaining work is a frontend-only aggregation utility (group
+resource_allocations by resource across all projects, compute hours from
+each resource's own shift capacity — see section 4 for the exact formula
+and open edge cases).

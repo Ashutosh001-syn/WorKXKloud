@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { API_ENDPOINTS } from "../../config/api";
+import StatusPopupModal from "../ui/StatusPopupModal";
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
@@ -540,6 +541,15 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
   console.log("Rendering CreateProjectModal, isOpen:", isOpen);
   const [step, setStep] = useState(1);
   const [toast, setToast] = useState({ visible: false, message: "" });
+  const [statusModal, setStatusModal] = useState({
+    isOpen: false,
+    type: "success",
+    title: "",
+    message: "",
+    details: null,
+    primaryButtonText: "Done",
+    onConfirm: null,
+  });
 
   function showToast(message) {
     setToast({ visible: true, message });
@@ -1050,7 +1060,15 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
 
   async function handleSubmit() {
     if (!validateStep4()) {
-      alert("Please fill all required fields in the Milestone section.");
+      setStatusModal({
+        isOpen: true,
+        type: "warning",
+        title: "Milestone Required",
+        message: "Please ensure all required milestone fields are filled and total percentage equals exactly 100%.",
+        details: null,
+        primaryButtonText: "Review Milestones",
+        onConfirm: () => setStatusModal((prev) => ({ ...prev, isOpen: false })),
+      });
       return;
     }
     setIsLoading(true);
@@ -1172,21 +1190,62 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
       if (contentType && contentType.indexOf("application/json") !== -1) {
         const data = await response.json();
         if (data.success) {
-          alert(data.message || (editingId ? "Project updated successfully" : "Project created successfully"));
-          onSave?.({ ...Object.fromEntries(formData), id: editingId || Date.now() });
-          onClose();
+          const savedData = { ...Object.fromEntries(formData), id: editingId || Date.now() };
+          setStatusModal({
+            isOpen: true,
+            type: "success",
+            title: editingId ? "Project Updated Successfully!" : "Project Saved Successfully!",
+            message: data.message || (editingId ? "Your project changes and resource allocations have been saved." : "Project allocations, milestones, and details have been successfully saved."),
+            details: {
+              projectName: projectName || "Project",
+              projectCode: projectCode,
+              pm: getCleanName(pm) || pm || "Assigned",
+              budget: budget,
+              billing: billing,
+            },
+            primaryButtonText: "Done",
+            onConfirm: () => {
+              setStatusModal((prev) => ({ ...prev, isOpen: false }));
+              onSave?.(savedData);
+              onClose();
+            },
+          });
         } else {
-          alert(data.message || (editingId ? "Failed to update project" : "Failed to create project"));
+          setStatusModal({
+            isOpen: true,
+            type: "error",
+            title: editingId ? "Update Failed" : "Save Failed",
+            message: data.message || (editingId ? "Failed to update project. Please verify the details and try again." : "Failed to create project. Please verify the details and try again."),
+            details: null,
+            primaryButtonText: "Try Again",
+            onConfirm: () => setStatusModal((prev) => ({ ...prev, isOpen: false })),
+          });
         }
       } else {
         // If not JSON, it might be an HTML error page
         const text = await response.text();
         console.error("Non-JSON response received:", text);
-        alert(`Server Error: ${response.status}. Please check console for details.`);
+        setStatusModal({
+          isOpen: true,
+          type: "error",
+          title: "Server Error",
+          message: `Server returned status ${response.status}. Please check your connection or contact administrator.`,
+          details: null,
+          primaryButtonText: "Dismiss",
+          onConfirm: () => setStatusModal((prev) => ({ ...prev, isOpen: false })),
+        });
       }
     } catch (error) {
       console.error("Submission error:", error);
-      alert("An error occurred during submission. Please check your connection.");
+      setStatusModal({
+        isOpen: true,
+        type: "error",
+        title: "Connection Error",
+        message: "An error occurred during submission. Please check your internet connection.",
+        details: null,
+        primaryButtonText: "Dismiss",
+        onConfirm: () => setStatusModal((prev) => ({ ...prev, isOpen: false })),
+      });
     } finally {
       setIsLoading(false);
     }
@@ -1737,6 +1796,24 @@ export default function CreateProjectModal({ isOpen = true, onClose, onSave, for
 
         </div>
       </div>
+
+      {/* ── Status / Success Popup Modal ── */}
+      <StatusPopupModal
+        isOpen={statusModal.isOpen}
+        type={statusModal.type}
+        title={statusModal.title}
+        message={statusModal.message}
+        details={statusModal.details}
+        primaryButtonText={statusModal.primaryButtonText}
+        onClose={() => {
+          if (statusModal.type === "success" && statusModal.onConfirm) {
+            statusModal.onConfirm();
+          } else {
+            setStatusModal((prev) => ({ ...prev, isOpen: false }));
+          }
+        }}
+        onConfirm={statusModal.onConfirm}
+      />
     </div>
   );
 }

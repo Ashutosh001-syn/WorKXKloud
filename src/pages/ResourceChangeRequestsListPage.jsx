@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import BackButton from '../components/ui/BackButton'
 import {
   Users,
   Clock,
@@ -38,6 +39,18 @@ function ResourceChangeRequestsListPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
   const [priorityFilter, setPriorityFilter] = useState('All')
+
+  useEffect(() => {
+    const handleSync = () => setRequests(getResourceChangeRequests())
+    window.addEventListener('resource-requests-updated', handleSync)
+    window.addEventListener('storage', handleSync)
+    window.addEventListener('focus', handleSync)
+    return () => {
+      window.removeEventListener('resource-requests-updated', handleSync)
+      window.removeEventListener('storage', handleSync)
+      window.removeEventListener('focus', handleSync)
+    }
+  }, [])
 
   const refreshData = () => {
     setRequests(getResourceChangeRequests())
@@ -88,23 +101,34 @@ function ResourceChangeRequestsListPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-[26px]">
-                Pending Resource Requests
+                Resource Change Requests
               </h1>
               <p className="text-xs text-slate-500 mt-0.5">
-                Review and approve staffing change requests submitted by Project Managers.
+                Complete log and history of all staffing change requests submitted by Project Managers.
               </p>
             </div>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={refreshData}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 transition cursor-pointer"
-        >
-          <RefreshCw size={14} />
-          Refresh List
-        </button>
+        <div className="flex items-center gap-2.5">
+          <BackButton fallbackUrl="/dashboard" label="Back to Dashboard" />
+          <button
+            type="button"
+            onClick={refreshData}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 transition cursor-pointer"
+          >
+            <RefreshCw size={14} />
+            Refresh
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/pmo/resource-approval-queue')}
+            className="inline-flex items-center gap-2 rounded-xl bg-[#0052ff] px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-blue-600 transition cursor-pointer"
+          >
+            Open PMO Approval Queue
+            <ArrowRight size={14} />
+          </button>
+        </div>
       </div>
 
       {/* KPI Metric Cards */}
@@ -238,9 +262,8 @@ function ResourceChangeRequestsListPage() {
                     </td>
                     <td className="py-4 px-4 text-center">
                       <span
-                        className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                          PRIORITY_STYLES[item.priority] || PRIORITY_STYLES.Medium
-                        }`}
+                        className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold ${PRIORITY_STYLES[item.priority] || PRIORITY_STYLES.Medium
+                          }`}
                       >
                         {item.priority}
                       </span>
@@ -250,9 +273,8 @@ function ResourceChangeRequestsListPage() {
                     </td>
                     <td className="py-4 px-4 text-center">
                       <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                          STATUS_BADGES[item.status] || STATUS_BADGES['Pending PMO Review']
-                        }`}
+                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${STATUS_BADGES[item.status] || STATUS_BADGES['Pending PMO Review']
+                          }`}
                       >
                         {item.status}
                       </span>

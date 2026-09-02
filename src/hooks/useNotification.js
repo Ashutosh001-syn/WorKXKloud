@@ -1,36 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { API_ENDPOINTS } from '../config/api'
 import { mockNotifications } from '../data/mockNotifications'
 
 export const NOTIFICATIONS_PAGE_SIZE = 6
 
-/**
- * Fetches the notification list.
- *
- * TODO(backend): once GET_NOTIFICATIONS is live, this becomes:
- *
- *   const token = localStorage.getItem('token')
- *   const res = await fetch(API_ENDPOINTS.GET_NOTIFICATIONS, {
- *     headers: { Authorization: `Bearer ${token}` },
- *   })
- *   if (!res.ok) throw new Error('Failed to load notifications')
- *   const data = await res.json()
- *   return data.notifications
- *
- * Falling back to mock data for now so the UI is fully functional
- * during frontend development.
- */
+// GET_NOTIFICATIONS isn't live on the backend yet — falls back to mock data.
 async function fetchNotifications() {
     try {
-        // Uncomment when backend endpoint is ready:
-        // const token = localStorage.getItem('token')
-        // const res = await fetch(API_ENDPOINTS.GET_NOTIFICATIONS, {
-        //   headers: { Authorization: `Bearer ${token}` },
-        // })
-        // if (!res.ok) throw new Error('Failed to load notifications')
-        // const data = await res.json()
-        // return data.notifications
-
         return mockNotifications
     } catch (error) {
         console.error('useNotifications: fetch failed, using mock data', error)
@@ -81,32 +56,21 @@ export function useNotifications() {
         [totalPages],
     )
 
+    // MARK_NOTIFICATION_READ/MARK_ALL_NOTIFICATIONS_READ/CLEAR_ALL_NOTIFICATIONS
+    // aren't live yet — these stay local-only until the backend is ready.
     const markOneAsRead = useCallback((id) => {
         setNotifications((current) =>
             current.map((item) => (item.id === id ? { ...item, read: true } : item)),
         )
-
-        // TODO(backend): fire and forget
-        // fetch(API_ENDPOINTS.MARK_NOTIFICATION_READ, {
-        //   method: 'POST',
-        //   headers: { 'Content-Type': 'application/json' },
-        //   body: JSON.stringify({ id }),
-        // }).catch(() => {})
     }, [])
 
     const markAllAsRead = useCallback(() => {
         setNotifications((current) => current.map((item) => ({ ...item, read: true })))
-
-        // TODO(backend): fire and forget
-        // fetch(API_ENDPOINTS.MARK_ALL_NOTIFICATIONS_READ, { method: 'POST' }).catch(() => {})
     }, [])
 
     const clearAll = useCallback(() => {
         setNotifications([])
         setPage(1)
-
-        // TODO(backend): fire and forget
-        // fetch(API_ENDPOINTS.CLEAR_ALL_NOTIFICATIONS, { method: 'DELETE' }).catch(() => {})
     }, [])
 
     return {

@@ -1,3 +1,5 @@
+import { API_ENDPOINTS } from '../config/api'
+
 // Initial mock dataset and localStorage storage helper for PMO Resource Change Requests
 
 const STORAGE_KEY = 'workxkloud_pmo_resource_change_requests'
@@ -567,3 +569,78 @@ export function clarifyResourceChangeRequest(id, clarificationQuery = '') {
   updateBadgeCount(updated)
   return updated.find((r) => r.id.toLowerCase() === (id || '').toLowerCase())
 }
+
+// Create & Submit Resource Change Request (PM Side)
+export async function createResourceChangeRequest(payload) {
+  const all = getResourceChangeRequests()
+  const now = new Date()
+  const idNum = Math.floor(100000 + Math.random() * 900000)
+  const requestId = `RCR-${idNum}`
+  const timeFormatted = now.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }) + ', ' + now.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+
+  const newRequest = {
+    id: requestId,
+    requestedOn: now.toISOString(),
+    requestedOnFormatted: timeFormatted,
+    status: 'Pending PMO Review',
+    priority: payload.priority || 'High',
+    department: payload.department || 'Engineering / IT',
+    projectId: payload.projectId || 'PJ-2026001',
+    projectName: payload.projectName || 'Project',
+    projectManager: payload.projectManager || 'Project Manager',
+    projectManagerEmail: payload.projectManagerEmail || '',
+    dueDate: payload.dueDate || '',
+    dueDateFormatted: payload.dueDateFormatted || '',
+    startDate: payload.startDate || '',
+    startDateFormatted: payload.startDateFormatted || '',
+    duration: payload.duration || '180 days',
+    projectType: payload.projectType || 'Software Development',
+    methodology: payload.methodology || 'Agile',
+    location: payload.location || 'Remote',
+    budget: payload.budget || 0,
+    noBilling: payload.noBilling || 'Fixed Price',
+    technology: payload.technology || '',
+    projectScope: payload.projectScope || 'Staffing re-allocation request.',
+    requestSummary: payload.requestSummary || 'PM has requested changes in the resource allocation.',
+    reasonProvidedByPM: payload.reasonProvidedByPM || '',
+    currentAllocation: payload.currentAllocation || [],
+    requestedAllocation: payload.requestedAllocation || [],
+    attachments: payload.attachments || [],
+    paymentMilestones: payload.paymentMilestones || [],
+    clientDetails: payload.clientDetails || {
+      companyName: payload.clientName || 'Client Organization',
+      location: 'India',
+      contactPerson: 'Lead Representative',
+    },
+    activityLog: [
+      {
+        id: `act-${Date.now()}`,
+        timestamp: timeFormatted,
+        author: `${payload.projectManager || 'Project Manager'} (PM)`,
+        avatarTone: 'bg-emerald-100 text-emerald-700',
+        action: 'Resource Change Request Submitted',
+        details: payload.reasonProvidedByPM
+          ? `Submitted with reason: "${payload.reasonProvidedByPM}"`
+          : 'Staffing adjustment request submitted to PMO queue.',
+      },
+    ],
+  }
+
+  const updated = [newRequest, ...all]
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+  updateBadgeCount(updated)
+  window.dispatchEvent(new Event('resource-requests-updated'))
+
+  // NOTE: Once backend deploys POST /api/projectManager/create_resource_change_request,
+  // enable backend network sync here.
+
+  return newRequest
+}
+

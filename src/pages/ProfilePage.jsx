@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Camera, User, Pencil, Briefcase, MapPin } from 'lucide-react';
+import BackButton from '../components/ui/BackButton';
 
 const initialUserData = {
   firstName: 'Natashia',
@@ -100,60 +101,65 @@ export default function ProfilePage() {
             </p>
           </div>
 
-          {!isEditing ? (
-            <button
-              onClick={handleEdit}
-              className="
-        shrink-0 whitespace-nowrap
-        rounded-full
-        bg-[#0052ff]
-        px-5 py-2
-        text-[13px] font-medium text-white
-        shadow-[0_4px_12px_rgba(0,82,255,0.18)]
-        transition-all duration-200
-        hover:bg-[#0042cc]
-        hover:shadow-[0_6px_16px_rgba(0,82,255,0.25)]
-        sm:px-6 sm:py-2 sm:text-[14px]
-      "
-            >
-              Edit Profile
-            </button>
-          ) : (
-            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-              <button
-                onClick={handleCancel}
-                className="
-          whitespace-nowrap
-          rounded-full
-          bg-[#f1f5f9]
-          px-4 py-2
-          text-[13px] font-medium text-[#475569]
-          transition
-          hover:bg-[#e2e8f0]
-          sm:px-6 sm:text-[14px]
-        "
-              >
-                Cancel
-              </button>
+          <div className="flex items-center gap-3">
+            <BackButton fallbackUrl="/dashboard" label="Back to Dashboard" />
 
+            {!isEditing ? (
               <button
-                onClick={handleSave}
+                onClick={handleEdit}
                 className="
-          whitespace-nowrap
+          shrink-0 whitespace-nowrap
           rounded-full
           bg-[#0052ff]
-          px-4 py-2
+          px-5 py-2
           text-[13px] font-medium text-white
-          shadow-sm
-          transition
+          shadow-[0_4px_12px_rgba(0,82,255,0.18)]
+          transition-all duration-200
           hover:bg-[#0042cc]
-          sm:px-6 sm:text-[14px]
+          hover:shadow-[0_6px_16px_rgba(0,82,255,0.25)]
+          sm:px-6 sm:py-2 sm:text-[14px]
+          cursor-pointer
         "
               >
-                Save Changes
+                Edit Profile
               </button>
-            </div>
-          )}
+            ) : (
+              <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <button
+                  onClick={handleCancel}
+                  className="
+            whitespace-nowrap
+            rounded-full
+            bg-[#f1f5f9]
+            px-4 py-2
+            text-[13px] font-medium text-[#475569]
+            transition
+            hover:bg-[#e2e8f0]
+            sm:px-6 sm:text-[14px]
+          "
+                >
+                  Cancel
+                </button>
+
+                <button
+                  onClick={handleSave}
+                  className="
+            whitespace-nowrap
+            rounded-full
+            bg-[#0052ff]
+            px-4 py-2
+            text-[13px] font-medium text-white
+            shadow-sm
+            transition
+            hover:bg-[#0042cc]
+            sm:px-6 sm:text-[14px]
+          "
+                >
+                  Save Changes
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Profile Card */}

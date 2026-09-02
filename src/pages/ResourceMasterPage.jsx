@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { Search, ChevronDown, Clock, Plus, Eye, Pencil, Trash2, User, X, Shield, ShieldOff, Loader2 } from 'lucide-react'
+import { Search, ChevronDown, Clock, Plus, Eye, EyeOff, Pencil, Trash2, User, X, Shield, ShieldOff, Loader2 } from 'lucide-react'
 import { API_ENDPOINTS } from '../config/api'
+import BackButton from '../components/ui/BackButton'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ const mapApiRow = (r) => ({
 
   name: r.name || '',
   email: r.email || '',
+  password: r.password || '',
   mobile: r.mobile || '',
   role: r.role || '',
   shift: r.shift || 'Day',
@@ -296,6 +298,8 @@ function Toast({ message, type, onDone }) {
 
 /* ─── View Modal ────────────────────────────────────────────────────────── */
 function ViewModal({ row, onClose }) {
+  const [showPassword, setShowPassword] = useState(false)
+
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     return () => {
@@ -310,6 +314,7 @@ function ViewModal({ row, onClose }) {
   if (row.type === 'In-house' || row.type === 'Freelancer') {
     fields.push(
       { label: 'Email', value: row.email },
+      { label: 'Password', value: row.password, sensitive: true },
       { label: 'Mobile', value: row.mobile },
       { label: 'Role', value: row.role },
       { label: 'Shift', value: row.shift },
@@ -364,7 +369,25 @@ function ViewModal({ row, onClose }) {
           {fields.map((f, i) => (
             <div key={i} className="flex items-center justify-between py-3 border-b border-[#f1f5f9] last:border-0">
               <span className="text-[12px] font-bold text-[#94a3b8] uppercase tracking-wider">{f.label}</span>
-              <span className="text-[14px] font-semibold text-[#1e293b]">{f.value || '—'}</span>
+              {f.sensitive ? (
+                <span className="flex items-center gap-2">
+                  <span className="text-[14px] font-semibold text-[#1e293b] font-mono">
+                    {f.value ? (showPassword ? f.value : '•'.repeat(Math.max(6, f.value.length))) : '—'}
+                  </span>
+                  {f.value && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="text-[#94a3b8] hover:text-[#1e293b] transition"
+                      title={showPassword ? 'Hide' : 'Show'}
+                    >
+                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  )}
+                </span>
+              ) : (
+                <span className="text-[14px] font-semibold text-[#1e293b]">{f.value || '—'}</span>
+              )}
             </div>
           ))}
         </div>
@@ -1219,12 +1242,15 @@ const toggleBan = async (row) => {
             <h1 style={{ fontSize: isMobile ? 22 : 28, fontWeight: 900, color: '#0f1e3d', letterSpacing: '-0.5px', margin: 0 }}>Resource Master</h1>
             {!isMobile && <p style={{ fontSize: 14, color: '#64748b', marginTop: 4, fontWeight: 500 }}>Manage all organizational resources from one place</p>}
           </div>
-          <button onClick={() => setShowAdd(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'linear-gradient(135deg, #0052ff, #003adb)', color: '#fff', border: 'none', borderRadius: isMobile ? 12 : 14, padding: isMobile ? '10px 16px' : '12px 22px', fontSize: isMobile ? 13 : 14, fontWeight: 800, cursor: 'pointer', boxShadow: '0 4px 20px rgba(0,82,255,0.3)', transition: 'all 0.2s', flexShrink: 0 }}
-            onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-            onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
-            <Plus size={isMobile ? 16 : 18} /> Add Resource
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <BackButton fallbackUrl="/dashboard" label="Back to Dashboard" />
+            <button onClick={() => setShowAdd(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'linear-gradient(135deg, #0052ff, #003adb)', color: '#fff', border: 'none', borderRadius: isMobile ? 12 : 14, padding: isMobile ? '10px 16px' : '12px 22px', fontSize: isMobile ? 13 : 14, fontWeight: 800, cursor: 'pointer', boxShadow: '0 4px 20px rgba(0,82,255,0.3)', transition: 'all 0.2s', flexShrink: 0 }}
+              onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+              onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
+              <Plus size={isMobile ? 16 : 18} /> Add Resource
+            </button>
+          </div>
         </div>
 
         {/* Card */}

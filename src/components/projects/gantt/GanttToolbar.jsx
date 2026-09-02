@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom'
 import {
   Plus, Settings, Printer, ChevronDown, ChevronLeft, ChevronRight,
-  Check, Calendar, FileText, MoreHorizontal, Trash2, Snowflake, Lock,
+  Check, Calendar, FileText, MoreHorizontal, Trash2, Snowflake, Lock, Info,
 } from 'lucide-react'
 import { btnBase, iconBtnBase, dropdownMenu, dropdownItem } from './ganttConstants'
 import { WORKFLOW_STATUS } from '../../../utils/scheduleWorkflow'
@@ -26,6 +26,7 @@ function GanttToolbar({
 
   workflowStatus,
   workflowStatusMeta,
+  onOpenRejectionReason,
   isScheduleLocked,
 
   addOpen,
@@ -228,6 +229,33 @@ function GanttToolbar({
             {isScheduleLocked ? <Lock size={11} /> : <Snowflake size={11} />}
             {!isMobile && workflowStatusMeta?.label}
           </div>
+
+          {workflowStatus === WORKFLOW_STATUS.REJECTED && onOpenRejectionReason && (
+            <button
+              type="button"
+              onClick={onOpenRejectionReason}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '4px 10px',
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: 700,
+                background: '#fee2e2',
+                color: '#991b1b',
+                border: '1px solid #fca5a5',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#fecaca' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#fee2e2' }}
+              title="Click to view PMO feedback reason"
+            >
+              <Info size={12} />
+              View Reason
+            </button>
+          )}
 
           <div style={{ width: 1, height: 20, background: '#e2e8f0', flexShrink: 0 }} />
 

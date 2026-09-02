@@ -29,6 +29,13 @@ import {
   UserRoundPlus,
   Users,
   X,
+  Plus,
+  ArrowRight,
+  ShieldCheck,
+  CheckCircle2,
+  Building,
+  Sparkles,
+  FolderPlus,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { API_ENDPOINTS } from '../config/api'
@@ -39,6 +46,8 @@ import {
   getSummaryCardMeta,
 } from '../components/dashboard/dashboardData'
 import { useDashboardLayout } from '../hooks/useDashboardLayout'
+import { getResourceChangeRequests } from '../data/resourceChangeRequestsData'
+import SelectProjectToCopyModal from '../components/projects/SelectProjectToCopyModal'
 
 const HEALTH_TONE = {
   Red: 'bg-[#ffe6e3] text-[#f56a5d]',
@@ -453,6 +462,25 @@ function Dashboard() {
   const [projects, setProjects] = useState([])
   const [projectsLoading, setProjectsLoading] = useState(true)
   const [projectsError, setProjectsError] = useState('')
+  const [resourceRequests, setResourceRequests] = useState(() => getResourceChangeRequests())
+
+  useEffect(() => {
+    const handleSync = () => setResourceRequests(getResourceChangeRequests())
+    window.addEventListener('resource-requests-updated', handleSync)
+    window.addEventListener('storage', handleSync)
+    return () => {
+      window.removeEventListener('resource-requests-updated', handleSync)
+      window.removeEventListener('storage', handleSync)
+    }
+  }, [])
+
+  const pendingResourceRequestsCount = useMemo(() => {
+    return resourceRequests.filter((r) => r.status === 'Pending PMO Review').length
+  }, [resourceRequests])
+
+  const [showCreateProjectChoiceModal, setShowCreateProjectChoiceModal] = useState(false)
+  const [showSelectProjectToCopyModal, setShowSelectProjectToCopyModal] = useState(false)
+
   const gridMenuRef = useRef(null)
   const resizeCleanupRef = useRef(null)
   const bodyStyleSnapshotRef = useRef({ cursor: '', userSelect: '' })
@@ -819,23 +847,62 @@ function Dashboard() {
   const visibleLayout = layout.slice(0, gridLimit)
 
   return (
-    <div className="min-h-screen bg-[#0d2646] px-3 py-4 text-slate-900 sm:px-4">
-      <div className="mx-auto max-w-[1280px] rounded-[10px] bg-white p-3 shadow-[0_16px_40px_rgba(3,10,24,0.16)] sm:p-4">
-        <div className="flex flex-wrap items-center justify-between gap-4 px-1 pb-1">
-          <h1 className="text-[2rem] font-semibold tracking-[-0.04em] text-[#161616]">
-            Dashboard
-          </h1>
+    <div className="min-h-screen bg-[#0d2646] p-4 sm:p-6 lg:p-8 text-slate-900">
+      <div className="mx-auto max-w-[1400px] rounded-[28px] bg-white p-4 sm:p-6 md:p-8 shadow-[0_24px_60px_rgba(3,10,24,0.14)] space-y-6">
+        
+        {/* Header Bar */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-blue-600 flex-shrink-0" />
+              <h1 className="text-2xl sm:text-[1.8rem] font-bold text-slate-900 tracking-tight leading-tight flex items-center gap-2.5">
+                PMO Executive Dashboard
+                <span className="text-[11px] bg-blue-50 text-blue-700 border border-blue-200/80 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                  Admin PMO
+                </span>
+              </h1>
+            </div>
+            <p className="mt-1.5 text-sm font-medium text-slate-500">
+              Enterprise portfolio governance, capacity utilization, and resource staffing authorizations.
+            </p>
+          </div>
 
+          {/* Quick Action Navigation Pills */}
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => {
-                setActiveLauncherMenu(null)
-                setOpenModal(true)
-              }}
-              className="inline-flex items-center rounded-full bg-[#0088CE] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#d78116]"
+              onClick={() => setShowCreateProjectChoiceModal(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 text-xs font-bold shadow-md shadow-blue-600/20 transition active:scale-95 cursor-pointer"
             >
-              New Space
+              <Plus size={14} />
+              <span>Create Project</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/pmo/resource-approval-queue')}
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition active:scale-95 cursor-pointer border ${
+                pendingResourceRequestsCount > 0
+                  ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              <Users size={14} className={pendingResourceRequestsCount > 0 ? 'text-amber-600' : 'text-slate-500'} />
+              <span>Approval Queue</span>
+              {pendingResourceRequestsCount > 0 && (
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-extrabold shadow-xs">
+                  {pendingResourceRequestsCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/workload')}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 px-3.5 py-2 text-xs font-bold transition active:scale-95 cursor-pointer"
+            >
+              <BarChart3 size={14} className="text-slate-500" />
+              <span>Workload</span>
             </button>
 
             <div ref={gridMenuRef} className="relative">
@@ -846,7 +913,7 @@ function Dashboard() {
               />
 
               {showGridMenu ? (
-                <div className="absolute right-0 z-50 mt-2 max-h-[420px] w-[260px] overflow-y-auto rounded-md border border-[#d5dde7] bg-white shadow-lg">
+                <div className="absolute right-0 z-50 mt-2 max-h-[420px] w-[260px] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl p-1">
                   {gridMenuItems.map((item, index) => {
                     const isSelected = gridLimit === index + 1
 
@@ -858,10 +925,11 @@ function Dashboard() {
                           setGridLimit(index + 1)
                           setShowGridMenu(false)
                         }}
-                        className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-[#4a5565] ${isSelected ? 'bg-[#dbeafe]' : 'hover:bg-[#eef3f8]'
-                          }`}
+                        className={`flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-semibold text-slate-700 ${
+                          isSelected ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-slate-50'
+                        }`}
                       >
-                        <span className="h-3 w-3 rounded-sm border border-[#c8d1dc] bg-white" />
+                        <span className="h-2 w-2 rounded-full border border-slate-300 bg-white" />
                         <span>{item}</span>
                       </button>
                     )
@@ -869,11 +937,37 @@ function Dashboard() {
                 </div>
               ) : null}
             </div>
-            <ToolbarIcon icon={PencilLine} label="Edit" />
-            <ToolbarIcon icon={RefreshCw} label="Refresh" />
-            <ToolbarIcon icon={EllipsisVertical} label="More actions" />
+
+            <ToolbarIcon icon={RefreshCw} label="Refresh" onClick={() => window.location.reload()} />
           </div>
         </div>
+
+        {/* Priority PMO Alert Banner (if pending requests exist) */}
+        {pendingResourceRequestsCount > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-white border border-amber-200/90 p-4 shadow-2xs">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-md shadow-amber-500/25">
+                <AlertTriangle size={18} strokeWidth={2.3} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-amber-950">
+                  {pendingResourceRequestsCount} Pending Staffing / Resource Change Requests
+                </p>
+                <p className="text-[11px] font-medium text-amber-800 mt-0.5">
+                  Project Managers have submitted team allocation change requests requiring PMO review.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/pmo/resource-approval-queue')}
+              className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-xl bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 text-xs font-bold shadow-md shadow-amber-600/20 transition active:scale-95 cursor-pointer whitespace-nowrap"
+            >
+              <span>Review in Approval Queue</span>
+              <ArrowRight size={13} />
+            </button>
+          </div>
+        )}
 
         <DndContext
           collisionDetection={closestCenter}
@@ -896,6 +990,103 @@ function Dashboard() {
           appears.
         </div>
       </div>
+
+      {/* Production Create Project Choice Modal (New vs Copy Project) */}
+      {showCreateProjectChoiceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-blue-50/70 to-white px-6 py-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-md shadow-blue-500/20">
+                  <FolderPlus size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Create Project</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Select how you want to set up your project</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateProjectChoiceModal(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Choice Cards */}
+            <div className="p-6 space-y-3.5">
+              {/* Option 1: New Project */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateProjectChoiceModal(false)
+                  handleProjectQuickAction('new')
+                }}
+                className="group w-full flex items-center justify-between p-4.5 rounded-2xl border border-slate-200 hover:border-blue-500 bg-slate-50/50 hover:bg-blue-50/40 transition-all text-left cursor-pointer shadow-2xs hover:shadow-md"
+              >
+                <div className="flex items-start gap-3.5">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-2xs">
+                    <Sparkles size={20} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition">
+                      New Project
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                      Start fresh with a blank template. Define scope, milestones, budget, and resource allocations from scratch.
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight size={18} className="text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition shrink-0 ml-2" />
+              </button>
+
+              {/* Option 2: Copy Project */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateProjectChoiceModal(false)
+                  setShowSelectProjectToCopyModal(true)
+                }}
+                className="group w-full flex items-center justify-between p-4.5 rounded-2xl border border-slate-200 hover:border-emerald-500 bg-slate-50/50 hover:bg-emerald-50/40 transition-all text-left cursor-pointer shadow-2xs hover:shadow-md"
+              >
+                <div className="flex items-start gap-3.5">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-2xs">
+                    <Copy size={20} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 group-hover:text-emerald-700 transition">
+                      Copy Project
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                      Select an existing project to clone settings, milestone hierarchy, tasks, and budgets.
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight size={18} className="text-slate-300 group-hover:text-emerald-600 group-hover:translate-x-1 transition shrink-0 ml-2" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Select Project to Copy Modal */}
+      <SelectProjectToCopyModal
+        isOpen={showSelectProjectToCopyModal}
+        onClose={() => setShowSelectProjectToCopyModal(false)}
+        projects={projects}
+        onConfirmCopy={(chosenProject) => {
+          setShowSelectProjectToCopyModal(false)
+          handleLauncherNavigation('/project-management/create-project', {
+            state: {
+              openWizard: true,
+              mode: 'copy',
+              selectedProject: chosenProject,
+            },
+          })
+        }}
+      />
 
       {showLegacyLauncher && openModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">

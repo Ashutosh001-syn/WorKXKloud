@@ -19,7 +19,11 @@ import PMOReviewPage from './pages/PMOReviewPage'
 import WorkloadPage from './pages/Workload/WorkloadPage'
 import ResourceChangeRequestDetailPage from './pages/ResourceChangeRequestDetailPage'
 import ResourceChangeRequestsListPage from './pages/ResourceChangeRequestsListPage'
-import { hasPermission } from './utils/permissions'
+import ResourceApprovalQueuePage from './pages/ResourceApprovalQueuePage'
+import MyTasksPage from './pages/MyTasksPage'
+import MyTaskProjectDetailPage from './pages/MyTaskProjectDetailPage'
+import RiskPage from './pages/RiskPage'
+import { hasPermission, isResourceRole } from './utils/permissions'
 
 function ProtectedLayout() {
   if (!isAuthenticated()) {
@@ -64,6 +68,10 @@ function RoleBasedHome() {
     return <Navigate to="/new-assigned-project" replace />
   }
 
+  if (isResourceRole(role)) {
+    return <Navigate to="/my-tasks" replace />
+  }
+
   return <Dashboard />
 }
 
@@ -97,6 +105,9 @@ function App() {
         <Route element={<ProtectedLayout />}>
           <Route path="/" element={<RoleBasedHome />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/my-tasks" element={<MyTasksPage />} />
+          <Route path="/my-tasks/:projectId" element={<MyTaskProjectDetailPage />} />
+          <Route path="/risk" element={<RiskPage />} />
 
           <Route path="/pmo/resource-requests/:requestId" element={<ResourceChangeRequestDetailPage />} />
           <Route path="/pmo/resource-change-request" element={<ResourceChangeRequestDetailPage />} />
@@ -134,7 +145,7 @@ function App() {
                       ) : route.to === '/pmo/resource-requests' ? (
                         <ResourceChangeRequestsListPage />
                       ) : route.to === '/pmo/resource-approval-queue' ? (
-                        <ResourceChangeRequestsListPage />
+                        <ResourceApprovalQueuePage />
                       ) : route.to === '/project-management/create-project' ? (
                         <CreateProjectPage />
                       ) : route.to === '/resource/resource-master' ? (

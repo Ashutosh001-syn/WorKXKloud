@@ -1,0 +1,102 @@
+NEW / MISSING BACKEND APIS — CONSOLIDATED TODO
+=================================================
+Compiled: 2026-08-20 | All endpoints below confirmed via live curl (HTTP 404
+unless noted). Frontend is fully built for every item here — nothing listed
+requires frontend work, only the backend route + DB work.
+
+Full detailed specs also exist in:
+  - BACKEND_API_REQUIREMENTS.md          (overview of all sections below)
+  - BACKEND_RESOURCE_CHANGE_REQUEST_API.md  (full schema/response detail for section 1)
+
+This file is the flat checklist version — grab this list, hand the two docs
+above to backend for the detailed shapes.
+
+
+1. RESOURCE CHANGE REQUEST (6 endpoints)
+-------------------------------------------
+Full spec: BACKEND_RESOURCE_CHANGE_REQUEST_API.md (request/response JSON,
+DB schema for 4 tables, error code matrix — all already written).
+
+[ ] POST /api/admin/resource_change_requests
+    Params: { status, priority, search, page, limit } — all optional filters
+    Returns: list + summary counts (total/pending/approved/rejected) + pagination
+
+[ ] POST /api/admin/resource_change_request_detail
+    Params: { request_id }
+    Returns: project + client info, current_allocation[], requested_allocation[],
+    attachments[], payment_milestones[], activity_log[]
+
+[ ] POST /api/admin/approve_resource_change
+    Params: { request_id, pmo_id, pmo_remarks }
+    Side effect: must apply the requested allocation to the project's live
+    resource_allocations, not just flip a status flag
+
+[ ] POST /api/admin/reject_resource_change
+    Params: { request_id, pmo_id, rejection_reason }  (rejection_reason required)
+
+[ ] POST /api/admin/clarify_resource_change
+    Params: { request_id, pmo_id, clarification_query }
+
+[ ] POST /api/projectManager/create_resource_change_request
+    Params: (PM-side submission — not in api.js yet, needs adding once live)
+    project_id, pm_id, requested_allocation[], reason_by_pm, pm_request_note,
+    attachments[] (optional)
+
+
+2. PROJECT REALLOCATION (1 endpoint)
+-------------------------------------------
+[ ] POST /api/admin/re-allocated
+    Real frontend call site: src/pages/CreateProjectPage.jsx,
+    handleConfirmAssignPM() — payload format is multipart/form-data, NOT JSON:
+      id: <project_id>
+      pm_id: <project_id>          <-- BUG, see below
+      project_manager: <string, new PM's display name>
+      status: "re-allocated"
+    Returns: { success, message }
+
+    ⚠️ KNOWN FRONTEND BUG (flag to backend before they build against this):
+    pm_id is currently set to the PROJECT's id, not the new PM's actual
+    user/resource id (copy-paste mistake in CreateProjectPage.jsx). Confirm
+    the real intended field with frontend/backend together before locking
+    this contract in — implementing it as-is will silently misassign PMs.
+
+
+3. UPDATE PROJECT MILESTONE (1 endpoint)
+-------------------------------------------
+[ ] POST /api/projectManager/update_project_milestone
+    STATUS: no frontend call site exists yet (endpoint is defined in
+    api.js but never called) — shape below is INFERRED from the existing
+    milestone schema, not confirmed. Treat as a proposal to align on.
+
+    Suggested params:
+      project_id: number
+      milestone: string        (matches how milestones are created/read)
+      milestone_date: "YYYY-MM-DD"
+      percentage: number
+
+    OPEN QUESTION — blocking a real contract: milestones have no stable
+    `id` in the current read shape (get_projectList's milestones[] is just
+    { milestone, percentage, milestone_date }, no id). A project can have
+    two milestones with the same name (e.g. two "Sign-off" phases) — so
+    "update by name" is ambiguous. RECOMMEND backend add a milestone_id
+    column, return it in get_projectList's milestones[], and require it
+    here — matching how every other update endpoint in this app (e.g.
+    UPDATE_BOARD) keys off a real row id, not a name match.
+
+
+4. NOT ON THIS LIST — RESOLVED, NO API NEEDED
+-------------------------------------------
+Workload page — confirmed 2026-08-19, does NOT need a new endpoint.
+Computed client-side from RESOURCE_LIST + GET_PROJECT_LIST (already live).
+See workload.todo for the full calculation logic if this ever needs
+revisiting.
+
+
+SUMMARY
+-------
+8 endpoints across 3 features, all confirmed 404 live (2026-08-20).
+Priority suggestion:
+  1. Resource Change Request (6) — biggest, most complete frontend waiting
+  2. Project Reallocation (1) — fix the pm_id bug conversation first
+  3. Update Project Milestone (1) — needs a design decision (milestone_id)
+     before backend should start building

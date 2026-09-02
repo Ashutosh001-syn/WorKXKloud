@@ -146,14 +146,24 @@ const BACKEND_STATUS_MAP = {
   [WORKFLOW_STATUS.REJECTED]: { actor: 'pmo', value: 'rejected' },
 }
 
-// Best-effort parallel write — localStorage (writeAll above) is what the UI
-// actually reads back, so a failure here is logged, not surfaced to the
-// user or allowed to block/roll back the local state change. `actorId` is
-// whichever side is doing the acting: the PM's own id when status is
-// FROZEN_PENDING_REVIEW, the PMO's own id when Approving/Rejecting.
-function syncToBackend(projectId, actorId, status, note) {
+export function getLoggedInPmId() {
+  try {
+    const authUser = localStorage.getItem('auth_user')
+    if (authUser) {
+      const user = JSON.parse(authUser)
+      if (user.id || user.user_id) return Number(user.id || user.user_id)
+    }
+  } catch {}
+  return 1 // Fallback PM id
+}
+
+// Best-effort write to backend with promise return
+async function syncToBackend(projectId, actorId, status, note) {
   const mapped = BACKEND_STATUS_MAP[status]
-  if (!mapped || !actorId) return
+  if (!mapped) return null
+
+  const resolvedActorId = Number(actorId) || getLoggedInPmId()
+  const numProjectId = Number(projectId)
 
   // There's one status row per project, not a queue — PMO's last decision
   // (approved/rejected) otherwise stays stuck on the row forever, since a
@@ -161,22 +171,43 @@ function syncToBackend(projectId, actorId, status, note) {
   // is what makes a re-submission after a Reject actually show up as
   // pending again instead of still reading as the old decision.
   const body = mapped.actor === 'pm'
-    ? { project_id: projectId, pm_id: actorId, pm_status: mapped.value, pmo_id: FORCED_PMO_ID, pmo_status: 'pending', reason: '' }
-    : { project_id: projectId, pmo_id: actorId, pmo_status: mapped.value, reason: note || '' }
+    ? {
+        project_id: numProjectId,
+        pm_id: resolvedActorId,
+        pm_status: mapped.value,
+        pmo_id: FORCED_PMO_ID,
+        pmo_status: 'pending',
+        reason: '',
+      }
+    : {
+        project_id: numProjectId,
+        pmo_id: Number(actorId || FORCED_PMO_ID),
+        pmo_status: mapped.value,
+        reason: note || '',
+      }
 
-  fetch(API_ENDPOINTS.SCHEDULE_STATUS_BY_PM, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-    .then((res) => res.json())
-    .then((data) => {
-      if (!data.success) console.warn('scheduleStatusByPm rejected:', data.message)
+  try {
+    const token = localStorage.getItem('token') || ''
+    const headers = { 'Content-Type': 'application/json' }
+    if (token && token !== 'authenticated') {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const res = await fetch(API_ENDPOINTS.SCHEDULE_STATUS_BY_PM, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
     })
-    .catch((err) => console.warn('scheduleStatusByPm failed:', err))
+    const data = await res.json()
+    if (!data?.success) console.warn('scheduleStatusByPm response not successful:', data?.message)
+    return data
+  } catch (err) {
+    console.warn('scheduleStatusByPm failed:', err)
+    return null
+  }
 }
 
-export function setWorkflow(projectId, status, note = '', actorId = null, snapshot = null) {
+export async function setWorkflow(projectId, status, note = '', actorId = null, snapshot = null) {
   const all = readAll()
   const key = String(projectId)
   const current = all[key] || { history: [] }
@@ -196,8 +227,39 @@ export function setWorkflow(projectId, status, note = '', actorId = null, snapsh
   }
   all[key] = entry
   writeAll(all)
-  syncToBackend(projectId, actorId, status, note)
+  await syncToBackend(projectId, actorId, status, note)
   return entry
+}
+
+// Helper to determine the accurate status considering both backend data and local store
+export function getEffectiveWorkflow(projectRow) {
+  const localWf = getWorkflow(projectRow?.id)
+  const backendDerived = deriveWorkflowStatus(projectRow?.pm_status, projectRow?.pmo_status)
+
+  // If backend has explicit approved or rejected, use backend
+  if (projectRow?.pmo_status === 'approved' || projectRow?.pmo_status === 'rejected') {
+    return {
+      status: backendDerived,
+      note: projectRow?.reason || localWf.note || '',
+    }
+  }
+
+  // If locally marked as FROZEN_PENDING_REVIEW, APPROVED, or REJECTED and backend is lagging (e.g. DRAFT)
+  if (
+    localWf.status &&
+    localWf.status !== WORKFLOW_STATUS.DRAFT &&
+    backendDerived === WORKFLOW_STATUS.DRAFT
+  ) {
+    return {
+      status: localWf.status,
+      note: localWf.note || projectRow?.reason || '',
+    }
+  }
+
+  return {
+    status: backendDerived,
+    note: projectRow?.reason || localWf.note || '',
+  }
 }
 
 export function subscribeToWorkflowChanges(callback) {

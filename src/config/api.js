@@ -41,22 +41,33 @@ export const API_ENDPOINTS = {
   PROJECT_APPROVAL_BY_PM: `${API_ROOT_URL}/projectManager/project_approvalBYPM`,
   CREATE_REQUIRED_RESOURCE: `${API_ROOT_URL}/projectManager/create_requiredResource`,
   GET_PM_BACKLOG: `${API_ROOT_URL}/projectManager/get_pmBacklog`,
-  // Write-only — confirmed live, but there's no read/GET counterpart yet,
-  // so it can't be the source of truth for UI state (see scheduleWorkflow.js).
+  // A resource's own tasks across every project — POST { resource: <user id> }.
+  GET_USER_PROJECT_LIST: `${API_ROOT_URL}/users/get_userProjectList`,
+  // Write-only, no GET counterpart (see scheduleWorkflow.js).
   SCHEDULE_STATUS_BY_PM: `${API_ROOT_URL}/projectManager/scheduleStatusByPm`,
-  // Read counterpart — confirmed live. POST (not GET), and pmo_id is
-  // required + actually filters (returns only projects that PMO has
-  // touched via scheduleStatusByPm). No pm_id-scoped equivalent exists yet.
+  // POST, requires pmo_id. No pm_id-scoped equivalent yet.
   GET_PROJECTS_STATUS: `${API_ROOT_URL}/admin/getProjectsStatus`,
+
+  // Resource Change Requests
+  CREATE_RESOURCE_CHANGE_REQUEST: `${API_ROOT_URL}/projectManager/create_resource_change_request`,
+  GET_RESOURCE_CHANGE_REQUESTS: `${API_BASE_URL}/resource_change_requests`,
+  APPROVE_RESOURCE_CHANGE: `${API_BASE_URL}/approve_resource_change`,
+  REJECT_RESOURCE_CHANGE: `${API_BASE_URL}/reject_resource_change`,
+  CLARIFY_RESOURCE_CHANGE: `${API_BASE_URL}/clarify_resource_change`,
 
   // Boards
   CREATE_BOARD: `${API_ROOT_URL}/users/create_board`,
+  // getBoard only returns 5 fixed status buckets (in_discussion/to_do/
+  // in_work/in_progress/completed) — see boardfinal.todo.
   GET_BOARD: `${API_ROOT_URL}/projectManager/getBoard`,
-  // Both status moves and field edits (resource_id) go through the same
-  // record-level endpoint — confirmed live, and it requires the FULL
-  // record (id, project_id, task_id, resource_id, status, pm_id) on every
-  // call; sending a partial body nulls out the omitted columns server-side.
+  // Requires the FULL record (id, project_id, task_id, resource_id,
+  // status, pm_id) every call — a partial body nulls out omitted columns.
   UPDATE_BOARD_STATUS: `${API_ROOT_URL}/users/editBoard`,
+  // Board column NAMES only (not card data) — see boardfinal.todo.
+  SAVE_BOARD_STATUS: `${API_ROOT_URL}/projectManager/saveBoardStatus`,
+  GET_BOARD_STATUS: `${API_ROOT_URL}/projectManager/getBoardStatus`,
+  RENAME_BOARD_STATUS: `${API_ROOT_URL}/projectManager/editBoardStatus`,
+  DELETE_BOARD_STATUS: `${API_ROOT_URL}/projectManager/deleteBoardStatus`,
   UPDATE_BOARD: `${API_ROOT_URL}/users/editBoard`,
   DELETE_BOARD: `${API_ROOT_URL}/users/deleteBoard`,
   GET_USER_DISCUSSION: `${API_ROOT_URL}/users/get_userDiscussion`,
@@ -64,27 +75,17 @@ export const API_ENDPOINTS = {
   // Milestone
   UPDATE_PROJECT_MILESTONE: `${API_ROOT_URL}/projectManager/update_project_milestone`,
 
-  // ==========================
-  // Project Schedule (Gantt)
-  // ==========================
+  // Project Schedule (Gantt) & Project Resources
   GET_PROJECT_SCHEDULE: `${API_ROOT_URL}/projectManager/get_project_schedule`,
+  GET_PROJECT_RESOURCES: `${API_ROOT_URL}/admin/get_project_resources`,
   SCHEDULE_PROJECT_TASK: `${API_ROOT_URL}/projectManager/schedule_project`,
   CREATE_SUBTASK_SCHEDULE: `${API_ROOT_URL}/projectManager/subTask_schedule`,
-
-  // NEW
   UPDATE_TASK_SCHEDULE: `${API_ROOT_URL}/projectManager/editTaskScheduleProject`,
   UPDATE_SUBTASK_SCHEDULE: `${API_ROOT_URL}/projectManager/editSubTaskSchedule`,
-
   DELETE_TASK_SUBTASK: `${API_ROOT_URL}/projectManager/deleteTaskSubtask`,
 
-  // TODO(backend): placeholder — no workload/resource-allocation-hours
-  // endpoint exists yet (verified: not in resource_list, not in
-  // ResourceAllocationPage, not anywhere else). WorkloadPage tries this URL
-  // and falls back to workloadDummyData.js on failure, so once this route
-  // is real, swap the URL below and the page picks it up with no other
-  // changes needed. Expected shape: { success, data: { activeProject: {...},
-  // resources: [{ id, name, role, projects: [{ id, name, weekdayHours,
-  // monthly, exceptions }] }] } } — same as workloadDummyData.js's exports.
+  // Not implemented on the backend yet (404) — Workload is computed
+  // client-side instead (see WorkloadPage.jsx).
   GET_WORKLOAD: `${API_ROOT_URL}/admin/get_workload`,
 
   // Notifications

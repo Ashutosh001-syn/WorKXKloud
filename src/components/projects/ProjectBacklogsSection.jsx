@@ -32,6 +32,10 @@ function ProjectBacklogsSection() {
   const [searchTerm, setSearchTerm] = useState('');
   const [memberFilter, setMemberFilter] = useState('All Members');
   const [roleFilter, setRoleFilter] = useState('All Roles');
+  // get_pmBacklog can return a raw board-status id (e.g. "9") instead of a
+  // name — this maps it back to the real status name via getBoardStatus so
+  // the table never shows a bare number to the user.
+  const [statusNameById, setStatusNameById] = useState({});
 
   const getPmId = () => {
     const userStr = localStorage.getItem('auth_user');
@@ -76,6 +80,23 @@ function ProjectBacklogsSection() {
     };
 
     queueMicrotask(() => fetchBacklogs());
+  }, []);
+
+  useEffect(() => {
+    const fetchStatusNames = async () => {
+      try {
+        const res = await fetch(API_ENDPOINTS.GET_BOARD_STATUS);
+        const data = await res.json();
+        if (data?.success && Array.isArray(data.data)) {
+          const map = {};
+          data.data.forEach((s) => { map[String(s.id)] = s.status; });
+          setStatusNameById(map);
+        }
+      } catch {
+        // Falls back to showing the raw status value below.
+      }
+    };
+    queueMicrotask(() => fetchStatusNames());
   }, []);
 
   const memberOptions = useMemo(
@@ -149,14 +170,17 @@ function ProjectBacklogsSection() {
   };
 
   const renderStatus = (status) => {
-    const s = (status || '').toLowerCase();
+    // get_pmBacklog can return a raw board-status id ("9") instead of a
+    // name — resolve it via statusNameById before displaying.
+    const resolved = /^\d+$/.test(String(status || '')) ? statusNameById[String(status)] || status : status;
+    const s = (resolved || '').toLowerCase();
     if (s === 'to do') {
       return <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-600 capitalize">To Do</span>;
     }
     if (s === 'in progress') {
       return <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600 capitalize">In Progress</span>;
     }
-    return <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 capitalize">{status || 'Not Started'}</span>;
+    return <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 capitalize">{resolved || 'Not Started'}</span>;
   };
 
   if (loading) {

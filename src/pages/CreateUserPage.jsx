@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { Search, ChevronDown, X, Pencil, Ban, Camera, User, Check } from 'lucide-react'
 import { API_ENDPOINTS } from '../config/api'
+import BackButton from '../components/ui/BackButton'
 
 const initialTeamMembers = [
 ]
@@ -344,26 +345,29 @@ export default function CreateUserPage() {
               Manage and maintain all resource in the organization
             </p>
           </div>
-          <div className="flex w-full sm:w-auto flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-3">
-            <button
-              onClick={handleOpenModal}
-              className="rounded-full bg-[#0052ff] px-6 py-2 text-[14px] font-medium text-white transition hover:bg-[#0042cc]"
-            >
-              Add User
-            </button>
-            <label className="flex cursor-pointer items-center gap-2 text-[12px] font-medium text-[#64748b] transition-colors hover:text-[#334155]">
-              <div className="relative flex items-center">
-                <input
-                  type="checkbox"
-                  className="peer sr-only"
-                  checked={showBlockedUsers}
-                  onChange={(e) => setShowBlockedUsers(e.target.checked)}
-                />
-                <div className="h-4 w-7 rounded-full bg-slate-200 transition-colors duration-200 ease-in-out peer-checked:bg-[#0052ff]"></div>
-                <div className="absolute left-[2px] h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out peer-checked:translate-x-3"></div>
-              </div>
-              Show blocked users
-            </label>
+          <div className="flex w-full sm:w-auto flex-row items-center justify-between sm:justify-end gap-3">
+            <BackButton fallbackUrl="/dashboard" label="Back to Dashboard" />
+            <div className="flex flex-col items-end gap-2">
+              <button
+                onClick={handleOpenModal}
+                className="rounded-full bg-[#0052ff] px-6 py-2 text-[14px] font-medium text-white transition hover:bg-[#0042cc] cursor-pointer"
+              >
+                Add User
+              </button>
+              <label className="flex cursor-pointer items-center gap-2 text-[12px] font-medium text-[#64748b] transition-colors hover:text-[#334155]">
+                <div className="relative flex items-center">
+                  <input
+                    type="checkbox"
+                    className="peer sr-only"
+                    checked={showBlockedUsers}
+                    onChange={(e) => setShowBlockedUsers(e.target.checked)}
+                  />
+                  <div className="h-4 w-7 rounded-full bg-slate-200 transition-colors duration-200 ease-in-out peer-checked:bg-[#0052ff]"></div>
+                  <div className="absolute left-[2px] h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out peer-checked:translate-x-3"></div>
+                </div>
+                Show blocked users
+              </label>
+            </div>
           </div>
         </div>
 

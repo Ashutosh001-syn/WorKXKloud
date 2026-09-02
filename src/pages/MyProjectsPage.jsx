@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import BackButton from '../components/ui/BackButton'
 import {
   Calendar,
   Compass,
@@ -26,12 +27,17 @@ import {
   DollarSign,
   Loader2,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  CheckCircle2,
+  UserPlus,
+  Check,
 } from 'lucide-react'
 import GanttChart from '../components/projects/gantt/GanttChart'
 import ProjectBoardSection from '../components/projects/ProjectBoardSection'
 import ProjectDiscussionSection from '../components/projects/ProjectDiscussionSection'
 import ProjectBacklogsSection from '../components/projects/ProjectBacklogsSection'
+import CreateResourceChangeRequestModal from '../components/projects/CreateResourceChangeRequestModal'
+import { getResourceChangeRequests } from '../data/resourceChangeRequestsData'
 import { API_ENDPOINTS, API_ROOT_URL } from '../config/api'
 
 // Helper to format date strings
@@ -233,34 +239,59 @@ const EmptyBoxIcon = () => (
 
 
 
+// Helper to parse milestones from array or string
+const parseMilestones = (milestones) => {
+  if (!milestones) return []
+  if (Array.isArray(milestones)) return milestones
+  if (typeof milestones === 'string') {
+    try {
+      const parsed = JSON.parse(milestones)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
 // Calculate overall milestone progress
 const getOverallProgress = (project) => {
-  if (!project.milestones || project.milestones.length === 0) return 0
+  if (!project) return 0
+  const milestones = parseMilestones(project.milestones)
+  if (milestones.length === 0) return 0
   const today = new Date()
-  const completed = project.milestones.filter(m => new Date(m.milestone_date) <= today)
-  if (completed.length === 0) return 0
-  return completed[completed.length - 1]?.percentage || 0
+  try {
+    const completed = milestones.filter(m => m && m.milestone_date && new Date(m.milestone_date) <= today)
+    if (completed.length === 0) return 0
+    return completed[completed.length - 1]?.percentage || 0
+  } catch {
+    return 0
+  }
 }
 
 // Break milestones into Done / On Track / Overdue / Future buckets for the Task Status donut.
 // Done = percentage already at/above 100. Overdue = past its date but not completed.
 // On Track = due within the next 14 days, not completed yet. Future = everything further out.
 const getTaskStatusBreakdown = (project) => {
-  const milestones = Array.isArray(project.milestones) ? project.milestones : []
+  if (!project) return { done: 0, overdue: 0, onTrack: 0, future: 0, total: 0 }
+  const milestones = parseMilestones(project.milestones)
   const today = new Date()
   let done = 0, overdue = 0, onTrack = 0, future = 0
 
   milestones.forEach((ms) => {
-    const pct = ms.percentage || 0
-    const msDate = new Date(ms.milestone_date)
+    if (!ms) return
+    const pct = Number(ms.percentage) || 0
+    const msDate = ms.milestone_date ? new Date(ms.milestone_date) : null
     if (pct >= 100) {
       done++
-    } else if (msDate < today) {
+    } else if (msDate && msDate < today) {
       overdue++
-    } else {
+    } else if (msDate) {
       const diffDays = (msDate - today) / (1000 * 60 * 60 * 24)
       if (diffDays <= 14) onTrack++
       else future++
+    } else {
+      future++
     }
   })
 
@@ -353,9 +384,9 @@ const getGanttDataForProject = (project) => {
 
   const projectId = project.id || project.project_code || 'project_root'
   const rootTaskId = `project_${projectId}`
-  const milestones = Array.isArray(project.milestones) ? [...project.milestones] : []
+  const milestones = parseMilestones(project.milestones)
 
-  const sortedMilestones = milestones.sort((a, b) => new Date(a.milestone_date) - new Date(b.milestone_date))
+  const sortedMilestones = [...milestones].sort((a, b) => new Date(a.milestone_date || 0) - new Date(b.milestone_date || 0))
 
   const projectTask = {
     id: rootTaskId,
@@ -406,6 +437,19 @@ function MyProjectsPage() {
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'Overview')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [isResourceModalOpen, setIsResourceModalOpen] = useState(false)
+  const [resourceRequests, setResourceRequests] = useState(() => getResourceChangeRequests())
+  const [toastMessage, setToastMessage] = useState(null)
+
+  useEffect(() => {
+    const handleSync = () => setResourceRequests(getResourceChangeRequests())
+    window.addEventListener('resource-requests-updated', handleSync)
+    window.addEventListener('storage', handleSync)
+    return () => {
+      window.removeEventListener('resource-requests-updated', handleSync)
+      window.removeEventListener('storage', handleSync)
+    }
+  }, [])
 
   // Selecting a project / switching tabs is plain React state, which a
   // refresh wipes — mirror it into the URL (?project=&tab=) so a refresh
@@ -473,39 +517,42 @@ function MyProjectsPage() {
   }, [])
 
   // Once projects are in, re-select whichever one the URL points at (e.g.
-  // after a refresh) instead of leaving the user on the project list.
+  // after a refresh or navigating with ?project=ID&tab=Overview)
   useEffect(() => {
-    if (loading || selectedProject) return
+    if (loading) return
     const projectId = searchParams.get('project')
-    if (!projectId) return
-    const match = projects.find((p) => String(p.id) === projectId)
-    queueMicrotask(() => {
-      if (match) {
-        setSelectedProject(match)
-      } else {
-        // Stale/invalid id in the URL — drop it instead of leaving a dead link.
-        setSearchParams({})
-      }
-    })
-  }, [loading, projects, searchParams, selectedProject, setSearchParams])
+    if (!projectId) {
+      if (selectedProject) setSelectedProject(null)
+      return
+    }
+    const match = projects.find((p) => String(p.id) === String(projectId))
+    if (match) {
+      setSelectedProject(match)
+      const tab = searchParams.get('tab') || 'Overview'
+      setActiveTab(tab)
+    } else if (projects.length > 0) {
+      // Stale/invalid id in the URL — drop it instead of leaving a dead link.
+      setSearchParams({})
+    }
+  }, [loading, projects, searchParams])
 
 
   return (
     <div className="min-h-screen bg-[#0d2646] p-4 sm:p-6 lg:p-8">
       {/* Back button */}
-      <button
-        onClick={() => {
-          if (selectedProject) {
-            closeProject()
-          } else {
-            navigate('/')
-          }
-        }}
-        className="flex items-center gap-2 text-xs font-bold text-slate-200 hover:text-white mb-6 bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 rounded-lg transition shadow-sm cursor-pointer"
-      >
-        <ArrowLeft size={14} />
-        {selectedProject ? 'Back to Projects' : 'Back to Dashboard'}
-      </button>
+      <div className="mb-6">
+        <BackButton
+          variant="dark"
+          label={selectedProject ? 'Back to Projects' : 'Back to Dashboard'}
+          onClick={(e) => {
+            if (selectedProject) {
+              e.preventDefault();
+              closeProject();
+            }
+          }}
+          fallbackUrl="/dashboard"
+        />
+      </div>
 
       {/* Main Container */}
       <div className="mx-auto max-w-[1280px]">
@@ -736,25 +783,36 @@ function MyProjectsPage() {
                   </div>
                 </div>
 
-                {/* Progress bar container */}
-                <div className="flex flex-col min-w-[240px] md:mr-4">
-                  <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold">
-                    <span>➔</span>
-                    <span>Start</span>
-                  </div>
-                  <div className="text-sm font-bold text-slate-700 mt-1">
-                    {formatDate(selectedProject.start_date)}
-                  </div>
-                  <div className="relative mt-3.5 flex items-center w-full max-w-[260px]">
-                    <div className="h-[3px] w-full bg-blue-100 rounded-full relative">
-                      <div
-                        className="absolute left-0 top-1/2 -translate-y-1/2 h-[3px] bg-blue-600 rounded-full"
-                        style={{ width: `${getOverallProgress(selectedProject)}%` }}
-                      />
-                      <div
-                        className="absolute top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full bg-[#0d2646] border-2 border-white shadow-sm cursor-pointer"
-                        style={{ left: `${getOverallProgress(selectedProject)}%` }}
-                      />
+                {/* Right Actions & Progress Bar */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsResourceModalOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-600/20 hover:from-blue-700 hover:to-indigo-700 transition active:scale-95 cursor-pointer whitespace-nowrap"
+                  >
+                    <Users size={15} />
+                    <span>Request Resource Change</span>
+                  </button>
+
+                  <div className="flex flex-col min-w-[200px]">
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold">
+                      <span>➔</span>
+                      <span>Start</span>
+                    </div>
+                    <div className="text-sm font-bold text-slate-700 mt-1">
+                      {formatDate(selectedProject.start_date)}
+                    </div>
+                    <div className="relative mt-3.5 flex items-center w-full max-w-[240px]">
+                      <div className="h-[3px] w-full bg-blue-100 rounded-full relative">
+                        <div
+                          className="absolute left-0 top-1/2 -translate-y-1/2 h-[3px] bg-blue-600 rounded-full"
+                          style={{ width: `${getOverallProgress(selectedProject)}%` }}
+                        />
+                        <div
+                          className="absolute top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full bg-[#0d2646] border-2 border-white shadow-sm cursor-pointer"
+                          style={{ left: `${getOverallProgress(selectedProject)}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -763,7 +821,7 @@ function MyProjectsPage() {
               {/* Tabs list */}
               <div className="mt-6 border-b border-slate-100 overflow-x-auto scrollbar-none">
                 <div className="flex items-center gap-5 sm:gap-8 text-sm font-bold w-max min-w-full pb-px px-2 sm:px-6">
-                  {['Overview', 'Schedule', 'Board', 'Backlogs', 'Discussion', 'Financial'].map((tab) => (
+                  {['Overview', 'Schedule', 'Board', 'Resources', 'Discussion', 'Financial'].map((tab) => (
                     <button
                       key={tab}
                       onClick={() => changeTab(tab)}
@@ -966,11 +1024,12 @@ function MyProjectsPage() {
 
                 </div>
 
-              ) : activeTab === 'Board' ? (
+              ) : activeTab === 'Board' || activeTab === 'Backlogs' ? (
                 <ProjectBoardSection
-                  projectId={selectedProject.id}
+                  projectId={selectedProject?.id}
                   pmId={getPmId()}
-                  projectName={selectedProject.project_name}
+                  projectName={selectedProject?.project_name}
+                  initialViewMode={activeTab === 'Backlogs' ? 'backlog' : 'board'}
                 />
               ) : activeTab === 'Schedule' ? (
                 <GanttChart
@@ -1016,8 +1075,115 @@ function MyProjectsPage() {
                     </div>
                   </div>
                 </div>
-              ) : activeTab === 'Backlogs' ? (
-                <ProjectBacklogsSection />
+              ) : activeTab === 'Resources' ? (
+                <div className="mt-6 space-y-6">
+                  {/* Top Banner */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-blue-50/80 via-indigo-50/40 to-white p-5 rounded-2xl border border-blue-100/80 shadow-2xs">
+                    <div className="flex items-center gap-3.5">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-md shadow-blue-500/20">
+                        <Users size={22} strokeWidth={2.2} />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-900 text-sm">
+                          Project Staffing & Resource Allocations
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          View allocated team members or request staffing changes from the PMO.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsResourceModalOpen(true)}
+                      className="inline-flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-600/20 transition active:scale-95 cursor-pointer whitespace-nowrap"
+                    >
+                      <Users size={15} />
+                      <span>+ Request Resource Change</span>
+                    </button>
+                  </div>
+
+                  {/* Allocated Team Members Grid */}
+                  <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">
+                      Current Allocated Team
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {(selectedProject.resourcesAllocated || [
+                        { name: selectedProject.project_manager || 'Lead Developer', role: 'Full Stack Developer', allocation: 100 }
+                      ]).map((member, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-slate-50/60 hover:bg-slate-50 hover:border-slate-200 transition"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs">
+                              {(member.name || 'U').slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-slate-800">{member.name}</p>
+                              <p className="text-[11px] text-slate-400 mt-0.5">{member.role || 'Team Member'}</p>
+                            </div>
+                          </div>
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold">
+                            {member.allocation || 100}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Submitted Resource Change Requests for this Project */}
+                  <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                        Staffing Change Requests (PM ➔ PMO)
+                      </h4>
+                      <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full">
+                        {resourceRequests.filter(r => r.projectName === selectedProject.project_name || r.projectId === selectedProject.project_code).length} Submitted
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {resourceRequests.filter(r => r.projectName === selectedProject.project_name || r.projectId === selectedProject.project_code).length === 0 ? (
+                        <div className="py-8 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                          <p className="text-xs font-bold text-slate-400">No resource change requests raised for this project yet.</p>
+                          <p className="text-[11px] text-slate-400 mt-1">Click "Request Resource Change" above to submit a staffing request to PMO.</p>
+                        </div>
+                      ) : (
+                        resourceRequests
+                          .filter(r => r.projectName === selectedProject.project_name || r.projectId === selectedProject.project_code)
+                          .map((req) => (
+                            <div
+                              key={req.id}
+                              className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-slate-100 bg-white shadow-2xs hover:border-slate-200 transition"
+                            >
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-bold text-slate-900">{req.id}</span>
+                                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                                    req.status === 'Approved'
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                      : req.status === 'Rejected'
+                                      ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                      : req.status === 'Clarification Requested'
+                                      ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  }`}>
+                                    {req.status}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-1">{req.reasonProvidedByPM}</p>
+                              </div>
+                              <div className="text-right text-xs text-slate-400">
+                                <span>{req.requestedOnFormatted}</span>
+                              </div>
+                            </div>
+                          ))
+                      )}
+                    </div>
+                  </div>
+                </div>
               ) : activeTab === 'Discussion' ? (
                 <ProjectDiscussionSection />
               ) : (
@@ -1034,6 +1200,27 @@ function MyProjectsPage() {
 
         </div>
       </div>
+
+      {/* Resource Change Request Modal (PM Side) */}
+      {isResourceModalOpen && selectedProject && (
+        <CreateResourceChangeRequestModal
+          isOpen={isResourceModalOpen}
+          onClose={() => setIsResourceModalOpen(false)}
+          project={selectedProject}
+          onSuccess={(createdReq) => {
+            setToastMessage(`Resource change request ${createdReq.id} submitted to PMO successfully!`)
+            setTimeout(() => setToastMessage(null), 5000)
+          }}
+        />
+      )}
+
+      {/* Floating Success Toast */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-slate-900 text-white px-5 py-3.5 shadow-2xl border border-slate-800 animate-in slide-in-from-bottom-5">
+          <CheckCircle2 size={18} className="text-emerald-400" />
+          <span className="text-xs font-bold">{toastMessage}</span>
+        </div>
+      )}
     </div>
   )
 }

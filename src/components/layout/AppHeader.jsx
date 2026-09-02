@@ -1,7 +1,7 @@
-import { Bell, UserCircle2, LogOut, User, Menu } from "lucide-react";
+import { Bell, UserCircle2, LogOut, User, Menu, Search, X } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { signOut } from "../../utils/auth";
 import logo from '../../assets/Logo.png';
 import NotificationPanel from "../notifications/NotificationPanel";
@@ -25,9 +25,14 @@ function HeaderIconButton({ children, label, onClick }) {
 function AppHeader() {
   const [open, setOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const dropdownRef = useRef(null);
   const notifRef = useRef(null);
+  const searchRef = useRef(null);
+  const searchInputRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const [userData, setUserData] = useState(() => {
     const saved = localStorage.getItem('user_profile');
     return saved ? JSON.parse(saved) : null;
@@ -66,10 +71,28 @@ function AppHeader() {
       if (notifRef.current && !notifRef.current.contains(e.target)) {
         setNotifOpen(false);
       }
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setSearchOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
+
+  // AppHeader persists across route changes (it's outside the routed
+  // <Outlet/>), so navigating any other way than submitting the search
+  // form (a sidebar link, browser back/forward, the result page's own
+  // search box) would otherwise leave this box sitting open and empty —
+  // exactly the "two search bars" confusion. Closing on every path change
+  // guarantees it never lingers, regardless of how navigation happened.
+  useEffect(() => {
+    setSearchOpen(false);
+    setSearchQuery('');
+  }, [location.pathname]);
 
   const handleLogout = () => {
     signOut();
@@ -108,7 +131,69 @@ function AppHeader() {
           </div>
 
           {/* Right: Actions */}
-          <div className="flex items-center gap-1.5 relative z-10">
+          <div className="flex items-center gap-2 relative z-10">
+            {/* Search — expands to a query box that jumps to All Projects
+                with the term pre-filled (that page already does real,
+                live filtering over get_projectList). */}
+            <div className="relative flex items-center" ref={searchRef}>
+              <AnimatePresence mode="wait">
+                {searchOpen ? (
+                  <MotionDiv
+                    key="search-input"
+                    initial={{ width: 0, opacity: 0 }}
+                    animate={{ width: 176, opacity: 1 }}
+                    exit={{ width: 0, opacity: 0 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="overflow-hidden max-w-[45vw]"
+                  >
+                    {/* Fixed 176px comfortably fits alongside the
+                        hamburger/notification/profile icons even on a
+                        320px-wide phone; max-w-[45vw] is a second safety
+                        net if the viewport is narrower still. */}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const q = searchQuery.trim();
+                        if (!q) return;
+                        navigate(`/all-project?search=${encodeURIComponent(q)}`);
+                        setSearchOpen(false);
+                        setSearchQuery('');
+                      }}
+                      className="relative flex items-center w-44"
+                    >
+                      <Search size={14} strokeWidth={2} className="pointer-events-none absolute left-3.5 text-slate-300" />
+                      <input
+                        ref={searchInputRef}
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery(''); } }}
+                        placeholder="Search projects..."
+                        className="h-9 w-full rounded-full border border-white/20 bg-white/10 pl-9 pr-8 text-[13px] font-medium text-white placeholder:text-slate-400 shadow-inner outline-none transition focus:border-white/40 focus:bg-white/15"
+                      />
+                      <button
+                        type="button"
+                        aria-label="Close search"
+                        onClick={() => { setSearchOpen(false); setSearchQuery(''); }}
+                        className="absolute right-2.5 flex h-5 w-5 items-center justify-center rounded-full text-slate-300 transition hover:bg-white/10 hover:text-white"
+                      >
+                        <X size={13} strokeWidth={2.5} />
+                      </button>
+                    </form>
+                  </MotionDiv>
+                ) : (
+                  <MotionDiv key="search-icon" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+                    <HeaderIconButton
+                      label="Search"
+                      onClick={() => setSearchOpen(true)}
+                    >
+                      <Search size={18} strokeWidth={2} />
+                    </HeaderIconButton>
+                  </MotionDiv>
+                )}
+              </AnimatePresence>
+            </div>
+
             <div className="relative" ref={notifRef}>
               <HeaderIconButton
                 label="Notifications"

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import BackButton from '../components/ui/BackButton'
 import {
   ArrowLeft,
   Calendar,
@@ -84,7 +85,7 @@ function ResourceChangeRequestDetailPage() {
   // Modals
   const [showApproveModal, setShowApproveModal] = useState(false)
   const [approveNote, setApproveNote] = useState('')
-  
+
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [rejectError, setRejectError] = useState('')
@@ -181,13 +182,12 @@ function ResourceChangeRequestDetailPage() {
       {toastMessage && (
         <div className="fixed right-6 top-20 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
           <div
-            className={`flex items-center gap-3 rounded-2xl px-5 py-3.5 shadow-xl ${
-              toastMessage.type === 'success'
+            className={`flex items-center gap-3 rounded-2xl px-5 py-3.5 shadow-xl ${toastMessage.type === 'success'
                 ? 'border border-emerald-200 bg-emerald-600 text-white'
                 : toastMessage.type === 'error'
-                ? 'border border-rose-200 bg-rose-600 text-white'
-                : 'border border-blue-200 bg-blue-600 text-white'
-            }`}
+                  ? 'border border-rose-200 bg-rose-600 text-white'
+                  : 'border border-blue-200 bg-blue-600 text-white'
+              }`}
           >
             {toastMessage.type === 'success' && <CheckCircle2 size={18} />}
             {toastMessage.type === 'error' && <XCircle size={18} />}
@@ -199,14 +199,7 @@ function ResourceChangeRequestDetailPage() {
 
       {/* Top Back Navigation Link */}
       <div className="mb-4">
-        <button
-          type="button"
-          onClick={() => navigate('/pmo/resource-requests')}
-          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#0052ff] transition hover:text-[#003eb3] hover:underline cursor-pointer"
-        >
-          <ArrowLeft size={14} strokeWidth={2.5} />
-          Back to Requests
-        </button>
+        <BackButton to="/pmo/resource-requests" label="Back to Requests" />
       </div>
 
       {/* Main Header Container */}
@@ -217,9 +210,8 @@ function ResourceChangeRequestDetailPage() {
               Resource Change Request
             </h1>
             <span
-              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-                STATUS_BADGE_STYLES[request.status] || STATUS_BADGE_STYLES['Pending PMO Review']
-              }`}
+              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${STATUS_BADGE_STYLES[request.status] || STATUS_BADGE_STYLES['Pending PMO Review']
+                }`}
             >
               {request.status}
             </span>
@@ -344,11 +336,10 @@ function ResourceChangeRequestDetailPage() {
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`relative flex items-center gap-2 whitespace-nowrap px-4 py-3 text-[13px] font-semibold transition-all cursor-pointer ${
-                  isActive
+                className={`relative flex items-center gap-2 whitespace-nowrap px-4 py-3 text-[13px] font-semibold transition-all cursor-pointer ${isActive
                     ? 'text-[#0052ff]'
                     : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-xl'
-                }`}
+                  }`}
               >
                 <span>{tab.label}</span>
                 {tab.badge && (
@@ -451,9 +442,8 @@ function ResourceChangeRequestDetailPage() {
                       {request.requestedAllocation.map((row) => (
                         <tr
                           key={row.srNo}
-                          className={`transition ${
-                            row.change === 'Added' ? 'bg-emerald-50/30' : 'hover:bg-slate-50/70'
-                          }`}
+                          className={`transition ${row.change === 'Added' ? 'bg-emerald-50/30' : 'hover:bg-slate-50/70'
+                            }`}
                         >
                           <td className="py-3.5 pr-2 text-center text-slate-400 font-medium">
                             {row.srNo}
@@ -472,9 +462,8 @@ function ResourceChangeRequestDetailPage() {
                           </td>
                           <td className="py-3.5 text-center">
                             <span
-                              className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-bold ${
-                                CHANGE_BADGE_STYLES[row.change] || CHANGE_BADGE_STYLES.Unchanged
-                              }`}
+                              className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-bold ${CHANGE_BADGE_STYLES[row.change] || CHANGE_BADGE_STYLES.Unchanged
+                                }`}
                             >
                               {row.change}
                             </span>
@@ -754,13 +743,12 @@ function ResourceChangeRequestDetailPage() {
                       <td className="py-3.5 px-4 text-center text-slate-600">{m.dueDate}</td>
                       <td className="py-3.5 px-4 text-center">
                         <span
-                          className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                            m.status === 'Completed'
+                          className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold ${m.status === 'Completed'
                               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                               : m.status === 'In Progress'
-                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                              : 'bg-slate-100 text-slate-600 border border-slate-200'
-                          }`}
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                : 'bg-slate-100 text-slate-600 border border-slate-200'
+                            }`}
                         >
                           {m.status}
                         </span>

@@ -1,0 +1,110 @@
+USER SECTION (My Tasks — resource/team-member login) — backend needs
+========================================================================
+
+Scope: /my-tasks and /my-tasks/:projectId pages, used by non-PM logins
+(tester, tech lead, architect, etc.) to see their own assigned work.
+
+Frontend is now production-ready on its own side — every screen shows
+real data where the backend provides it, and an honest "Not available" /
+"Not tracked yet" label anywhere it doesn't (no invented names, dates, or
+percentages). The 4 gaps below are the only things blocking full data.
+
+
+1. get_userProjectList needs more fields
+------------------------------------------
+Current (confirmed live): POST { resource: <user id> } returns
+  { id, sub_project_id, project_id, resource, created_at, planned_start,
+    planned_end, duration, predecessor, project_name, sub_project_name, type }
+
+Missing fields the UI needs and currently shows as "Not available"/"Not set":
+  - pm_id            (which PM owns this project — needed for #3 below)
+  - priority          (High/Medium/Low)
+  - category / domain (what kind of work this project is)
+  - manager_name      (project's manager, shown in Project Overview)
+  - client_name       (shown in Project Overview)
+  - status / is_completed (so "Completed" work can actually be counted —
+    right now there is no way to know if a task is done)
+  - updated_at        (last-modified time, shown in List tab's "Updated" column)
+  - task_key          (short id like "PJ-16", shown in List tab's "Key" column)
+  - reporter_name     (who raised/assigned the task, List tab's "Reporter" column)
+  - comment_count     (or a real per-task comments endpoint, for List tab's
+    "Comment" column — no per-task commenting exists at all today)
+
+Requested response shape (adds fields, doesn't remove any existing ones):
+  {
+    "success": true,
+    "data": [
+      {
+        "id": 55, "project_id": 12, "sub_project_id": null,
+        "resource": 4, "created_at": "2026-08-01",
+        "planned_start": "2026-08-10", "planned_end": "2026-08-20",
+        "duration": 10, "predecessor": "",
+        "project_name": "Website Revamp", "sub_project_name": null,
+        "type": "project",
+        "pm_id": 19,
+        "priority": "High",
+        "category": "Website",
+        "manager_name": "Ashwini Singh",
+        "client_name": "Acme Corp",
+        "status": "in_progress"
+      }
+    ]
+  }
+
+
+2. Board tab can't load for a resource/team-member
+-----------------------------------------------------
+getBoard (POST /projectManager/getBoard) requires { pm_id, project_id }.
+A resource user only knows their own id and the project_id — not the
+project's pm_id. Once get_userProjectList returns pm_id (see #1), this is
+already solved on our side — no separate fix needed here IF #1 ships.
+
+If pm_id can't be added to get_userProjectList for some reason, the
+alternative is: let getBoard accept { project_id } alone (resolve pm_id
+internally on the backend, since a project has exactly one PM anyway).
+
+
+3. Backlog is PM-only today, not project-scoped
+---------------------------------------------------
+get_pmBacklog (POST /projectManager/get_pmBacklog) takes { pm_id } and
+returns that PM's entire backlog across all their projects. It assumes
+the logged-in user's own id IS a pm_id — which is only true for a PM
+login. For a resource/team-member login this is wrong (and risky: if a
+resource's numeric id happens to match a real PM's id, it would show
+that PM's backlog by mistake).
+
+Needed: a project-scoped backlog fetch, e.g.
+  POST /projectManager/get_projectBacklog  { project_id: 12 }
+  -> { success, data: [ ...backlog items for that project only... ] }
+
+Until this exists, the Backlog tab is intentionally disabled for
+resource/team-member logins on the frontend (shows "not available for
+your account yet" instead of risking wrong data).
+
+
+4. Discussions aren't filtered by project
+----------------------------------------------
+get_userDiscussion (POST /users/get_userDiscussion, form-data:
+resource_id, type) returns ALL of a resource's discussions mixed
+together — there's no project_id in the request or a reliable project_id
+field in each response row to filter by client-side (live test only
+returned project_name/project_scope/start_date/end_date/id — id's
+meaning is ambiguous, could be the project's own id or a discussion
+row's id).
+
+Needed: accept project_id as a filter param, e.g.
+  POST /users/get_userDiscussion  (form-data) resource_id, type, project_id
+  -> only discussions belonging to that project
+
+Until this ships, the Discussions tab on a project's detail page shows
+discussions from every project the resource is on, not just this one.
+
+
+NICE TO HAVE (not blocking, lower priority)
+---------------------------------------------
+- A real "health index" / project-status metric, if that feature is
+  wanted — right now the Project Status tab just shows Planned
+  Start/Deadline (real) and marks Health Index as "Not available"
+  because no such field exists anywhere.
+- A task-type field beyond project/subproject (e.g. Bug/Epic/Story) if
+  "Types of work" breakdown should show more than Task vs Subtask.
